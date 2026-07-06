@@ -32,17 +32,32 @@ class NaverStaticMapService {
     int height = 420,
     int level = 15,
   }) {
-    final marker = Uri.encodeComponent(
-      'type:d|size:mid|pos:$longitude $latitude|color:red',
+    return buildMultiMarkerMapUri(
+      points: [MapPoint(latitude: latitude, longitude: longitude)],
+      width: width,
+      height: height,
+      level: level,
     );
+  }
 
-    return Uri.parse(
-      'https://maps.apigw.ntruss.com/map-static/v2/raster'
-      '?center=$longitude,$latitude'
-      '&level=$level'
-      '&w=$width'
-      '&h=$height'
-      '&markers=$marker',
+  Uri buildMultiMarkerMapUri({
+    required List<MapPoint> points,
+    int width = 720,
+    int height = 420,
+    int? level,
+  }) {
+    final center = MapBounds.from(points).center;
+    return Uri(
+      scheme: 'https',
+      host: 'maps.apigw.ntruss.com',
+      path: '/map-static/v2/raster',
+      query: _buildStaticMapQuery(
+        center: center,
+        points: points,
+        width: width,
+        height: height,
+        level: level ?? _estimateLevel(points),
+      ),
     );
   }
 
@@ -55,6 +70,18 @@ class NaverStaticMapService {
     required double latitude,
     required double longitude,
   }) async {
+    return fetchMapForPoints(
+      points: [MapPoint(latitude: latitude, longitude: longitude)],
+    );
+  }
+
+  Future<StaticMapResult> fetchMapForPoints({
+    required List<MapPoint> points,
+  }) async {
+    if (points.isEmpty) {
+      return StaticMapResult.failure('No GPS points are available for this date.');
+    }
+
     if (kIsWeb && proxyBaseUrl.isEmpty) {
       return StaticMapResult.failure(
         'Flutter Web cannot call Naver Static Map directly because the browser blocks the required API-key headers. '
@@ -65,8 +92,8 @@ class NaverStaticMapService {
     try {
       final response = await http.get(
         kIsWeb
-            ? buildProxyMapUri(latitude: latitude, longitude: longitude)
-            : buildMapUri(latitude: latitude, longitude: longitude),
+            ? buildProxyMapUri(points: points)
+            : buildMultiMarkerMapUri(points: points),
         headers: kIsWeb ? const {} : headers,
       );
 
@@ -86,14 +113,14 @@ class NaverStaticMapService {
   }
 
   Uri buildProxyMapUri({
-    required double latitude,
-    required double longitude,
+    required List<MapPoint> points,
   }) {
     return Uri.parse(proxyBaseUrl).replace(
       path: _joinPath(Uri.parse(proxyBaseUrl).path, 'static-map'),
       queryParameters: {
-        'lat': latitude.toString(),
-        'lng': longitude.toString(),
+        'points': points
+            .map((point) => '${point.latitude},${point.longitude}')
+            .join(';'),
       },
     );
   }
@@ -120,6 +147,101 @@ class NaverStaticMapService {
     }
 
     return '${body.substring(0, 300)}...';
+  }
+
+  String _buildStaticMapQuery({
+    required MapPoint center,
+    required List<MapPoint> points,
+    required int width,
+    required int height,
+    required int level,
+  }) {
+    final params = <String>[
+      'center=${Uri.encodeQueryComponent('${center.longitude},${center.latitude}')}',
+      'level=$level',
+      'w=$width',
+      'h=$height',
+      for (final point in points)
+        'markers=${Uri.encodeQueryComponent('type:d|size:mid|pos:${point.longitude} ${point.latitude}|color:red')}',
+    ];
+
+    return params.join('&');
+  }
+
+  int _estimateLevel(List<MapPoint> points) {
+    if (points.length <= 1) {
+      return 15;
+    }
+
+    final bounds = MapBounds.from(points);
+    final span = bounds.maxSpan;
+    if (span >= 2.0) return 7;
+    if (span >= 1.0) return 8;
+    if (span >= 0.5) return 9;
+    if (span >= 0.25) return 10;
+    if (span >= 0.12) return 11;
+    if (span >= 0.06) return 12;
+    if (span >= 0.03) return 13;
+    if (span >= 0.015) return 14;
+    return 15;
+  }
+}
+
+class MapPoint {
+  const MapPoint({
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final double latitude;
+  final double longitude;
+}
+
+class MapBounds {
+  const MapBounds({
+    required this.minLatitude,
+    required this.maxLatitude,
+    required this.minLongitude,
+    required this.maxLongitude,
+  });
+
+  factory MapBounds.from(List<MapPoint> points) {
+    var minLatitude = points.first.latitude;
+    var maxLatitude = points.first.latitude;
+    var minLongitude = points.first.longitude;
+    var maxLongitude = points.first.longitude;
+
+    for (final point in points.skip(1)) {
+      if (point.latitude < minLatitude) minLatitude = point.latitude;
+      if (point.latitude > maxLatitude) maxLatitude = point.latitude;
+      if (point.longitude < minLongitude) minLongitude = point.longitude;
+      if (point.longitude > maxLongitude) maxLongitude = point.longitude;
+    }
+
+    return MapBounds(
+      minLatitude: minLatitude,
+      maxLatitude: maxLatitude,
+      minLongitude: minLongitude,
+      maxLongitude: maxLongitude,
+    );
+  }
+
+  final double minLatitude;
+  final double maxLatitude;
+  final double minLongitude;
+  final double maxLongitude;
+
+  MapPoint get center {
+    return MapPoint(
+      latitude: (minLatitude + maxLatitude) / 2,
+      longitude: (minLongitude + maxLongitude) / 2,
+    );
+  }
+
+  double get maxSpan {
+    final latitudeSpan = (maxLatitude - minLatitude).abs();
+    final longitudeSpan = (maxLongitude - minLongitude).abs();
+    return latitudeSpan > longitudeSpan ? latitudeSpan : longitudeSpan;
   }
 }
 
