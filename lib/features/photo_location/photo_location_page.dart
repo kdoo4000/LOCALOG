@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../models/place_candidate.dart';
 import '../../models/photo_metadata.dart';
 import '../../services/exif_metadata_reader.dart';
 import '../../services/naver_static_map_service.dart';
+import '../../services/place_candidate_service.dart';
 import 'naver_dynamic_map.dart';
 
 class PhotoLocationPage extends StatefulWidget {
@@ -16,6 +18,7 @@ class PhotoLocationPage extends StatefulWidget {
 class _PhotoLocationPageState extends State<PhotoLocationPage> {
   final _picker = ImagePicker();
   final _metadataReader = ExifMetadataReader();
+  final _placeCandidateService = const PlaceCandidateService();
 
   List<_PhotoEntry> _entries = const [];
   String? _selectedDateKey;
@@ -118,15 +121,29 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
               controller: controller,
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               children: [
-                _PhotoPreview(photo: entry.photo, height: 320),
-                const SizedBox(height: 16),
-                _MetadataPanel(metadata: entry.metadata),
+                _PhotoDetailsSheet(
+                  entry: entry,
+                  placeCandidateService: _placeCandidateService,
+                  onPlaceSelected: _selectPlace,
+                ),
               ],
             );
           },
         );
       },
     );
+  }
+
+  void _selectPlace(String entryId, PlaceCandidate candidate) {
+    setState(() {
+      _entries = [
+        for (final entry in _entries)
+          if (entry.id == entryId)
+            entry.copyWith(selectedPlace: candidate)
+          else
+            entry,
+      ];
+    });
   }
 
   @override
@@ -403,10 +420,75 @@ class _PhotoPreview extends StatelessWidget {
   }
 }
 
+class _PhotoDetailsSheet extends StatefulWidget {
+  const _PhotoDetailsSheet({
+    required this.entry,
+    required this.placeCandidateService,
+    required this.onPlaceSelected,
+  });
+
+  final _PhotoEntry entry;
+  final PlaceCandidateService placeCandidateService;
+  final void Function(String entryId, PlaceCandidate candidate) onPlaceSelected;
+
+  @override
+  State<_PhotoDetailsSheet> createState() => _PhotoDetailsSheetState();
+}
+
+class _PhotoDetailsSheetState extends State<_PhotoDetailsSheet> {
+  Future<PlaceCandidateResult>? _candidateFuture;
+  PlaceCandidate? _selectedPlace;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedPlace = widget.entry.selectedPlace;
+
+    final metadata = widget.entry.metadata;
+    if (metadata.hasLocation) {
+      _candidateFuture = widget.placeCandidateService.findCandidates(
+        latitude: metadata.latitude!,
+        longitude: metadata.longitude!,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _PhotoPreview(photo: widget.entry.photo, height: 320),
+        const SizedBox(height: 16),
+        _MetadataPanel(
+          metadata: widget.entry.metadata,
+          selectedPlace: _selectedPlace,
+        ),
+        const SizedBox(height: 16),
+        _PlaceCandidatePanel(
+          metadata: widget.entry.metadata,
+          selectedPlace: _selectedPlace,
+          candidateFuture: _candidateFuture,
+          onSelected: (candidate) {
+            setState(() {
+              _selectedPlace = candidate;
+            });
+            widget.onPlaceSelected(widget.entry.id, candidate);
+          },
+        ),
+      ],
+    );
+  }
+}
+
 class _MetadataPanel extends StatelessWidget {
-  const _MetadataPanel({required this.metadata});
+  const _MetadataPanel({
+    required this.metadata,
+    required this.selectedPlace,
+  });
 
   final PhotoMetadata metadata;
+  final PlaceCandidate? selectedPlace;
 
   @override
   Widget build(BuildContext context) {
@@ -433,6 +515,90 @@ class _MetadataPanel extends StatelessWidget {
               .where((value) => value.isNotEmpty)
               .join(' ')
               .ifEmpty('None'),
+        ),
+        _InfoRow(
+          label: 'Place',
+          value: selectedPlace?.displayName ?? 'Not selected',
+        ),
+      ],
+    );
+  }
+}
+
+class _PlaceCandidatePanel extends StatelessWidget {
+  const _PlaceCandidatePanel({
+    required this.metadata,
+    required this.selectedPlace,
+    required this.candidateFuture,
+    required this.onSelected,
+  });
+
+  final PhotoMetadata metadata;
+  final PlaceCandidate? selectedPlace;
+  final Future<PlaceCandidateResult>? candidateFuture;
+  final ValueChanged<PlaceCandidate> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!metadata.hasLocation) {
+      return const _MessagePanel(
+        message: 'No GPS metadata is available for place suggestions.',
+      );
+    }
+
+    final future = candidateFuture;
+    if (future == null) {
+      return const _MessagePanel(
+        message: 'Place suggestions are not available for this photo.',
+      );
+    }
+
+    return _Panel(
+      title: 'Suggested places',
+      children: [
+        FutureBuilder<PlaceCandidateResult>(
+          future: future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
+              );
+            }
+
+            final result = snapshot.data;
+            if (result == null) {
+              return const Text('Could not load place suggestions.');
+            }
+
+            if (!result.isSuccess) {
+              return Text(result.errorMessage!);
+            }
+
+            return Column(
+              children: [
+                for (final candidate in result.candidates)
+                  Material(
+                    color: Colors.transparent,
+                    child: RadioListTile<String>(
+                      contentPadding: EdgeInsets.zero,
+                      value: candidate.id,
+                      groupValue: selectedPlace?.id,
+                      onChanged: (_) => onSelected(candidate),
+                      title: Text(
+                        candidate.displayName,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      subtitle: Text(candidate.displayDetail),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -591,10 +757,30 @@ class _PhotoEntry {
   const _PhotoEntry({
     required this.photo,
     required this.metadata,
+    this.selectedPlace,
   });
 
   final XFile photo;
   final PhotoMetadata metadata;
+  final PlaceCandidate? selectedPlace;
+
+  String get id {
+    if (photo.path.isNotEmpty) {
+      return photo.path;
+    }
+
+    return '${metadata.fileName}_${metadata.takenAt?.toIso8601String() ?? ''}';
+  }
+
+  _PhotoEntry copyWith({
+    PlaceCandidate? selectedPlace,
+  }) {
+    return _PhotoEntry(
+      photo: photo,
+      metadata: metadata,
+      selectedPlace: selectedPlace ?? this.selectedPlace,
+    );
+  }
 
   String get dateKey {
     final takenAt = metadata.takenAt;
