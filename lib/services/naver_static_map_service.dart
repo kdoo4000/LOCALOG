@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -8,7 +7,9 @@ class NaverStaticMapService {
   const NaverStaticMapService({
     this.clientId = const String.fromEnvironment('NAVER_MAP_CLIENT_ID'),
     this.clientSecret = const String.fromEnvironment('NAVER_MAP_CLIENT_SECRET'),
-    this.proxyBaseUrl = const String.fromEnvironment('NAVER_MAP_PROXY_BASE_URL'),
+    this.proxyBaseUrl = const String.fromEnvironment(
+      'NAVER_MAP_PROXY_BASE_URL',
+    ),
   });
 
   final String clientId;
@@ -62,9 +63,9 @@ class NaverStaticMapService {
   }
 
   Map<String, String> get headers => {
-        'X-NCP-APIGW-API-KEY-ID': clientId,
-        'X-NCP-APIGW-API-KEY': clientSecret,
-      };
+    'X-NCP-APIGW-API-KEY-ID': clientId,
+    'X-NCP-APIGW-API-KEY': clientSecret,
+  };
 
   Future<StaticMapResult> fetchMap({
     required double latitude,
@@ -79,7 +80,9 @@ class NaverStaticMapService {
     required List<MapPoint> points,
   }) async {
     if (points.isEmpty) {
-      return StaticMapResult.failure('No GPS points are available for this date.');
+      return StaticMapResult.failure(
+        'No GPS points are available for this date.',
+      );
     }
 
     if (kIsWeb && proxyBaseUrl.isEmpty) {
@@ -112,9 +115,7 @@ class NaverStaticMapService {
     }
   }
 
-  Uri buildProxyMapUri({
-    required List<MapPoint> points,
-  }) {
+  Uri buildProxyMapUri({required List<MapPoint> points}) {
     return Uri.parse(proxyBaseUrl).replace(
       path: _joinPath(Uri.parse(proxyBaseUrl).path, 'static-map'),
       queryParameters: {
@@ -188,10 +189,7 @@ class NaverStaticMapService {
 }
 
 class MapPoint {
-  const MapPoint({
-    required this.latitude,
-    required this.longitude,
-  });
+  const MapPoint({required this.latitude, required this.longitude});
 
   final double latitude;
   final double longitude;
@@ -246,10 +244,7 @@ class MapBounds {
 }
 
 class StaticMapResult {
-  const StaticMapResult._({
-    this.bytes,
-    this.errorMessage,
-  });
+  const StaticMapResult._({this.bytes, this.errorMessage});
 
   factory StaticMapResult.image(Uint8List bytes) {
     return StaticMapResult._(bytes: bytes);

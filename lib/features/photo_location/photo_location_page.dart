@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/l10n/app_language.dart';
+import '../../core/router/route_names.dart';
 import '../../models/place_candidate.dart';
 import '../../models/photo_metadata.dart';
 import '../../services/exif_metadata_reader.dart';
 import '../../services/naver_static_map_service.dart';
 import '../../services/place_candidate_service.dart';
+import '../route_search/data/mock_route_repository.dart';
+import '../route_search/domain/route_place.dart';
+import '../route_search/domain/travel_route.dart';
 import 'naver_dynamic_map.dart';
 
 class PhotoLocationPage extends StatefulWidget {
@@ -19,10 +24,12 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
   final _picker = ImagePicker();
   final _metadataReader = ExifMetadataReader();
   final _placeCandidateService = const PlaceCandidateService();
+  final _routeRepository = const MockRouteRepository();
 
   List<_PhotoEntry> _entries = const [];
   String? _selectedDateKey;
   bool _isReading = false;
+  bool _isSavingRoute = false;
   String? _errorMessage;
 
   List<_PhotoDateGroup> get _dateGroups {
@@ -94,7 +101,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     } catch (error) {
       setState(() {
         _isReading = false;
-        _errorMessage = 'Could not read photo metadata. $error';
+        _errorMessage = context.strings.photoReadFailed(error);
       });
     }
   }
@@ -146,31 +153,127 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     });
   }
 
+  Future<void> _saveSelectedGroupAsRoute() async {
+    final group = _selectedGroup;
+    if (group == null) {
+      return;
+    }
+
+    final routeEntries = group.photos
+        .where((entry) => entry.metadata.hasLocation || entry.selectedPlace != null)
+        .toList();
+    if (routeEntries.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.strings.chooseRoutablePhotosFirst)),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSavingRoute = true;
+    });
+
+    try {
+      final route = _buildRouteFromPhotos(group, routeEntries);
+      final savedRoute = await _routeRepository.saveCreatedRoute(route);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSavingRoute = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.strings.savedPhotoRouteToProfile)),
+      );
+      await Navigator.of(
+        context,
+      ).pushNamed(RouteNames.routeDetail, arguments: savedRoute.id);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSavingRoute = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.strings.saveRouteFailed(error))));
+    }
+  }
+
+  TravelRoute _buildRouteFromPhotos(
+    _PhotoDateGroup group,
+    List<_PhotoEntry> routeEntries,
+  ) {
+    final routeId = 'photo-route-${DateTime.now().microsecondsSinceEpoch}';
+    final places = <RoutePlace>[
+      for (var index = 0; index < routeEntries.length; index += 1)
+        _buildPlaceFromPhoto(routeEntries[index], index),
+    ];
+
+    return TravelRoute(
+      id: routeId,
+      title: context.strings.photoRouteTitle(_displayGroupLabel(context, group)),
+      description: context.strings.photoRouteDescription(routeEntries.length),
+      city: context.strings.myTrip,
+      authorName: context.strings.me,
+      places: places,
+      tags: [context.strings.photoTag, context.strings.localTag],
+      upvoteRatio: 1,
+      downloadCount: 0,
+      estimatedDurationMinutes: routeEntries.length * 45,
+      isDownloaded: true,
+    );
+  }
+
+  RoutePlace _buildPlaceFromPhoto(_PhotoEntry entry, int index) {
+    final selectedPlace = entry.selectedPlace;
+    final metadata = entry.metadata;
+    final category = selectedPlace?.category;
+    final photoPath = entry.photo.path;
+
+    return RoutePlace(
+      id: 'photo-place-${DateTime.now().microsecondsSinceEpoch}-$index',
+      name: selectedPlace?.displayName ?? context.strings.photoStop(index),
+      category: category == null || category.isEmpty
+          ? context.strings.photoSpot
+          : category,
+      orderIndex: index,
+      address: _nullIfEmpty(selectedPlace?.address),
+      visitedAt: metadata.takenAt,
+      memo: context.strings.takenAtFromFile(entry.timeLabel, metadata.fileName),
+      latitude: metadata.latitude,
+      longitude: metadata.longitude,
+      photoUrls: photoPath.isEmpty ? const [] : [photoPath],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final strings = context.strings;
     final selectedGroup = _selectedGroup;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('LIKE LOCAL'),
-        centerTitle: false,
-      ),
+      appBar: AppBar(title: const Text('LIKE LOCAL'), centerTitle: false),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
             Text(
-              'Build a travel log from photos',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              strings.photoTitle,
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
-              'Select multiple photos to group them by date, sort them by time, and show each day on a Naver Dynamic Map.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.black54,
-                  ),
+              strings.photoSubtitle,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
@@ -181,7 +284,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.photo_library_outlined),
-              label: Text(_isReading ? 'Reading photos' : 'Choose photos'),
+              label: Text(_isReading ? strings.readingPhotos : strings.choosePhotos),
             ),
             const SizedBox(height: 20),
             if (_errorMessage != null) _MessagePanel(message: _errorMessage!),
@@ -195,16 +298,26 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
                 selectedKey: selectedGroup?.key,
                 onSelected: _selectDate,
               ),
+              const SizedBox(height: 12),
+              _SaveRoutePanel(
+                group: selectedGroup,
+                isSaving: _isSavingRoute,
+                onSave: _isSavingRoute
+                    ? null
+                    : () {
+                        _saveSelectedGroupAsRoute();
+                      },
+              ),
               const SizedBox(height: 16),
               if (selectedGroup != null) ...[
-                _MultiMapPanel(
-                  group: selectedGroup,
-                ),
+                _MultiMapPanel(group: selectedGroup),
                 const SizedBox(height: 16),
-                _PhotoGrid(
+                _PhotoPlaceReviewPanel(
                   group: selectedGroup,
                   onPhotoTap: _showDetails,
                 ),
+                const SizedBox(height: 16),
+                _PhotoGrid(group: selectedGroup, onPhotoTap: _showDetails),
               ],
             ],
           ],
@@ -221,13 +334,18 @@ class _SummaryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final locatedCount = entries.where((entry) => entry.metadata.hasLocation).length;
+    final locatedCount = entries
+        .where((entry) => entry.metadata.hasLocation)
+        .length;
     return _Panel(
-      title: 'Selected photos',
+      title: context.strings.selectedPhotos,
       children: [
-        _InfoRow(label: 'Photos', value: '${entries.length}'),
-        _InfoRow(label: 'With GPS', value: '$locatedCount'),
-        _InfoRow(label: 'Without GPS', value: '${entries.length - locatedCount}'),
+        _InfoRow(label: context.strings.photos, value: '${entries.length}'),
+        _InfoRow(label: context.strings.withGps, value: '$locatedCount'),
+        _InfoRow(
+          label: context.strings.withoutGps,
+          value: '${entries.length - locatedCount}',
+        ),
       ],
     );
   }
@@ -255,7 +373,9 @@ class _DateSelector extends StatelessWidget {
         itemBuilder: (context, index) {
           final group = groups[index];
           return ChoiceChip(
-            label: Text('${group.label} (${group.photos.length})'),
+            label: Text(
+              '${_displayGroupLabel(context, group)} (${group.photos.length})',
+            ),
             selected: group.key == selectedKey,
             onSelected: (_) => onSelected(group.key),
           );
@@ -265,11 +385,62 @@ class _DateSelector extends StatelessWidget {
   }
 }
 
-class _PhotoGrid extends StatelessWidget {
-  const _PhotoGrid({
+class _SaveRoutePanel extends StatelessWidget {
+  const _SaveRoutePanel({
     required this.group,
-    required this.onPhotoTap,
+    required this.isSaving,
+    required this.onSave,
   });
+
+  final _PhotoDateGroup? group;
+  final bool isSaving;
+  final VoidCallback? onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final group = this.group;
+    final routableCount =
+        group?.photos
+            .where(
+              (entry) =>
+                  entry.metadata.hasLocation || entry.selectedPlace != null,
+            )
+            .length ??
+        0;
+
+    return _Panel(
+      title: context.strings.createRoute,
+      children: [
+        Text(
+          group == null
+              ? context.strings.selectPhotoDateToCreateRoute
+              : context.strings.routablePhotoStops(routableCount),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: routableCount == 0 ? null : onSave,
+          icon: isSaving
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.route_outlined),
+          label: Text(
+            isSaving
+                ? context.strings.savingRoute
+                : context.strings.saveSelectedDayAsRoute,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PhotoGrid extends StatelessWidget {
+  const _PhotoGrid({required this.group, required this.onPhotoTap});
 
   final _PhotoDateGroup group;
   final ValueChanged<_PhotoEntry> onPhotoTap;
@@ -277,7 +448,7 @@ class _PhotoGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Panel(
-      title: '${group.label} timeline',
+      title: '${_displayGroupLabel(context, group)} ${context.strings.timelineSuffix}',
       children: [
         GridView.builder(
           shrinkWrap: true,
@@ -290,10 +461,7 @@ class _PhotoGrid extends StatelessWidget {
           itemCount: group.photos.length,
           itemBuilder: (context, index) {
             final entry = group.photos[index];
-            return _PhotoTile(
-              entry: entry,
-              onTap: () => onPhotoTap(entry),
-            );
+            return _PhotoTile(entry: entry, onTap: () => onPhotoTap(entry));
           },
         ),
       ],
@@ -301,11 +469,122 @@ class _PhotoGrid extends StatelessWidget {
   }
 }
 
-class _PhotoTile extends StatelessWidget {
-  const _PhotoTile({
-    required this.entry,
-    required this.onTap,
+class _PhotoPlaceReviewPanel extends StatelessWidget {
+  const _PhotoPlaceReviewPanel({
+    required this.group,
+    required this.onPhotoTap,
   });
+
+  final _PhotoDateGroup group;
+  final ValueChanged<_PhotoEntry> onPhotoTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      title: context.strings.assignPlaces,
+      children: [
+        Text(
+          context.strings.assignPlacesHelp,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+        ),
+        const SizedBox(height: 12),
+        for (final entry in group.photos) ...[
+          _PhotoPlaceReviewTile(
+            entry: entry,
+            onTap: () => onPhotoTap(entry),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _PhotoPlaceReviewTile extends StatelessWidget {
+  const _PhotoPlaceReviewTile({required this.entry, required this.onTap});
+
+  final _PhotoEntry entry;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final placeName = entry.selectedPlace?.displayName;
+
+    return Material(
+      color: const Color(0x08000000),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: _PhotoImage(photo: entry.photo),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.timeLabel,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      placeName ?? context.strings.notSelected,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: placeName == null
+                            ? Colors.black54
+                            : Colors.black87,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (!entry.metadata.hasLocation) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        context.strings.noGpsForSuggestions,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.black45,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                onPressed: onTap,
+                tooltip: placeName == null
+                    ? context.strings.choosePlace
+                    : context.strings.changePlace,
+                icon: const Icon(Icons.edit_location_alt_outlined),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PhotoTile extends StatelessWidget {
+  const _PhotoTile({required this.entry, required this.onTap});
 
   final _PhotoEntry entry;
   final VoidCallback onTap;
@@ -333,12 +612,37 @@ class _PhotoTile extends StatelessWidget {
                   );
                 }
 
-                return Image.memory(
-                  snapshot.data!,
-                  fit: BoxFit.cover,
-                );
+                return Image.memory(snapshot.data!, fit: BoxFit.cover);
               },
             ),
+            if (entry.selectedPlace != null)
+              Positioned(
+                left: 4,
+                right: 4,
+                top: 4,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0xC6000000),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
+                    child: Text(
+                      entry.selectedPlace!.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             Positioned(
               left: 4,
               right: 4,
@@ -349,16 +653,19 @@ class _PhotoTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
                   child: Text(
                     entry.timeLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -367,11 +674,7 @@ class _PhotoTile extends StatelessWidget {
               const Positioned(
                 top: 4,
                 right: 4,
-                child: Icon(
-                  Icons.location_off,
-                  color: Colors.white,
-                  size: 18,
-                ),
+                child: Icon(Icons.location_off, color: Colors.white, size: 18),
               ),
           ],
         ),
@@ -380,11 +683,36 @@ class _PhotoTile extends StatelessWidget {
   }
 }
 
+class _PhotoImage extends StatelessWidget {
+  const _PhotoImage({required this.photo});
+
+  final XFile photo;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: photo.readAsBytes(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const ColoredBox(
+            color: Colors.black12,
+            child: Center(
+              child: SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+
+        return Image.memory(snapshot.data!, fit: BoxFit.cover);
+      },
+    );
+  }
+}
+
 class _PhotoPreview extends StatelessWidget {
-  const _PhotoPreview({
-    required this.photo,
-    this.height = 220,
-  });
+  const _PhotoPreview({required this.photo, this.height = 220});
 
   final XFile photo;
   final double height;
@@ -470,22 +798,133 @@ class _PhotoDetailsSheetState extends State<_PhotoDetailsSheet> {
           selectedPlace: _selectedPlace,
           candidateFuture: _candidateFuture,
           onSelected: (candidate) {
-            setState(() {
-              _selectedPlace = candidate;
-            });
-            widget.onPlaceSelected(widget.entry.id, candidate);
+            _selectPlace(candidate);
           },
         ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _showManualPlaceDialog,
+          icon: const Icon(Icons.edit_location_alt_outlined),
+          label: Text(context.strings.enterPlaceManually),
+        ),
+      ],
+    );
+  }
+
+  void _selectPlace(PlaceCandidate candidate) {
+    setState(() {
+      _selectedPlace = candidate;
+    });
+    widget.onPlaceSelected(widget.entry.id, candidate);
+  }
+
+  Future<void> _showManualPlaceDialog() async {
+    final candidate = await showDialog<PlaceCandidate>(
+      context: context,
+      builder: (context) => const _ManualPlaceDialog(),
+    );
+    if (candidate == null) {
+      return;
+    }
+
+    _selectPlace(candidate);
+  }
+}
+
+class _ManualPlaceDialog extends StatefulWidget {
+  const _ManualPlaceDialog();
+
+  @override
+  State<_ManualPlaceDialog> createState() => _ManualPlaceDialogState();
+}
+
+class _ManualPlaceDialogState extends State<_ManualPlaceDialog> {
+  final _nameController = TextEditingController();
+  final _categoryController = TextEditingController();
+  final _addressController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _categoryController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.strings.enterPlaceName)));
+      return;
+    }
+
+    Navigator.of(context).pop(
+      PlaceCandidate(
+        id: 'manual-${DateTime.now().microsecondsSinceEpoch}',
+        name: name,
+        address: _addressController.text.trim(),
+        source: 'manual',
+        category: _categoryController.text.trim().isEmpty
+            ? null
+            : _categoryController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+
+    return AlertDialog(
+      title: Text(strings.enterPlaceManually),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _nameController,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: strings.placeName,
+                hintText: strings.exampleCafe,
+              ),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _categoryController,
+              decoration: InputDecoration(
+                labelText: strings.category,
+                hintText: strings.categoryHint,
+              ),
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _addressController,
+              decoration: InputDecoration(
+                labelText: strings.address,
+                hintText: strings.optional,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.cancel),
+        ),
+        FilledButton(onPressed: _submit, child: Text(strings.add)),
       ],
     );
   }
 }
 
 class _MetadataPanel extends StatelessWidget {
-  const _MetadataPanel({
-    required this.metadata,
-    required this.selectedPlace,
-  });
+  const _MetadataPanel({required this.metadata, required this.selectedPlace});
 
   final PhotoMetadata metadata;
   final PlaceCandidate? selectedPlace;
@@ -493,32 +932,34 @@ class _MetadataPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Panel(
-      title: 'Photo details',
+      title: context.strings.photoDetails,
       children: [
-        _InfoRow(label: 'File', value: metadata.fileName),
+        _InfoRow(label: context.strings.file, value: metadata.fileName),
         _InfoRow(
-          label: 'Taken at',
-          value: metadata.hasTakenAt ? _formatDate(metadata.takenAt!) : 'None',
+          label: context.strings.takenAt,
+          value: metadata.hasTakenAt
+              ? _formatDate(metadata.takenAt!)
+              : context.strings.none,
         ),
         _InfoRow(
-          label: 'Latitude',
-          value: metadata.latitude?.toStringAsFixed(6) ?? 'None',
+          label: context.strings.latitude,
+          value: metadata.latitude?.toStringAsFixed(6) ?? context.strings.none,
         ),
         _InfoRow(
-          label: 'Longitude',
-          value: metadata.longitude?.toStringAsFixed(6) ?? 'None',
+          label: context.strings.longitude,
+          value: metadata.longitude?.toStringAsFixed(6) ?? context.strings.none,
         ),
         _InfoRow(
-          label: 'Camera',
+          label: context.strings.camera,
           value: [metadata.cameraMake, metadata.cameraModel]
               .whereType<String>()
               .where((value) => value.isNotEmpty)
               .join(' ')
-              .ifEmpty('None'),
+              .ifEmpty(context.strings.none),
         ),
         _InfoRow(
-          label: 'Place',
-          value: selectedPlace?.displayName ?? 'Not selected',
+          label: context.strings.place,
+          value: selectedPlace?.displayName ?? context.strings.notSelected,
         ),
       ],
     );
@@ -542,19 +983,19 @@ class _PlaceCandidatePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!metadata.hasLocation) {
       return const _MessagePanel(
-        message: 'No GPS metadata is available for place suggestions.',
+        messageKey: _MessageKey.noGpsForSuggestions,
       );
     }
 
     final future = candidateFuture;
     if (future == null) {
       return const _MessagePanel(
-        message: 'Place suggestions are not available for this photo.',
+        messageKey: _MessageKey.placeSuggestionsUnavailable,
       );
     }
 
     return _Panel(
-      title: 'Suggested places',
+      title: context.strings.suggestedPlaces,
       children: [
         FutureBuilder<PlaceCandidateResult>(
           future: future,
@@ -570,7 +1011,7 @@ class _PlaceCandidatePanel extends StatelessWidget {
 
             final result = snapshot.data;
             if (result == null) {
-              return const Text('Could not load place suggestions.');
+              return Text(context.strings.couldNotLoadPlaceSuggestions);
             }
 
             if (!result.isSuccess) {
@@ -590,8 +1031,8 @@ class _PlaceCandidatePanel extends StatelessWidget {
                       title: Text(
                         candidate.displayName,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       subtitle: Text(candidate.displayDetail),
                     ),
@@ -606,9 +1047,7 @@ class _PlaceCandidatePanel extends StatelessWidget {
 }
 
 class _MultiMapPanel extends StatelessWidget {
-  const _MultiMapPanel({
-    required this.group,
-  });
+  const _MultiMapPanel({required this.group});
 
   final _PhotoDateGroup group;
 
@@ -626,18 +1065,18 @@ class _MultiMapPanel extends StatelessWidget {
 
     if (points.isEmpty) {
       return const _MessagePanel(
-        message: 'No GPS metadata is available for this date.',
+        messageKey: _MessageKey.noGpsForDate,
       );
     }
 
     return _Panel(
-      title: '${group.label} dynamic map',
+      title: '${_displayGroupLabel(context, group)} ${context.strings.dynamicMapSuffix}',
       children: [
         Text(
-          '${points.length} marker(s), connected in taken-time order.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.black54,
-              ),
+          context.strings.markerCount(points.length),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.black54),
         ),
         const SizedBox(height: 12),
         NaverDynamicMap(points: points),
@@ -647,10 +1086,7 @@ class _MultiMapPanel extends StatelessWidget {
 }
 
 class _Panel extends StatelessWidget {
-  const _Panel({
-    required this.title,
-    required this.children,
-  });
+  const _Panel({required this.title, required this.children});
 
   final String title;
   final List<Widget> children;
@@ -670,9 +1106,9 @@ class _Panel extends StatelessWidget {
           children: [
             Text(
               title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             ...children,
@@ -684,10 +1120,7 @@ class _Panel extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
+  const _InfoRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -703,17 +1136,17 @@ class _InfoRow extends StatelessWidget {
             width: 82,
             child: Text(
               label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.black54,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -723,12 +1156,22 @@ class _InfoRow extends StatelessWidget {
 }
 
 class _MessagePanel extends StatelessWidget {
-  const _MessagePanel({required this.message});
+  const _MessagePanel({this.message, this.messageKey});
 
-  final String message;
+  final String? message;
+  final _MessageKey? messageKey;
 
   @override
   Widget build(BuildContext context) {
+    final resolvedMessage = message ?? switch (messageKey) {
+      _MessageKey.noGpsForSuggestions => context.strings.noGpsForSuggestions,
+      _MessageKey.placeSuggestionsUnavailable =>
+        context.strings.placeSuggestionsUnavailable,
+      _MessageKey.noGpsForDate => context.strings.noGpsForDate,
+      _MessageKey.emptyPhotoState => context.strings.emptyPhotoState,
+      null => '',
+    };
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(14),
@@ -737,9 +1180,16 @@ class _MessagePanel extends StatelessWidget {
         border: Border.all(color: const Color(0xFFFFD54F)),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(message),
+      child: Text(resolvedMessage),
     );
   }
+}
+
+enum _MessageKey {
+  noGpsForSuggestions,
+  placeSuggestionsUnavailable,
+  noGpsForDate,
+  emptyPhotoState,
 }
 
 class _EmptyState extends StatelessWidget {
@@ -748,7 +1198,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const _MessagePanel(
-      message: 'Choose multiple photos to build a date-grouped grid and map.',
+      messageKey: _MessageKey.emptyPhotoState,
     );
   }
 }
@@ -772,9 +1222,7 @@ class _PhotoEntry {
     return '${metadata.fileName}_${metadata.takenAt?.toIso8601String() ?? ''}';
   }
 
-  _PhotoEntry copyWith({
-    PlaceCandidate? selectedPlace,
-  }) {
+  _PhotoEntry copyWith({PlaceCandidate? selectedPlace}) {
     return _PhotoEntry(
       photo: photo,
       metadata: metadata,
@@ -841,6 +1289,22 @@ String _formatDate(DateTime date) {
 }
 
 String _two(int value) => value.toString().padLeft(2, '0');
+
+String _displayGroupLabel(BuildContext context, _PhotoDateGroup group) {
+  if (group.key == _unknownDateKey) {
+    return context.strings.unknownDate;
+  }
+
+  return group.label;
+}
+
+String? _nullIfEmpty(String? value) {
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+
+  return value;
+}
 
 extension on String {
   String ifEmpty(String fallback) => isEmpty ? fallback : this;

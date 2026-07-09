@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_web_libraries_in_flutter
+// ignore_for_file: avoid_web_libraries_in_flutter, uri_does_not_exist
 
 import 'dart:async';
 import 'dart:html' as html;
@@ -10,11 +10,7 @@ import 'package:flutter/material.dart';
 import '../../services/naver_static_map_service.dart';
 
 class NaverDynamicMap extends StatefulWidget {
-  const NaverDynamicMap({
-    super.key,
-    required this.points,
-    this.height = 320,
-  });
+  const NaverDynamicMap({super.key, required this.points, this.height = 320});
 
   final List<MapPoint> points;
   final double height;
@@ -109,10 +105,10 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
       js_util.setProperty(mapOptions, 'center', centerLatLng);
       js_util.setProperty(mapOptions, 'zoom', _estimateZoom(widget.points));
 
-      _map = js_util.callConstructor(
-        js_util.getProperty(maps, 'Map'),
-        [_container, mapOptions],
-      );
+      _map = js_util.callConstructor(js_util.getProperty(maps, 'Map'), [
+        _container,
+        mapOptions,
+      ]);
 
       _drawMarkers(maps);
       _drawPath(maps);
@@ -167,7 +163,8 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
           'https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=$_clientId&callback=$_callbackName'
       ..async = true;
     script.onError.first.then(
-      (_) => _scriptCompleter?.completeError('Naver Maps script failed to load.'),
+      (_) =>
+          _scriptCompleter?.completeError('Naver Maps script failed to load.'),
     );
     html.document.head?.append(script);
     return _scriptCompleter!.future;
@@ -181,17 +178,19 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
 
     final maps = js_util.getProperty(naver, 'maps');
     if (maps == null) {
-      throw StateError('window.naver.maps is null after the Naver Maps callback.');
+      throw StateError(
+        'window.naver.maps is null after the Naver Maps callback.',
+      );
     }
 
     return maps;
   }
 
   Object _latLng(Object maps, MapPoint point) {
-    return js_util.callConstructor(
-      js_util.getProperty(maps, 'LatLng'),
-      [point.latitude, point.longitude],
-    );
+    return js_util.callConstructor(js_util.getProperty(maps, 'LatLng'), [
+      point.latitude,
+      point.longitude,
+    ]);
   }
 
   void _drawMarkers(Object maps) {
@@ -284,10 +283,7 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
 }
 
 class _MapMessage extends StatelessWidget {
-  const _MapMessage({
-    required this.height,
-    required this.message,
-  });
+  const _MapMessage({required this.height, required this.message});
 
   final double height;
   final String message;
@@ -303,10 +299,7 @@ class _MapMessage extends StatelessWidget {
         color: Colors.black12,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        message,
-        textAlign: TextAlign.center,
-      ),
+      child: Text(message, textAlign: TextAlign.center),
     );
   }
 }

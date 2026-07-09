@@ -3,11 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/naver_static_map_service.dart';
 
 class NaverDynamicMap extends StatelessWidget {
-  const NaverDynamicMap({
-    super.key,
-    required this.points,
-    this.height = 320,
-  });
+  const NaverDynamicMap({super.key, required this.points, this.height = 320});
 
   final List<MapPoint> points;
   final double height;

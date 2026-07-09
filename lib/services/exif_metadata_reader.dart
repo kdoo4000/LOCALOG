@@ -39,9 +39,9 @@ class ExifMetadataReader {
     }
 
     final normalized = value.trim().replaceFirstMapped(
-          RegExp(r'^(\d{4}):(\d{2}):(\d{2})'),
-          (match) => '${match[1]}-${match[2]}-${match[3]}',
-        );
+      RegExp(r'^(\d{4}):(\d{2}):(\d{2})'),
+      (match) => '${match[1]}-${match[2]}-${match[3]}',
+    );
     return DateTime.tryParse(normalized);
   }
 

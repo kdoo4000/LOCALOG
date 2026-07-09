@@ -6,7 +6,9 @@ import '../models/place_candidate.dart';
 
 class PlaceCandidateService {
   const PlaceCandidateService({
-    this.proxyBaseUrl = const String.fromEnvironment('NAVER_MAP_PROXY_BASE_URL'),
+    this.proxyBaseUrl = const String.fromEnvironment(
+      'NAVER_MAP_PROXY_BASE_URL',
+    ),
   });
 
   final String proxyBaseUrl;
@@ -27,10 +29,7 @@ class PlaceCandidateService {
       final base = Uri.parse(proxyBaseUrl);
       final uri = base.replace(
         path: _joinPath(base.path, 'place-candidates'),
-        queryParameters: {
-          'lat': '$latitude',
-          'lng': '$longitude',
-        },
+        queryParameters: {'lat': '$latitude', 'lng': '$longitude'},
       );
       final response = await http.get(uri);
       final body = utf8.decode(response.bodyBytes, allowMalformed: true);
@@ -86,16 +85,13 @@ class PlaceCandidateService {
 }
 
 class PlaceCandidateResult {
-  const PlaceCandidateResult._({
-    this.candidates = const [],
-    this.errorMessage,
-  });
+  const PlaceCandidateResult._({this.candidates = const [], this.errorMessage});
 
   const PlaceCandidateResult.success(List<PlaceCandidate> candidates)
-      : this._(candidates: candidates);
+    : this._(candidates: candidates);
 
   const PlaceCandidateResult.failure(String message)
-      : this._(errorMessage: message);
+    : this._(errorMessage: message);
 
   final List<PlaceCandidate> candidates;
   final String? errorMessage;
