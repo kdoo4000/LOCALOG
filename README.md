@@ -113,3 +113,16 @@ Like Local은 여행지를 소비하는 방식보다, 누군가의 하루를 따
 
 - **Profile**
   다운로드한 루트, 업로드한 루트, 설정을 관리하는 화면입니다.
+
+## 로컬 실행 설정
+
+네이버 지도 API ID는 Git에서 제외되는 `config/local.json`에 저장합니다.
+처음 한 번 `NAVER_MAP_CLIENT_ID` 값을 설정한 뒤 다음 명령으로 실행합니다.
+
+```powershell
+.\tools\run_web.ps1
+```
+
+웹 포트를 지정하려면 `-WebPort 8080`을 추가할 수 있습니다. VS Code에서는
+`Like Local (Chrome, local config)` 실행 구성을 선택하면 같은 설정이 자동으로
+적용됩니다. 공유 가능한 키 목록은 `config/local.example.json`에서 관리합니다.

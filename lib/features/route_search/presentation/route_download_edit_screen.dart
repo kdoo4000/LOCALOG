@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_language.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/app_card.dart';
 import '../data/mock_route_repository.dart';
 import '../domain/route_place.dart';
 import '../domain/travel_route.dart';
+import 'widgets/route_stop_edit_tile.dart';
 
 class RouteDownloadEditScreen extends StatefulWidget {
   const RouteDownloadEditScreen({super.key, required this.routeId});
@@ -20,6 +19,7 @@ class RouteDownloadEditScreen extends StatefulWidget {
 class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
   final _repository = const MockRouteRepository();
   final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
   TravelRoute? _route;
   List<RoutePlace> _places = [];
   bool _isSaving = false;
@@ -33,6 +33,7 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
   @override
   void dispose() {
     _titleController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -53,6 +54,7 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
     setState(() {
       _route = route;
       _titleController.text = route.title;
+      _descriptionController.text = route.description;
       _places = [...route.places]
         ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     });
@@ -76,6 +78,9 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
       title: _titleController.text.trim().isEmpty
           ? route.title
           : _titleController.text.trim(),
+      description: _descriptionController.text.trim().isEmpty
+          ? route.description
+          : _descriptionController.text.trim(),
       places: orderedPlaces,
       isDownloaded: true,
     );
@@ -104,15 +109,14 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
     });
   }
 
-  void _movePlace(int index, int offset) {
-    final nextIndex = index + offset;
-    if (nextIndex < 0 || nextIndex >= _places.length) {
-      return;
-    }
-
+  void _reorderPlaces(int oldIndex, int newIndex) {
     setState(() {
-      final item = _places.removeAt(index);
-      _places.insert(nextIndex, item);
+      if (newIndex > oldIndex) {
+        newIndex -= 1;
+      }
+
+      final item = _places.removeAt(oldIndex);
+      _places.insert(newIndex, item);
     });
   }
 
@@ -166,6 +170,16 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                             border: const OutlineInputBorder(),
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _descriptionController,
+                          decoration: InputDecoration(
+                            labelText: strings.routeDescriptionLabel,
+                            border: const OutlineInputBorder(),
+                          ),
+                          minLines: 2,
+                          maxLines: 4,
+                        ),
                         const SizedBox(height: 18),
                         OutlinedButton.icon(
                           onPressed: _showAddPlaceDialog,
@@ -173,19 +187,34 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                           label: Text(strings.addPlace),
                         ),
                         const SizedBox(height: 14),
-                        for (var index = 0; index < _places.length; index += 1)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _EditablePlaceTile(
-                              index: index,
-                              place: _places[index],
-                              canMoveUp: index > 0,
-                              canMoveDown: index < _places.length - 1,
-                              onMoveUp: () => _movePlace(index, -1),
-                              onMoveDown: () => _movePlace(index, 1),
-                              onRemove: () => _removePlace(_places[index]),
-                            ),
-                          ),
+                        Text(
+                          strings.includedStops,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 10),
+                        ReorderableListView.builder(
+                          shrinkWrap: true,
+                          primary: false,
+                          physics: const NeverScrollableScrollPhysics(),
+                          buildDefaultDragHandles: false,
+                          itemCount: _places.length,
+                          onReorder: _reorderPlaces,
+                          itemBuilder: (context, index) {
+                            final place = _places[index];
+
+                            return Padding(
+                              key: ValueKey('download-place-${place.id}'),
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: RouteStopEditTile(
+                                index: index,
+                                title: place.name,
+                                subtitle: place.category,
+                                onRemove: () => _removePlace(place),
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -317,88 +346,6 @@ class _AddPlaceDialogState extends State<_AddPlaceDialog> {
         ),
         FilledButton(onPressed: _submit, child: Text(strings.add)),
       ],
-    );
-  }
-}
-
-class _EditablePlaceTile extends StatelessWidget {
-  const _EditablePlaceTile({
-    required this.index,
-    required this.place,
-    required this.canMoveUp,
-    required this.canMoveDown,
-    required this.onMoveUp,
-    required this.onMoveDown,
-    required this.onRemove,
-  });
-
-  final int index;
-  final RoutePlace place;
-  final bool canMoveUp;
-  final bool canMoveDown;
-  final VoidCallback onMoveUp;
-  final VoidCallback onMoveDown;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = context.strings;
-
-    return AppCard(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: AppColors.accentYellow,
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              '${index + 1}',
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  place.name,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  place.category,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: strings.moveUp,
-            onPressed: canMoveUp ? onMoveUp : null,
-            icon: const Icon(Icons.keyboard_arrow_up),
-          ),
-          IconButton(
-            tooltip: strings.moveDown,
-            onPressed: canMoveDown ? onMoveDown : null,
-            icon: const Icon(Icons.keyboard_arrow_down),
-          ),
-          IconButton(
-            tooltip: strings.delete,
-            onPressed: onRemove,
-            icon: const Icon(Icons.delete_outline),
-          ),
-        ],
-      ),
     );
   }
 }

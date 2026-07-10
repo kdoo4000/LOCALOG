@@ -52,15 +52,23 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
       (int viewId) => _container,
     );
 
-    unawaited(_renderMap());
+    _scheduleRenderMap();
   }
 
   @override
   void didUpdateWidget(covariant NaverDynamicMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_samePoints(oldWidget.points, widget.points)) {
-      unawaited(_renderMap());
+      _scheduleRenderMap();
     }
+  }
+
+  void _scheduleRenderMap() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_renderMap());
+      }
+    });
   }
 
   @override
@@ -103,7 +111,7 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
       final centerLatLng = _latLng(maps, center);
       final mapOptions = js_util.newObject();
       js_util.setProperty(mapOptions, 'center', centerLatLng);
-      js_util.setProperty(mapOptions, 'zoom', _estimateZoom(widget.points));
+      js_util.setProperty(mapOptions, 'zoom', 15);
 
       _map = js_util.callConstructor(js_util.getProperty(maps, 'Map'), [
         _container,
@@ -112,6 +120,7 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
 
       _drawMarkers(maps);
       _drawPath(maps);
+      await _fitAllPoints(maps);
       if (mounted) {
         setState(() {
           _errorMessage = null;
@@ -193,6 +202,58 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
     ]);
   }
 
+  Future<void> _fitAllPoints(Object maps) async {
+    final map = _map;
+    if (map == null) {
+      return;
+    }
+
+    // Wait until the platform view has its final size before calculating the
+    // camera. fitBounds uses the rendered pixel size to choose the zoom level.
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    if (!mounted || !identical(map, _map)) {
+      return;
+    }
+
+    js_util.callMethod(map, 'autoResize', const []);
+
+    if (widget.points.length == 1) {
+      js_util.callMethod(map, 'setCenter', [_latLng(maps, widget.points.first)]);
+      js_util.callMethod(map, 'setZoom', [17]);
+      return;
+    }
+
+    final bounds = MapBounds.from(widget.points);
+    final southWest = _latLng(
+      maps,
+      MapPoint(
+        latitude: bounds.minLatitude,
+        longitude: bounds.minLongitude,
+      ),
+    );
+    final northEast = _latLng(
+      maps,
+      MapPoint(
+        latitude: bounds.maxLatitude,
+        longitude: bounds.maxLongitude,
+      ),
+    );
+    final latLngBounds = js_util.callConstructor(
+      js_util.getProperty(maps, 'LatLngBounds'),
+      [southWest, northEast],
+    );
+    final fitOptions = js_util.jsify({
+      'top': 24,
+      'right': 24,
+      'bottom': 24,
+      'left': 24,
+      'maxZoom': 18,
+    });
+
+    js_util.callMethod(map, 'fitBounds', [latLngBounds, fitOptions]);
+    js_util.callMethod(map, 'setCenter', [_latLng(maps, bounds.center)]);
+  }
+
   void _drawMarkers(Object maps) {
     for (var index = 0; index < widget.points.length; index += 1) {
       final point = widget.points[index];
@@ -264,22 +325,6 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
     return true;
   }
 
-  int _estimateZoom(List<MapPoint> points) {
-    if (points.length <= 1) {
-      return 15;
-    }
-
-    final span = MapBounds.from(points).maxSpan;
-    if (span >= 2.0) return 7;
-    if (span >= 1.0) return 8;
-    if (span >= 0.5) return 9;
-    if (span >= 0.25) return 10;
-    if (span >= 0.12) return 11;
-    if (span >= 0.06) return 12;
-    if (span >= 0.03) return 13;
-    if (span >= 0.015) return 14;
-    return 15;
-  }
 }
 
 class _MapMessage extends StatelessWidget {
@@ -305,9 +350,5 @@ class _MapMessage extends StatelessWidget {
 }
 
 String _sequenceLabel(int index) {
-  if (index < 26) {
-    return String.fromCharCode('A'.codeUnitAt(0) + index);
-  }
-
   return '${index + 1}';
 }

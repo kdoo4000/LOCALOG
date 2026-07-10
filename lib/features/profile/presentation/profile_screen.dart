@@ -93,12 +93,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final strings = context.strings;
 
     return Scaffold(
-      appBar: AppBar(title: Text(strings.profileTitle)),
       body: SafeArea(
         child: FutureBuilder<List<TravelRoute>>(
           future: _repository.getDownloadedRoutes(),
           builder: (context, snapshot) {
             final routes = snapshot.data ?? const <TravelRoute>[];
+            final uploadedRoutes = routes
+                .where((route) => route.sourceRouteId == null)
+                .toList();
+            final downloadedRoutes = routes
+                .where((route) => route.sourceRouteId != null)
+                .toList();
 
             return RefreshIndicator(
               onRefresh: () async {
@@ -106,24 +111,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 await _repository.getDownloadedRoutes();
               },
               child: ListView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.fromLTRB(28, 34, 28, 28),
                 children: [
+                  Text(
+                    strings.profileTitle,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                  const SizedBox(height: 20),
+                  const _ProfileHeader(),
+                  const SizedBox(height: 24),
                   const _LanguageSelector(),
                   const SizedBox(height: 24),
                   Text(
                     strings.myRouteList,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    strings.myRouteListSubtitle,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
-                  ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                   if (!snapshot.hasData)
                     const Center(
                       child: Padding(
@@ -133,21 +140,149 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     )
                   else if (routes.isEmpty)
                     const _EmptyDownloadedRoutes()
-                  else
-                    for (final route in routes) ...[
-                      _DownloadedRouteTile(
-                        route: route,
-                        onOpen: () => _openRoute(route),
-                        onDelete: () => _deleteRoute(route),
-                      ),
-                      const SizedBox(height: 12),
+                  else ...[
+                    if (uploadedRoutes.isNotEmpty) ...[
+                      _RouteSectionTitle(title: strings.uploadedRoutes),
+                      const SizedBox(height: 10),
+                      for (final route in uploadedRoutes) ...[
+                        _DownloadedRouteTile(
+                          route: route,
+                          onOpen: () => _openRoute(route),
+                          onDelete: () => _deleteRoute(route),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                     ],
+                    if (downloadedRoutes.isNotEmpty) ...[
+                      if (uploadedRoutes.isNotEmpty) const SizedBox(height: 10),
+                      _RouteSectionTitle(title: strings.downloadedRoutes),
+                      const SizedBox(height: 10),
+                      for (final route in downloadedRoutes) ...[
+                        _DownloadedRouteTile(
+                          route: route,
+                          onOpen: () => _openRoute(route),
+                          onDelete: () => _deleteRoute(route),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ],
+                  ],
                 ],
               ),
             );
           },
         ),
       ),
+    );
+  }
+}
+
+class _RouteSectionTitle extends StatelessWidget {
+  const _RouteSectionTitle({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: AppColors.gray500,
+            fontWeight: FontWeight.w900,
+          ),
+    );
+  }
+}
+
+class _ProfileHeader extends StatelessWidget {
+  const _ProfileHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            const CircleAvatar(
+              radius: 37,
+              backgroundColor: AppColors.sky,
+              child: Text(
+                'P',
+                style: TextStyle(
+                  color: AppColors.primaryBlue,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Username',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Change profile',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.gray500,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        AppCard(
+          child: Row(
+            children: const [
+              Expanded(
+                child: _ProfileStat(label: '누적 좋아요', value: '12,430'),
+              ),
+              Expanded(
+                child: _ProfileStat(label: '다운로드', value: '327'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileStat extends StatelessWidget {
+  const _ProfileStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: AppColors.gray500,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+        ),
+      ],
     );
   }
 }
@@ -202,6 +337,7 @@ class _DownloadedRouteTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
+    final isUploadedRoute = route.sourceRouteId == null;
 
     return AppCard(
       padding: EdgeInsets.zero,
@@ -211,11 +347,18 @@ class _DownloadedRouteTile extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
             child: Row(
               children: [
-                const Icon(Icons.bookmark_added, color: AppColors.primaryBlue),
+                Icon(
+                  isUploadedRoute
+                      ? Icons.add_photo_alternate_outlined
+                      : Icons.bookmark_added,
+                  color: AppColors.primaryBlue,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    strings.savedRouteLabel,
+                    isUploadedRoute
+                        ? strings.uploadedRouteLabel
+                        : strings.downloadedRouteLabel,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w900,
                       color: AppColors.primaryBlue,

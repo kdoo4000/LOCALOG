@@ -14,21 +14,95 @@ abstract final class AppTheme {
 
     return ThemeData(
       colorScheme: scheme,
-      scaffoldBackgroundColor: AppColors.gray50,
+      scaffoldBackgroundColor: AppColors.white,
+      fontFamily: 'Pretendard',
       useMaterial3: true,
+      textTheme: Typography.blackMountainView.apply(
+        bodyColor: AppColors.ink,
+        displayColor: AppColors.ink,
+        fontFamily: 'Pretendard',
+      ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.gray50,
+        backgroundColor: AppColors.white,
         foregroundColor: AppColors.ink,
         elevation: 0,
         centerTitle: false,
+        titleTextStyle: TextStyle(
+          color: AppColors.ink,
+          fontFamily: 'Pretendard',
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+        ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
+          minimumSize: const Size.fromHeight(56),
+          backgroundColor: AppColors.primaryBlue,
+          foregroundColor: AppColors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(12),
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(52),
+          foregroundColor: AppColors.ink,
+          side: const BorderSide(color: AppColors.gray200),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.gray200),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.gray200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primaryBlue, width: 1.4),
+        ),
+        labelStyle: const TextStyle(color: AppColors.gray500),
+      ),
+      searchBarTheme: SearchBarThemeData(
+        backgroundColor: const WidgetStatePropertyAll(AppColors.white),
+        elevation: const WidgetStatePropertyAll(0),
+        side: const WidgetStatePropertyAll(
+          BorderSide(color: AppColors.gray200),
+        ),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 14),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.white,
+        selectedColor: AppColors.secondaryLavender,
+        disabledColor: AppColors.gray100,
+        side: const BorderSide(color: AppColors.gray200),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+        labelStyle: const TextStyle(
+          color: AppColors.ink,
+          fontWeight: FontWeight.w700,
+        ),
+        secondaryLabelStyle: const TextStyle(
+          color: AppColors.primaryBlue,
+          fontWeight: FontWeight.w800,
         ),
       ),
       cardTheme: CardThemeData(
@@ -37,19 +111,28 @@ abstract final class AppTheme {
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: Color(0x14000000)),
+          side: const BorderSide(color: AppColors.gray200),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.white,
-        indicatorColor: AppColors.accentYellow,
+        elevation: 0,
+        indicatorColor: AppColors.sky,
+        height: 82,
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             color: states.contains(WidgetState.selected)
-                ? AppColors.ink
-                : AppColors.gray400,
+                ? AppColors.primaryBlue
+                : AppColors.gray500,
             fontSize: 12,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? AppColors.primaryBlue
+                : AppColors.gray500,
           ),
         ),
       ),

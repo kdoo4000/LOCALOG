@@ -11,9 +11,14 @@ import '../domain/route_place.dart';
 import '../domain/travel_route.dart';
 
 class RouteDetailScreen extends StatefulWidget {
-  const RouteDetailScreen({super.key, required this.routeId});
+  const RouteDetailScreen({
+    super.key,
+    required this.routeId,
+    this.showSourceRoute = false,
+  });
 
   final String routeId;
+  final bool showSourceRoute;
 
   @override
   State<RouteDetailScreen> createState() => _RouteDetailScreenState();
@@ -21,12 +26,28 @@ class RouteDetailScreen extends StatefulWidget {
 
 class _RouteDetailScreenState extends State<RouteDetailScreen> {
   final _repository = const MockRouteRepository();
-  late Future<TravelRoute?> _routeFuture;
+  late Future<_RouteDetailData?> _detailFuture;
 
   @override
   void initState() {
     super.initState();
-    _routeFuture = _repository.getRouteById(widget.routeId);
+    _detailFuture = _loadDetail();
+  }
+
+  Future<_RouteDetailData?> _loadDetail() async {
+    final route = widget.showSourceRoute
+        ? await _repository.getSourceRouteById(widget.routeId)
+        : await _repository.getRouteById(widget.routeId);
+    if (route == null) {
+      return null;
+    }
+
+    // A source route always remains the content shown from search. A saved copy
+    // is only used to decide which route should open in the editor.
+    final savedRoute = route.sourceRouteId == null && !route.isDownloadedCopy
+        ? await _repository.getDownloadedRouteForSource(route.id)
+        : route;
+    return _RouteDetailData(route: route, savedRoute: savedRoute);
   }
 
   Future<void> _openDownloadEdit(TravelRoute route) async {
@@ -40,7 +61,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
 
     if (updated == true) {
       setState(() {
-        _routeFuture = _repository.getRouteById(widget.routeId);
+        _detailFuture = _loadDetail();
       });
       ScaffoldMessenger.of(
         context,
@@ -53,9 +74,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     final strings = context.strings;
 
     return Scaffold(
-      appBar: AppBar(title: Text(strings.routeDetailTitle)),
-      body: FutureBuilder<TravelRoute?>(
-        future: _routeFuture,
+      body: FutureBuilder<_RouteDetailData?>(
+        future: _detailFuture,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             if (snapshot.connectionState == ConnectionState.done) {
@@ -65,48 +85,207 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final route = snapshot.data!;
+          final detail = snapshot.data!;
+          final route = detail.route;
+          final routeToEdit = detail.savedRoute ?? route;
+          final hasSavedCopy = detail.savedRoute != null;
           final sortedPlaces = [...route.places]
             ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
 
-          return ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              _DetailHeader(route: route),
-              const SizedBox(height: 16),
-              _RouteStats(route: route),
-              const SizedBox(height: 20),
-              _RouteMapPanel(places: sortedPlaces),
-              const SizedBox(height: 20),
-              Text(
-                strings.visitTimeline,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 12),
-              for (final place in sortedPlaces) ...[
-                _TimelinePlace(place: place),
-                const SizedBox(height: 10),
+          return SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(28, 16, 28, 28),
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                ),
+                _DetailHero(route: route),
+                const SizedBox(height: 28),
+                Text(
+                  strings.visitTimeline,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                const SizedBox(height: 14),
+                for (final place in sortedPlaces) ...[
+                  _TimelinePlace(place: place),
+                  const SizedBox(height: 12),
+                ],
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: () => _openDownloadEdit(routeToEdit),
+                  icon: Icon(
+                    hasSavedCopy
+                        ? Icons.edit_note_outlined
+                        : Icons.download_outlined,
+                  ),
+                  label: Text(
+                    hasSavedCopy
+                        ? strings.editMyRoute
+                        : strings.downloadAndCustomize,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _RouteMapPanel(places: sortedPlaces),
               ],
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: () => _openDownloadEdit(route),
-                icon: Icon(
-                  route.isDownloadedCopy
-                      ? Icons.edit_note_outlined
-                      : Icons.download_outlined,
-                ),
-                label: Text(
-                  route.isDownloadedCopy
-                      ? strings.editMyRoute
-                      : strings.downloadAndCustomize,
-                ),
-              ),
-            ],
+            ),
           );
         },
       ),
+    );
+  }
+}
+
+class RouteDetailArguments {
+  const RouteDetailArguments({
+    required this.routeId,
+    this.showSourceRoute = false,
+  });
+
+  final String routeId;
+  final bool showSourceRoute;
+}
+
+class _RouteDetailData {
+  const _RouteDetailData({required this.route, required this.savedRoute});
+
+  final TravelRoute route;
+  final TravelRoute? savedRoute;
+}
+
+class _DetailHero extends StatelessWidget {
+  const _DetailHero({required this.route});
+
+  final TravelRoute route;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final upvote = '${(route.upvoteRatio * 100).round()}%';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          height: 236,
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: AppColors.primaryBlue,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.accentLime,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '추천 $upvote',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                route.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w900,
+                      height: 1.12,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          '${strings.durationLabel(route.estimatedDurationMinutes)} · ${route.places.length}곳 · ${route.city}',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.gray500,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          route.description,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.ink,
+                height: 1.45,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TimelinePlace extends StatelessWidget {
+  const _TimelinePlace({required this.place});
+
+  final RoutePlace place;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 17,
+          backgroundColor: AppColors.sky,
+          foregroundColor: AppColors.primaryBlue,
+          child: Text(
+            '${place.orderIndex + 1}',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+        const SizedBox(width: 18),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  place.name,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${place.category} · 예상 비용 ₩${8000 * (place.orderIndex + 1)}',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.gray500,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                if (place.memo != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    place.memo!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.gray500,
+                          height: 1.35,
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -134,211 +313,17 @@ class _RouteMapPanel extends StatelessWidget {
         children: [
           Text(
             context.strings.routeMap,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
           ),
           const SizedBox(height: 12),
           if (points.isEmpty)
             Text(context.strings.noRouteMapPoints)
-          else ...[
-            Text(
-              context.strings.markerCount(points.length),
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-            ),
-            const SizedBox(height: 12),
-            NaverDynamicMap(points: points, height: 260),
-          ],
+          else
+            NaverDynamicMap(points: points, height: 220),
         ],
       ),
     );
   }
-}
-
-class _DetailHeader extends StatelessWidget {
-  const _DetailHeader({required this.route});
-
-  final TravelRoute route;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = context.strings;
-
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: AppColors.primaryBlue,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            route.city,
-            style: const TextStyle(
-              color: AppColors.accentYellow,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            route.title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: AppColors.white,
-              fontWeight: FontWeight.w900,
-              height: 1.18,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            route.description,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.white,
-              height: 1.45,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            route.isDownloadedCopy
-                ? strings.savedRoute
-                : strings.authorRoute(route.authorName),
-            style: const TextStyle(
-              color: AppColors.white,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RouteStats extends StatelessWidget {
-  const _RouteStats({required this.route});
-
-  final TravelRoute route;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = context.strings;
-
-    return AppCard(
-      child: Row(
-        children: [
-          _StatItem(
-            icon: Icons.schedule,
-            label: strings.duration,
-            value: strings.durationLabel(route.estimatedDurationMinutes),
-          ),
-          _StatItem(
-            icon: Icons.thumb_up_alt_outlined,
-            label: strings.upvote,
-            value: '${(route.upvoteRatio * 100).round()}%',
-          ),
-          _StatItem(
-            icon: Icons.download_outlined,
-            label: strings.downloads,
-            value: '${route.downloadCount}',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatItem extends StatelessWidget {
-  const _StatItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          Icon(icon, color: AppColors.primaryBlue),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelMedium?.copyWith(color: Colors.black54),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TimelinePlace extends StatelessWidget {
-  const _TimelinePlace({required this.place});
-
-  final RoutePlace place;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            backgroundColor: AppColors.accentYellow,
-            foregroundColor: AppColors.ink,
-            child: Text('${place.orderIndex + 1}'),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  place.name,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${place.category}${place.address == null ? '' : ' - ${place.address}'}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.black54,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (place.visitedAt != null) ...[
-                  const SizedBox(height: 8),
-                  Text(_formatVisitedAt(place.visitedAt!)),
-                ],
-                if (place.memo != null) ...[
-                  const SizedBox(height: 8),
-                  Text(place.memo!),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-String _formatVisitedAt(DateTime value) {
-  String two(int number) => number.toString().padLeft(2, '0');
-  return '${value.year}.${two(value.month)}.${two(value.day)} '
-      '${two(value.hour)}:${two(value.minute)}';
 }

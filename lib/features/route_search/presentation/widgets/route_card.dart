@@ -13,123 +13,66 @@ class RouteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final upvote = '${(route.upvoteRatio * 100).round()}%';
+    final duration = context.strings.durationLabel(
+      route.estimatedDurationMinutes,
+    );
+    final cityInitial = route.city.isEmpty ? '?' : route.city.substring(0, 1);
+
     return AppCard(
       onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.all(16),
+      child: Row(
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.secondaryLavender,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  route.city.substring(0, 1),
-                  style: const TextStyle(
-                    color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 28,
-                  ),
-                ),
+          Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.sky,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              cityInitial,
+              style: const TextStyle(
+                color: AppColors.primaryBlue,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      route.title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  route.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w900,
+                        height: 1.16,
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '@${route.authorName} - ${route.city}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.black54,
-                        fontWeight: FontWeight.w700,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '추천 $upvote · ${route.places.length}곳 · $duration',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.gray500,
+                        fontWeight: FontWeight.w800,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      route.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final tag in route.tags)
-                Chip(
-                  label: Text(tag),
-                  visualDensity: VisualDensity.compact,
-                  side: BorderSide.none,
-                  backgroundColor: AppColors.gray100,
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _Metric(
-                icon: Icons.thumb_up_alt_outlined,
-                label: '${(route.upvoteRatio * 100).round()}%',
-              ),
-              const SizedBox(width: 14),
-              _Metric(
-                icon: Icons.download_outlined,
-                label: '${route.downloadCount}',
-              ),
-              const SizedBox(width: 14),
-              _Metric(
-                icon: Icons.schedule,
-                label: context.strings.durationLabel(
-                  route.estimatedDurationMinutes,
-                ),
-              ),
-            ],
-          ),
+          const SizedBox(width: 10),
+          const Icon(Icons.chevron_right, color: AppColors.gray400),
         ],
       ),
-    );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: AppColors.primaryBlue),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: Theme.of(
-            context,
-          ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
-        ),
-      ],
     );
   }
 }

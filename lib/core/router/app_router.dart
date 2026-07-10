@@ -18,9 +18,7 @@ abstract final class AppRouter {
           RouteNames.onboarding => const OnboardingScreen(),
           RouteNames.login => const LoginScreen(),
           RouteNames.main => const MainShellScreen(),
-          RouteNames.routeDetail => RouteDetailScreen(
-            routeId: settings.arguments as String,
-          ),
+          RouteNames.routeDetail => _routeDetailScreen(settings.arguments),
           RouteNames.routeDownloadEdit => RouteDownloadEditScreen(
             routeId: settings.arguments as String,
           ),
@@ -28,5 +26,16 @@ abstract final class AppRouter {
         };
       },
     );
+  }
+
+  static Widget _routeDetailScreen(Object? arguments) {
+    if (arguments is RouteDetailArguments) {
+      return RouteDetailScreen(
+        routeId: arguments.routeId,
+        showSourceRoute: arguments.showSourceRoute,
+      );
+    }
+
+    return RouteDetailScreen(routeId: arguments as String);
   }
 }

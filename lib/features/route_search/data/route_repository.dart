@@ -5,6 +5,8 @@ abstract class RouteRepository {
 
   Future<TravelRoute?> getRouteById(String routeId);
 
+  Future<TravelRoute?> getSourceRouteById(String routeId);
+
   Future<List<TravelRoute>> getDownloadedRoutes();
 
   Future<TravelRoute?> getDownloadedRouteForSource(String sourceRouteId);
