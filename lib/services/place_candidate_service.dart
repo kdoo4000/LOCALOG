@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -31,7 +32,7 @@ class PlaceCandidateService {
         path: _joinPath(base.path, 'place-candidates'),
         queryParameters: {'lat': '$latitude', 'lng': '$longitude'},
       );
-      final response = await http.get(uri);
+      final response = await http.get(uri).timeout(_requestTimeout);
       final body = utf8.decode(response.bodyBytes, allowMalformed: true);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return PlaceCandidateResult.failure(
@@ -39,37 +40,96 @@ class PlaceCandidateService {
         );
       }
 
-      final decoded = jsonDecode(body);
-      if (decoded is! Map<String, dynamic>) {
-        return const PlaceCandidateResult.failure(
-          'Place suggestion response was not valid.',
-        );
-      }
-
-      final candidatesJson = decoded['candidates'];
-      if (candidatesJson is! List) {
-        return const PlaceCandidateResult.failure(
-          'Place suggestion response did not include candidates.',
-        );
-      }
-
-      final candidates = candidatesJson
-          .whereType<Map<String, dynamic>>()
-          .map(PlaceCandidate.fromJson)
-          .where((candidate) => candidate.displayName.isNotEmpty)
-          .toList();
-      if (candidates.isEmpty) {
-        return const PlaceCandidateResult.failure(
-          'No place candidates were found for this photo.',
-        );
-      }
-
-      return PlaceCandidateResult.success(candidates);
+      return _decodeCandidates(
+        body,
+        emptyMessage: 'No place candidates were found for this photo.',
+      );
     } catch (error) {
       return PlaceCandidateResult.failure(
         'Place suggestion request failed before receiving a response. $error',
       );
     }
+  }
+
+  Future<PlaceCandidateResult> searchByKeyword(
+    String query, {
+    double? latitude,
+    double? longitude,
+  }) async {
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.length < 2) {
+      return const PlaceCandidateResult.success([]);
+    }
+
+    if (!isConfigured) {
+      return const PlaceCandidateResult.failure(
+        'Place search is not configured. Run the proxy and pass NAVER_MAP_PROXY_BASE_URL.',
+      );
+    }
+
+    try {
+      final base = Uri.parse(proxyBaseUrl);
+      final uri = base.replace(
+        path: _joinPath(base.path, 'place-search'),
+        queryParameters: {
+          'query': trimmedQuery,
+          if (latitude != null && latitude.isFinite) 'lat': '$latitude',
+          if (longitude != null && longitude.isFinite) 'lng': '$longitude',
+        },
+      );
+      final response = await http.get(uri).timeout(_requestTimeout);
+      final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return PlaceCandidateResult.failure(
+          'Place search request failed (${response.statusCode}). $body',
+        );
+      }
+
+      return _decodeCandidates(
+        body,
+        emptyMessage: 'No places were found.',
+        allowEmpty: true,
+      );
+    } catch (error) {
+      return PlaceCandidateResult.failure(
+        'Place search request failed before receiving a response. $error',
+      );
+    }
+  }
+
+  PlaceCandidateResult _decodeCandidates(
+    String body, {
+    required String emptyMessage,
+    bool allowEmpty = false,
+  }) {
+    final decoded = jsonDecode(body);
+    if (decoded is! Map<String, dynamic>) {
+      return const PlaceCandidateResult.failure(
+        'Place suggestion response was not valid.',
+      );
+    }
+
+    final candidatesJson = decoded['candidates'];
+    if (candidatesJson is! List) {
+      return const PlaceCandidateResult.failure(
+        'Place suggestion response did not include candidates.',
+      );
+    }
+
+    final candidates = candidatesJson
+        .whereType<Map<String, dynamic>>()
+        .map(PlaceCandidate.fromJson)
+        .where((candidate) => candidate.displayName.isNotEmpty)
+        .toList();
+    if (candidates.isEmpty) {
+      if (allowEmpty) {
+        return const PlaceCandidateResult.success([]);
+      }
+
+      return PlaceCandidateResult.failure(emptyMessage);
+    }
+
+    return PlaceCandidateResult.success(candidates);
   }
 
   String _joinPath(String basePath, String childPath) {
@@ -83,6 +143,8 @@ class PlaceCandidateService {
     return '$normalizedBase/$childPath';
   }
 }
+
+const _requestTimeout = Duration(seconds: 6);
 
 class PlaceCandidateResult {
   const PlaceCandidateResult._({this.candidates = const [], this.errorMessage});

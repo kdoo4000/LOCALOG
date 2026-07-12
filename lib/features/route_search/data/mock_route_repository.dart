@@ -17,7 +17,11 @@ class MockRouteRepository implements RouteRepository {
   @override
   Future<List<TravelRoute>> getRecommendedRoutes() async {
     await Future<void>.delayed(const Duration(milliseconds: 180));
-    return _routes;
+    final publishedByUser = _downloadedRoutesById.values.where(
+      (route) =>
+          route.isCreatedByCurrentUser && route.isPublished && route.isPublic,
+    );
+    return [...publishedByUser, ..._routes];
   }
 
   @override
@@ -75,6 +79,13 @@ class MockRouteRepository implements RouteRepository {
   @override
   Future<TravelRoute> updateDownloadedRoute(TravelRoute route) async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (route.isCreatedByCurrentUser) {
+      final updated = route.copyWith(isDownloaded: true);
+      _downloadedRoutesById[updated.id] = updated;
+      _notifyDownloadedRoutesChanged();
+      return updated;
+    }
+
     final sourceRouteId = route.sourceRouteId ?? _sourceIdFor(route.id);
     final downloadedId = route.isDownloadedCopy
         ? route.id
@@ -92,7 +103,11 @@ class MockRouteRepository implements RouteRepository {
   @override
   Future<TravelRoute> saveCreatedRoute(TravelRoute route) async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
-    final created = route.copyWith(isDownloaded: true);
+    final created = route.copyWith(
+      isDownloaded: true,
+      isCreatedByCurrentUser: true,
+      publishedAt: route.publishedAt ?? DateTime.now(),
+    );
     _downloadedRoutesById[created.id] = created;
     _notifyDownloadedRoutesChanged();
     return created;

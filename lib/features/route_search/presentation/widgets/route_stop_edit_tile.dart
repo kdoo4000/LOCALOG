@@ -12,6 +12,7 @@ class RouteStopEditTile extends StatelessWidget {
     required this.onRemove,
     this.leading,
     this.onChoosePlace,
+    this.onEdit,
     this.placeSelected = false,
   });
 
@@ -20,6 +21,7 @@ class RouteStopEditTile extends StatelessWidget {
   final String subtitle;
   final Widget? leading;
   final VoidCallback? onChoosePlace;
+  final VoidCallback? onEdit;
   final VoidCallback onRemove;
   final bool placeSelected;
 
@@ -69,9 +71,9 @@ class RouteStopEditTile extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -93,6 +95,13 @@ class RouteStopEditTile extends StatelessWidget {
                   ? context.strings.changePlace
                   : context.strings.choosePlace,
               icon: const Icon(Icons.edit_location_alt_outlined),
+            ),
+          if (onEdit != null)
+            IconButton(
+              onPressed: onEdit,
+              tooltip: context.strings.editPlace,
+              color: Colors.black87,
+              icon: const Icon(Icons.edit_outlined),
             ),
           ReorderableDragStartListener(
             index: index,

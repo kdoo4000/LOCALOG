@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_language.dart';
@@ -17,7 +19,8 @@ class RouteSearchScreen extends StatefulWidget {
 
 class _RouteSearchScreenState extends State<RouteSearchScreen> {
   final _repository = const MockRouteRepository();
-  late final Future<List<TravelRoute>> _routesFuture;
+  late Future<List<TravelRoute>> _routesFuture;
+  StreamSubscription<void>? _routesSubscription;
   String _keyword = '';
   final Set<String> _selectedTagKeys = {};
 
@@ -25,6 +28,19 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
   void initState() {
     super.initState();
     _routesFuture = _repository.getRecommendedRoutes();
+    _routesSubscription = _repository.downloadedRoutesChanged.listen((_) {
+      if (mounted) {
+        setState(() {
+          _routesFuture = _repository.getRecommendedRoutes();
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _routesSubscription?.cancel();
+    super.dispose();
   }
 
   void _openRoute(TravelRoute route) {

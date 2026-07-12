@@ -14,7 +14,7 @@ abstract final class AppTheme {
 
     return ThemeData(
       colorScheme: scheme,
-      scaffoldBackgroundColor: AppColors.white,
+      scaffoldBackgroundColor: AppColors.gray50,
       fontFamily: 'Pretendard',
       useMaterial3: true,
       textTheme: Typography.blackMountainView.apply(
@@ -23,7 +23,7 @@ abstract final class AppTheme {
         fontFamily: 'Pretendard',
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.white,
+        backgroundColor: AppColors.gray50,
         foregroundColor: AppColors.ink,
         elevation: 0,
         centerTitle: false,
@@ -40,7 +40,7 @@ abstract final class AppTheme {
           backgroundColor: AppColors.primaryBlue,
           foregroundColor: AppColors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
         ),
@@ -51,7 +51,7 @@ abstract final class AppTheme {
           foregroundColor: AppColors.ink,
           side: const BorderSide(color: AppColors.gray200),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
         ),
@@ -64,15 +64,15 @@ abstract final class AppTheme {
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: AppColors.gray200),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: AppColors.gray200),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: AppColors.primaryBlue, width: 1.4),
         ),
         labelStyle: const TextStyle(color: AppColors.gray500),
@@ -84,7 +84,7 @@ abstract final class AppTheme {
           BorderSide(color: AppColors.gray200),
         ),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 14),
@@ -107,18 +107,19 @@ abstract final class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: AppColors.white,
-        elevation: 0,
+        elevation: 1.5,
+        shadowColor: const Color(0x1A2457F5),
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: AppColors.gray200),
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFFE8ECF4)),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.white,
         elevation: 0,
-        indicatorColor: AppColors.sky,
-        height: 82,
+        indicatorColor: AppColors.accentLime,
+        height: 76,
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             color: states.contains(WidgetState.selected)

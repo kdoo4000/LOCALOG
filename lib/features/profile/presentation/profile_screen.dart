@@ -17,18 +17,24 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with SingleTickerProviderStateMixin {
   final _repository = const MockRouteRepository();
   StreamSubscription<void>? _downloadedRoutesSubscription;
+  late Future<List<TravelRoute>> _downloadedRoutesFuture;
+  late final TabController _routeTabController;
 
   @override
   void initState() {
     super.initState();
+    _routeTabController = TabController(length: 2, vsync: this);
+    _routeTabController.addListener(_handleRouteTabChanged);
+    _downloadedRoutesFuture = _repository.getDownloadedRoutes();
     _downloadedRoutesSubscription = _repository.downloadedRoutesChanged.listen((
       _,
     ) {
       if (mounted) {
-        setState(() {});
+        _reloadDownloadedRoutes();
       }
     });
   }
@@ -36,7 +42,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     _downloadedRoutesSubscription?.cancel();
+    _routeTabController
+      ..removeListener(_handleRouteTabChanged)
+      ..dispose();
     super.dispose();
+  }
+
+  void _handleRouteTabChanged() {
+    if (mounted && !_routeTabController.indexIsChanging) {
+      setState(() {});
+    }
   }
 
   Future<void> _openRoute(TravelRoute route) async {
@@ -46,7 +61,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) {
       return;
     }
-    setState(() {});
+    _reloadDownloadedRoutes();
   }
 
   Future<void> _deleteRoute(TravelRoute route) async {
@@ -85,7 +100,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(strings.routeDeleted)));
-    setState(() {});
+    _reloadDownloadedRoutes();
+  }
+
+  Future<void> _reloadDownloadedRoutes() {
+    final future = _repository.getDownloadedRoutes();
+    setState(() {
+      _downloadedRoutesFuture = future;
+    });
+    return future;
   }
 
   @override
@@ -95,20 +118,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       body: SafeArea(
         child: FutureBuilder<List<TravelRoute>>(
-          future: _repository.getDownloadedRoutes(),
+          future: _downloadedRoutesFuture,
           builder: (context, snapshot) {
             final routes = snapshot.data ?? const <TravelRoute>[];
             final uploadedRoutes = routes
-                .where((route) => route.sourceRouteId == null)
+                .where((route) => route.isCreatedByCurrentUser)
                 .toList();
             final downloadedRoutes = routes
-                .where((route) => route.sourceRouteId != null)
+                .where((route) => !route.isCreatedByCurrentUser)
                 .toList();
+            final selectedRoutes = _routeTabController.index == 0
+                ? uploadedRoutes
+                : downloadedRoutes;
 
             return RefreshIndicator(
               onRefresh: () async {
-                setState(() {});
-                await _repository.getDownloadedRoutes();
+                await _reloadDownloadedRoutes();
               },
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(28, 34, 28, 28),
@@ -131,6 +156,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                   ),
                   const SizedBox(height: 12),
+                  TabBar(
+                    controller: _routeTabController,
+                    tabs: [
+                      Tab(text: strings.uploadedRoutes),
+                      Tab(text: strings.downloadedRoutes),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   if (!snapshot.hasData)
                     const Center(
                       child: Padding(
@@ -138,58 +171,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: CircularProgressIndicator(),
                       ),
                     )
-                  else if (routes.isEmpty)
+                  else if (selectedRoutes.isEmpty)
                     const _EmptyDownloadedRoutes()
-                  else ...[
-                    if (uploadedRoutes.isNotEmpty) ...[
-                      _RouteSectionTitle(title: strings.uploadedRoutes),
-                      const SizedBox(height: 10),
-                      for (final route in uploadedRoutes) ...[
-                        _DownloadedRouteTile(
-                          route: route,
-                          onOpen: () => _openRoute(route),
-                          onDelete: () => _deleteRoute(route),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
+                  else
+                    for (final route in selectedRoutes) ...[
+                      _DownloadedRouteTile(
+                        route: route,
+                        onOpen: () => _openRoute(route),
+                        onDelete: () => _deleteRoute(route),
+                      ),
+                      const SizedBox(height: 12),
                     ],
-                    if (downloadedRoutes.isNotEmpty) ...[
-                      if (uploadedRoutes.isNotEmpty) const SizedBox(height: 10),
-                      _RouteSectionTitle(title: strings.downloadedRoutes),
-                      const SizedBox(height: 10),
-                      for (final route in downloadedRoutes) ...[
-                        _DownloadedRouteTile(
-                          route: route,
-                          onOpen: () => _openRoute(route),
-                          onDelete: () => _deleteRoute(route),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                    ],
-                  ],
                 ],
               ),
             );
           },
         ),
       ),
-    );
-  }
-}
-
-class _RouteSectionTitle extends StatelessWidget {
-  const _RouteSectionTitle({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            color: AppColors.gray500,
-            fontWeight: FontWeight.w900,
-          ),
     );
   }
 }
@@ -337,45 +335,50 @@ class _DownloadedRouteTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    final isUploadedRoute = route.sourceRouteId == null;
 
-    return AppCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
-            child: Row(
-              children: [
-                Icon(
-                  isUploadedRoute
-                      ? Icons.add_photo_alternate_outlined
-                      : Icons.bookmark_added,
-                  color: AppColors.primaryBlue,
+    return Stack(
+      children: [
+        RouteCard(route: route, onTap: onOpen),
+        if (route.isCreatedByCurrentUser)
+          Positioned(
+            top: 10,
+            left: 10,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: route.isPublic
+                    ? AppColors.primaryBlue
+                    : AppColors.gray500,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isUploadedRoute
-                        ? strings.uploadedRouteLabel
-                        : strings.downloadedRouteLabel,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.primaryBlue,
-                    ),
+                child: Text(
+                  route.isPublic ? '전체 공개' : '나만 보기',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                IconButton(
+              ),
+            ),
+          ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: Material(
+            color: Colors.white,
+            shape: const CircleBorder(),
+            child: IconButton(
                   tooltip: strings.delete,
                   onPressed: onDelete,
                   icon: const Icon(Icons.delete_outline),
-                ),
-              ],
             ),
           ),
-          RouteCard(route: route, onTap: onOpen),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -22,6 +22,7 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
   final _descriptionController = TextEditingController();
   TravelRoute? _route;
   List<RoutePlace> _places = [];
+  RouteVisibility _visibility = RouteVisibility.public;
   bool _isSaving = false;
 
   @override
@@ -55,6 +56,7 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
       _route = route;
       _titleController.text = route.title;
       _descriptionController.text = route.description;
+      _visibility = route.visibility;
       _places = [...route.places]
         ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     });
@@ -82,6 +84,7 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
           ? route.description
           : _descriptionController.text.trim(),
       places: orderedPlaces,
+      visibility: _visibility,
       isDownloaded: true,
     );
     await _repository.updateDownloadedRoute(updated);
@@ -120,10 +123,37 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
     });
   }
 
+  Future<void> _showEditPlaceDialog(RoutePlace place) async {
+    final updatedPlace = await showDialog<RoutePlace>(
+      context: context,
+      builder: (context) => _PlaceDialog(
+        title: context.strings.editPlace,
+        actionLabel: context.strings.saveRoute,
+        orderIndex: place.orderIndex,
+        initialPlace: place,
+      ),
+    );
+
+    if (updatedPlace == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _places = [
+        for (final item in _places)
+          if (item.id == place.id) updatedPlace else item,
+      ];
+    });
+  }
+
   Future<void> _showAddPlaceDialog() async {
     final place = await showDialog<RoutePlace>(
       context: context,
-      builder: (context) => _AddPlaceDialog(orderIndex: _places.length),
+      builder: (context) => _PlaceDialog(
+        title: context.strings.addPlace,
+        actionLabel: context.strings.add,
+        orderIndex: _places.length,
+      ),
     );
 
     if (place == null || !mounted) {
@@ -180,6 +210,33 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                           minLines: 2,
                           maxLines: 4,
                         ),
+                        if (route.isCreatedByCurrentUser) ...[
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<RouteVisibility>(
+                            initialValue: _visibility,
+                            decoration: const InputDecoration(
+                              labelText: '공개 범위',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: RouteVisibility.public,
+                                child: Text('전체 공개'),
+                              ),
+                              DropdownMenuItem(
+                                value: RouteVisibility.private,
+                                child: Text('나만 보기'),
+                              ),
+                            ],
+                            onChanged: _isSaving
+                                ? null
+                                : (value) {
+                                    if (value != null) {
+                                      setState(() => _visibility = value);
+                                    }
+                                  },
+                          ),
+                        ],
                         const SizedBox(height: 18),
                         OutlinedButton.icon(
                           onPressed: _showAddPlaceDialog,
@@ -209,7 +266,8 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                               child: RouteStopEditTile(
                                 index: index,
                                 title: place.name,
-                                subtitle: place.category,
+                                subtitle: _placeSubtitle(context, place),
+                                onEdit: () => _showEditPlaceDialog(place),
                                 onRemove: () => _removePlace(place),
                               ),
                             );
@@ -228,7 +286,9 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.save_outlined),
-                      label: Text(_isSaving ? strings.saving : strings.saveRoute),
+                      label: Text(
+                        _isSaving ? strings.saving : strings.saveRoute,
+                      ),
                     ),
                   ),
                 ],
@@ -238,20 +298,46 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
   }
 }
 
-class _AddPlaceDialog extends StatefulWidget {
-  const _AddPlaceDialog({required this.orderIndex});
+class _PlaceDialog extends StatefulWidget {
+  const _PlaceDialog({
+    required this.title,
+    required this.actionLabel,
+    required this.orderIndex,
+    this.initialPlace,
+  });
 
+  final String title;
+  final String actionLabel;
   final int orderIndex;
+  final RoutePlace? initialPlace;
 
   @override
-  State<_AddPlaceDialog> createState() => _AddPlaceDialogState();
+  State<_PlaceDialog> createState() => _PlaceDialogState();
 }
 
-class _AddPlaceDialogState extends State<_AddPlaceDialog> {
+class _PlaceDialogState extends State<_PlaceDialog> {
   final _nameController = TextEditingController();
   final _categoryController = TextEditingController();
   final _addressController = TextEditingController();
   final _memoController = TextEditingController();
+  final _costController = TextEditingController();
+
+  bool get _isEditing => widget.initialPlace != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final initialPlace = widget.initialPlace;
+    if (initialPlace == null) {
+      return;
+    }
+
+    _nameController.text = initialPlace.name;
+    _categoryController.text = initialPlace.category;
+    _addressController.text = initialPlace.address ?? '';
+    _memoController.text = initialPlace.memo ?? '';
+    _costController.text = initialPlace.estimatedCostWon?.toString() ?? '';
+  }
 
   @override
   void dispose() {
@@ -259,6 +345,7 @@ class _AddPlaceDialogState extends State<_AddPlaceDialog> {
     _categoryController.dispose();
     _addressController.dispose();
     _memoController.dispose();
+    _costController.dispose();
     super.dispose();
   }
 
@@ -271,9 +358,21 @@ class _AddPlaceDialogState extends State<_AddPlaceDialog> {
       return;
     }
 
+    final costText = _costController.text.trim().replaceAll(',', '');
+    final estimatedCost = costText.isEmpty ? null : int.tryParse(costText);
+    if (costText.isNotEmpty && estimatedCost == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.strings.invalidCost)));
+      return;
+    }
+
+    final initialPlace = widget.initialPlace;
     Navigator.of(context).pop(
       RoutePlace(
-        id: 'custom-${DateTime.now().microsecondsSinceEpoch}',
+        id:
+            initialPlace?.id ??
+            'custom-${DateTime.now().microsecondsSinceEpoch}',
         name: name,
         category: _categoryController.text.trim().isEmpty
             ? 'Custom'
@@ -284,6 +383,11 @@ class _AddPlaceDialogState extends State<_AddPlaceDialog> {
         memo: _memoController.text.trim().isEmpty
             ? null
             : _memoController.text.trim(),
+        latitude: initialPlace?.latitude,
+        longitude: initialPlace?.longitude,
+        estimatedCostWon: estimatedCost,
+        photoUrls: initialPlace?.photoUrls ?? const [],
+        purchasedItems: initialPlace?.purchasedItems ?? const [],
         orderIndex: widget.orderIndex,
       ),
     );
@@ -294,47 +398,62 @@ class _AddPlaceDialogState extends State<_AddPlaceDialog> {
     final strings = context.strings;
 
     return AlertDialog(
-      title: Text(strings.addPlace),
+      title: Text(widget.title),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: _nameController,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: strings.placeName,
-                hintText: strings.exampleCafe,
+            if (_isEditing) ...[
+              _LockedPlaceSummary(place: widget.initialPlace!),
+              const SizedBox(height: 12),
+            ] else ...[
+              TextField(
+                controller: _nameController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: strings.placeName,
+                  hintText: strings.exampleCafe,
+                ),
+                textInputAction: TextInputAction.next,
               ),
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _categoryController,
-              decoration: InputDecoration(
-                labelText: strings.category,
-                hintText: strings.categoryHint,
+              const SizedBox(height: 10),
+              TextField(
+                controller: _categoryController,
+                decoration: InputDecoration(
+                  labelText: strings.category,
+                  hintText: strings.categoryHint,
+                ),
+                textInputAction: TextInputAction.next,
               ),
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _addressController,
-              decoration: InputDecoration(
-                labelText: strings.address,
-                hintText: strings.optional,
+              const SizedBox(height: 10),
+              TextField(
+                controller: _addressController,
+                decoration: InputDecoration(
+                  labelText: strings.address,
+                  hintText: strings.optional,
+                ),
+                textInputAction: TextInputAction.next,
               ),
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 10),
+              const SizedBox(height: 10),
+            ],
             TextField(
               controller: _memoController,
               decoration: InputDecoration(
-                labelText: strings.memo,
+                labelText: strings.placeDescription,
                 hintText: strings.optional,
               ),
               minLines: 1,
               maxLines: 3,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _costController,
+              decoration: InputDecoration(
+                labelText: strings.estimatedCostWon,
+                hintText: strings.costHint,
+              ),
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
             ),
           ],
         ),
@@ -344,8 +463,61 @@ class _AddPlaceDialogState extends State<_AddPlaceDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(strings.cancel),
         ),
-        FilledButton(onPressed: _submit, child: Text(strings.add)),
+        FilledButton(onPressed: _submit, child: Text(widget.actionLabel)),
       ],
     );
   }
+}
+
+class _LockedPlaceSummary extends StatelessWidget {
+  const _LockedPlaceSummary({required this.place});
+
+  final RoutePlace place;
+
+  @override
+  Widget build(BuildContext context) {
+    final address = place.address;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              place.name,
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              address == null || address.isEmpty
+                  ? place.category
+                  : '${place.category} · $address',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _placeSubtitle(BuildContext context, RoutePlace place) {
+  final parts = <String>[place.category];
+  if (place.memo != null && place.memo!.isNotEmpty) {
+    parts.add(place.memo!);
+  }
+  if (place.estimatedCostWon != null) {
+    parts.add('${context.strings.estimatedCost} ₩${place.estimatedCostWon}');
+  }
+
+  return parts.join(' · ');
 }

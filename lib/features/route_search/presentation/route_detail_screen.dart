@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/l10n/app_language.dart';
 import '../../../core/router/route_names.dart';
@@ -108,8 +111,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 Text(
                   strings.visitTimeline,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 14),
                 for (final place in sortedPlaces) ...[
@@ -167,64 +170,89 @@ class _DetailHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = context.strings;
     final upvote = '${(route.upvoteRatio * 100).round()}%';
+    final coverPath = route.coverImageUrl;
+    final routePhotos = route.places
+        .expand((place) => place.photoUrls)
+        .toSet()
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: double.infinity,
-          height: 236,
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            color: AppColors.primaryBlue,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.accentLime,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '추천 $upvote',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w900,
+        GestureDetector(
+          onTap: routePhotos.isEmpty
+              ? null
+              : () => _openPhotoViewer(context, routePhotos, 0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: SizedBox(
+            width: double.infinity,
+            height: 236,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (coverPath != null)
+                  _StoredRoutePhoto(path: coverPath)
+                else
+                  const ColoredBox(color: AppColors.primaryBlue),
+                const ColoredBox(color: Color(0x59000000)),
+                Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentLime,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '추천 $upvote',
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(
+                                color: AppColors.ink,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
                       ),
+                      const Spacer(),
+                      Text(
+                        route.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              color: AppColors.white,
+                              fontWeight: FontWeight.w900,
+                              height: 1.12,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const Spacer(),
-              Text(
-                route.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      color: AppColors.white,
-                      fontWeight: FontWeight.w900,
-                      height: 1.12,
-                    ),
-              ),
-            ],
+              ],
+            ),
+            ),
           ),
         ),
         const SizedBox(height: 14),
         Text(
           '${strings.durationLabel(route.estimatedDurationMinutes)} · ${route.places.length}곳 · ${route.city}',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.gray500,
-                fontWeight: FontWeight.w800,
-              ),
+            color: AppColors.gray500,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           route.description,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.ink,
-                height: 1.45,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.ink, height: 1.45),
         ),
       ],
     );
@@ -254,31 +282,84 @@ class _TimelinePlace extends StatelessWidget {
         Expanded(
           child: Padding(
             padding: const EdgeInsets.only(top: 1),
-            child: Column(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  place.name,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${place.category} · 예상 비용 ₩${8000 * (place.orderIndex + 1)}',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: AppColors.gray500,
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                if (place.memo != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    place.memo!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.gray500,
-                          height: 1.35,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        place.name,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
                         ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _placeMetaText(context, place),
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: AppColors.gray500,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (place.memo != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          place.memo!,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.gray500,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (place.photoUrls.isNotEmpty) ...[
+                  const SizedBox(width: 14),
+                  GestureDetector(
+                    onTap: () => _openPhotoViewer(context, place.photoUrls, 0),
+                    child: Hero(
+                      tag: 'route-photo-${place.id}-0',
+                      child: Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: _StoredRoutePhoto(
+                              path: place.photoUrls.first,
+                              width: 108,
+                              height: 108,
+                            ),
+                          ),
+                          if (place.photoUrls.length > 1)
+                            Positioned(
+                              right: 7,
+                              bottom: 7,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xB3000000),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  '+${place.photoUrls.length - 1}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -290,6 +371,141 @@ class _TimelinePlace extends StatelessWidget {
   }
 }
 
+void _openPhotoViewer(
+  BuildContext context,
+  List<String> photoPaths,
+  int initialIndex,
+) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => _RoutePhotoViewer(
+        photoPaths: photoPaths,
+        initialIndex: initialIndex,
+      ),
+    ),
+  );
+}
+
+class _RoutePhotoViewer extends StatefulWidget {
+  const _RoutePhotoViewer({
+    required this.photoPaths,
+    required this.initialIndex,
+  });
+
+  final List<String> photoPaths;
+  final int initialIndex;
+
+  @override
+  State<_RoutePhotoViewer> createState() => _RoutePhotoViewerState();
+}
+
+class _RoutePhotoViewerState extends State<_RoutePhotoViewer> {
+  late final PageController _controller;
+  late int _index;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex;
+    _controller = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text('${_index + 1} / ${widget.photoPaths.length}'),
+      ),
+      body: PageView.builder(
+        controller: _controller,
+        itemCount: widget.photoPaths.length,
+        onPageChanged: (index) => setState(() => _index = index),
+        itemBuilder: (context, index) => InteractiveViewer(
+          minScale: 1,
+          maxScale: 4,
+          child: Center(
+            child: Hero(
+              tag: 'route-photo-viewer-$index',
+              child: _StoredRoutePhoto(
+                path: widget.photoPaths[index],
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StoredRoutePhoto extends StatelessWidget {
+  const _StoredRoutePhoto({
+    required this.path,
+    this.width,
+    this.height,
+    this.fit = BoxFit.cover,
+  });
+
+  final String path;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List>(
+      future: XFile(path).readAsBytes(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return SizedBox(
+            width: width,
+            height: height,
+            child: const ColoredBox(
+              color: AppColors.gray200,
+              child: Icon(Icons.broken_image_outlined),
+            ),
+          );
+        }
+        if (!snapshot.hasData) {
+          return SizedBox(
+            width: width,
+            height: height,
+            child: const ColoredBox(
+              color: AppColors.gray100,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+          );
+        }
+        return Image.memory(
+          snapshot.data!,
+          width: width,
+          height: height,
+          fit: fit,
+          gaplessPlayback: true,
+        );
+      },
+    );
+  }
+}
+
+String _placeMetaText(BuildContext context, RoutePlace place) {
+  final cost = place.estimatedCostWon;
+  if (cost == null) {
+    return place.category;
+  }
+
+  return '${place.category} · ${context.strings.estimatedCost} ₩$cost';
+}
+
 class _RouteMapPanel extends StatelessWidget {
   const _RouteMapPanel({required this.places});
 
@@ -298,12 +514,10 @@ class _RouteMapPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final points = places
-        .where((place) => place.latitude != null && place.longitude != null)
+        .where((place) => place.hasLocation)
         .map(
-          (place) => MapPoint(
-            latitude: place.latitude!,
-            longitude: place.longitude!,
-          ),
+          (place) =>
+              MapPoint(latitude: place.latitude!, longitude: place.longitude!),
         )
         .toList();
 
@@ -313,9 +527,9 @@ class _RouteMapPanel extends StatelessWidget {
         children: [
           Text(
             context.strings.routeMap,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 12),
           if (points.isEmpty)

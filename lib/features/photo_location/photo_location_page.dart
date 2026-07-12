@@ -1,3 +1,6 @@
+import 'dart:collection';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -8,11 +11,13 @@ import '../../models/place_candidate.dart';
 import '../../models/photo_metadata.dart';
 import '../../services/exif_metadata_reader.dart';
 import '../../services/naver_static_map_service.dart';
+import '../../services/original_media_picker.dart';
 import '../../services/place_candidate_service.dart';
 import '../route_search/data/mock_route_repository.dart';
 import '../route_search/domain/route_place.dart';
 import '../route_search/domain/travel_route.dart';
 import '../route_search/presentation/widgets/route_stop_edit_tile.dart';
+import '../route_search/presentation/region_picker_screen.dart';
 import 'naver_dynamic_map.dart';
 
 class PhotoLocationPage extends StatefulWidget {
@@ -24,6 +29,7 @@ class PhotoLocationPage extends StatefulWidget {
 
 class _PhotoLocationPageState extends State<PhotoLocationPage> {
   final _picker = ImagePicker();
+  final _originalMediaPicker = const OriginalMediaPicker();
   final _metadataReader = ExifMetadataReader();
   final _placeCandidateService = const PlaceCandidateService();
   final _routeRepository = const MockRouteRepository();
@@ -79,7 +85,10 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     });
 
     try {
-      final photos = await _picker.pickMultiImage(requestFullMetadata: true);
+      var photos = await _originalMediaPicker.pickImages();
+      if (photos.isEmpty) {
+        photos = await _picker.pickMultiImage(requestFullMetadata: true);
+      }
       if (photos.isEmpty) {
         setState(() {
           _isReading = false;
@@ -156,7 +165,13 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
   }
 
   Future<void> _saveSelectedGroupAsRoute(_RouteDraftResult draft) async {
-    if (draft.entries.isEmpty) {
+    if (draft.entries.isEmpty ||
+        draft.entries.any((entry) => entry.selectedPlace == null)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.strings.selectAllPlacesBeforeSave)),
+        );
+      }
       return;
     }
 
@@ -168,6 +183,9 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       final route = _buildRouteFromPhotos(
         draft.title,
         draft.description,
+        draft.city,
+        draft.tags,
+        draft.visibility,
         draft.entries,
       );
       final savedRoute = await _routeRepository.saveCreatedRoute(route);
@@ -193,15 +211,18 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       setState(() {
         _isSavingRoute = false;
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.strings.saveRouteFailed(error))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.strings.saveRouteFailed(error))),
+      );
     }
   }
 
   TravelRoute _buildRouteFromPhotos(
     String title,
     String description,
+    String city,
+    List<String> tags,
+    RouteVisibility visibility,
     List<_PhotoEntry> routeEntries,
   ) {
     final routeId = 'photo-route-${DateTime.now().microsecondsSinceEpoch}';
@@ -214,14 +235,20 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       id: routeId,
       title: title,
       description: description,
-      city: context.strings.myTrip,
+      city: city,
       authorName: context.strings.me,
       places: places,
-      tags: [context.strings.photoTag, context.strings.localTag],
+      tags: tags,
       upvoteRatio: 1,
       downloadCount: 0,
       estimatedDurationMinutes: routeEntries.length * 45,
+      coverImageUrl: routeEntries.first.photo.path.isEmpty
+          ? null
+          : routeEntries.first.photo.path,
       isDownloaded: true,
+      isCreatedByCurrentUser: true,
+      visibility: visibility,
+      publishedAt: DateTime.now(),
     );
   }
 
@@ -230,6 +257,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     final metadata = entry.metadata;
     final category = selectedPlace?.category;
     final photoPath = entry.photo.path;
+    final mapPoint = entry.mapPoint;
 
     return RoutePlace(
       id: 'photo-place-${DateTime.now().microsecondsSinceEpoch}-$index',
@@ -240,9 +268,9 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       orderIndex: index,
       address: _nullIfEmpty(selectedPlace?.address),
       visitedAt: metadata.takenAt,
-      memo: context.strings.takenAtFromFile(entry.timeLabel, metadata.fileName),
-      latitude: metadata.latitude,
-      longitude: metadata.longitude,
+      memo: null,
+      latitude: mapPoint?.latitude,
+      longitude: mapPoint?.longitude,
       photoUrls: photoPath.isEmpty ? const [] : [photoPath],
     );
   }
@@ -280,7 +308,9 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.photo_library_outlined),
-              label: Text(_isReading ? strings.readingPhotos : strings.choosePhotos),
+              label: Text(
+                _isReading ? strings.readingPhotos : strings.choosePhotos,
+              ),
             ),
             const SizedBox(height: 20),
             if (_errorMessage != null) _MessagePanel(message: _errorMessage!),
@@ -305,11 +335,6 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
               const SizedBox(height: 16),
               if (selectedGroup != null) ...[
                 _MultiMapPanel(group: selectedGroup),
-                const SizedBox(height: 16),
-                _PhotoPlaceReviewPanel(
-                  group: selectedGroup,
-                  onPhotoTap: _showDetails,
-                ),
                 const SizedBox(height: 16),
                 _PhotoGrid(group: selectedGroup, onPhotoTap: _showDetails),
               ],
@@ -416,15 +441,16 @@ class _SaveRoutePanel extends StatelessWidget {
         if (group != null) ...[
           const SizedBox(height: 14),
           _RouteDraftInlineEditor(
-            key: ValueKey(
-              'route-draft-editor-${group.key}-$groupFingerprint',
-            ),
+            key: ValueKey('route-draft-editor-${group.key}-$groupFingerprint'),
             initialTitle: context.strings.photoRouteTitle(
               _displayGroupLabel(context, group),
             ),
-            initialDescription: context.strings.photoRouteDescription(
-              photoCount,
-            ),
+            initialDescription: '',
+            initialCity: '',
+            initialTags: [
+              context.strings.photoTag,
+              context.strings.localTag,
+            ],
             entries: group.photos,
             isSaving: isSaving,
             placeCandidateService: placeCandidateService,
@@ -441,11 +467,17 @@ class _RouteDraftResult {
   const _RouteDraftResult({
     required this.title,
     required this.description,
+    required this.city,
+    required this.tags,
+    required this.visibility,
     required this.entries,
   });
 
   final String title;
   final String description;
+  final String city;
+  final List<String> tags;
+  final RouteVisibility visibility;
   final List<_PhotoEntry> entries;
 }
 
@@ -454,6 +486,8 @@ class _RouteDraftInlineEditor extends StatefulWidget {
     super.key,
     required this.initialTitle,
     required this.initialDescription,
+    required this.initialCity,
+    required this.initialTags,
     required this.entries,
     required this.isSaving,
     required this.placeCandidateService,
@@ -463,6 +497,8 @@ class _RouteDraftInlineEditor extends StatefulWidget {
 
   final String initialTitle;
   final String initialDescription;
+  final String initialCity;
+  final List<String> initialTags;
   final List<_PhotoEntry> entries;
   final bool isSaving;
   final PlaceCandidateService placeCandidateService;
@@ -470,13 +506,19 @@ class _RouteDraftInlineEditor extends StatefulWidget {
   final ValueChanged<_RouteDraftResult>? onSave;
 
   @override
-  State<_RouteDraftInlineEditor> createState() => _RouteDraftInlineEditorState();
+  State<_RouteDraftInlineEditor> createState() =>
+      _RouteDraftInlineEditorState();
 }
 
 class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _cityController;
+  late final TextEditingController _tagsController;
   late List<_PhotoEntry> _entries;
+  late List<String> _tags;
+  RouteVisibility _visibility = RouteVisibility.public;
+  bool _regionSelectedManually = false;
   String? _editingEntryId;
 
   @override
@@ -486,13 +528,19 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
     _descriptionController = TextEditingController(
       text: widget.initialDescription,
     );
+    _cityController = TextEditingController(text: widget.initialCity);
+    _tagsController = TextEditingController();
+    _tags = [...widget.initialTags];
     _entries = [...widget.entries];
+    _applySuggestedRegion();
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _cityController.dispose();
+    _tagsController.dispose();
     super.dispose();
   }
 
@@ -536,12 +584,19 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
       if (_editingEntryId == entry.id) {
         _editingEntryId = null;
       }
+      _applySuggestedRegion();
     });
   }
 
   void _save() {
     final onSave = widget.onSave;
     if (onSave == null) {
+      return;
+    }
+    if (_entries.any((entry) => entry.selectedPlace == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.strings.selectAllPlacesBeforeSave)),
+      );
       return;
     }
 
@@ -551,10 +606,17 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
     final description = _descriptionController.text.trim().isEmpty
         ? widget.initialDescription
         : _descriptionController.text.trim();
+    final city = _cityController.text.trim().isEmpty
+        ? context.strings.myTrip
+        : _cityController.text.trim();
+    _addTag();
     onSave(
       _RouteDraftResult(
         title: title,
         description: description,
+        city: city,
+        tags: _tags,
+        visibility: _visibility,
         entries: _entries,
       ),
     );
@@ -570,6 +632,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
             entry,
       ];
       _editingEntryId = entryId;
+      _applySuggestedRegion();
     });
     widget.onPlaceSelected(entryId, candidate);
   }
@@ -580,12 +643,56 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
     });
   }
 
+  void _addTag() {
+    final tag = _tagsController.text.trim().replaceFirst(RegExp(r'^#'), '');
+    if (tag.isEmpty || _tags.contains(tag)) {
+      _tagsController.clear();
+      return;
+    }
+    if (_tags.length >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('태그는 최대 5개까지 추가할 수 있어요.')),
+      );
+      return;
+    }
+    setState(() {
+      _tags = [..._tags, tag];
+      _tagsController.clear();
+    });
+  }
+
+  Future<void> _selectRegion() async {
+    final region = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => RegionPickerScreen(
+          initialRegion: _cityController.text,
+        ),
+      ),
+    );
+    if (region != null && mounted) {
+      setState(() {
+        _regionSelectedManually = true;
+        _cityController.text = region;
+      });
+    }
+  }
+
+  void _applySuggestedRegion() {
+    if (_regionSelectedManually) return;
+    final region = inferMostFrequentRegion(
+      _entries
+          .map((entry) => entry.selectedPlace?.address ?? '')
+          .where((address) => address.isNotEmpty),
+    );
+    if (region != null) {
+      _cityController.text = region;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final missingPlaceCount = _entries
-        .where(
-          (entry) => entry.selectedPlace == null && !entry.metadata.hasLocation,
-        )
+        .where((entry) => entry.selectedPlace == null)
         .length;
 
     return Column(
@@ -608,20 +715,95 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
           minLines: 2,
           maxLines: 4,
         ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _cityController,
+          readOnly: true,
+          onTap: _selectRegion,
+          decoration: const InputDecoration(
+            labelText: '지역',
+            hintText: '시·도와 시·군·구 선택',
+            helperText: '사진에서 가장 많이 확인된 지역을 자동 추천해요.',
+            suffixIcon: Icon(Icons.chevron_right),
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 3,
+              child: TextField(
+                controller: _tagsController,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _addTag(),
+                decoration: InputDecoration(
+                  labelText: '태그',
+                  hintText: '태그 입력',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    tooltip: '태그 추가',
+                    onPressed: _tags.length >= 5 ? null : _addTag,
+                    icon: const Icon(Icons.add_circle_outline),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: DropdownButtonFormField<RouteVisibility>(
+                initialValue: _visibility,
+                decoration: const InputDecoration(
+                  labelText: '공개 범위',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: RouteVisibility.public,
+                    child: Text('전체 공개'),
+                  ),
+                  DropdownMenuItem(
+                    value: RouteVisibility.private,
+                    child: Text('나만 보기'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) setState(() => _visibility = value);
+                },
+              ),
+            ),
+          ],
+        ),
+        if (_tags.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final tag in _tags)
+                InputChip(
+                  label: Text('#$tag'),
+                  onDeleted: () => setState(
+                    () => _tags = _tags.where((item) => item != tag).toList(),
+                  ),
+                ),
+            ],
+          ),
+        ],
         if (missingPlaceCount > 0) ...[
           const SizedBox(height: 14),
           _MessagePanel(
-            message: context.strings.missingPlaceWarning(
-              missingPlaceCount,
-            ),
+            message: context.strings.missingPlaceWarning(missingPlaceCount),
           ),
         ],
         const SizedBox(height: 18),
         Text(
           context.strings.includedStops,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w900,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 10),
         ReorderableListView.builder(
@@ -678,7 +860,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
         ),
         const SizedBox(height: 2),
         FilledButton.icon(
-          onPressed: widget.isSaving ? null : _save,
+          onPressed: widget.isSaving || missingPlaceCount > 0 ? null : _save,
           icon: widget.isSaving
               ? const SizedBox.square(
                   dimension: 18,
@@ -759,7 +941,8 @@ class _PhotoGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Panel(
-      title: '${_displayGroupLabel(context, group)} ${context.strings.timelineSuffix}',
+      title:
+          '${_displayGroupLabel(context, group)} ${context.strings.timelineSuffix}',
       children: [
         GridView.builder(
           shrinkWrap: true,
@@ -776,120 +959,6 @@ class _PhotoGrid extends StatelessWidget {
           },
         ),
       ],
-    );
-  }
-}
-
-class _PhotoPlaceReviewPanel extends StatelessWidget {
-  const _PhotoPlaceReviewPanel({
-    required this.group,
-    required this.onPhotoTap,
-  });
-
-  final _PhotoDateGroup group;
-  final ValueChanged<_PhotoEntry> onPhotoTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return _Panel(
-      title: context.strings.assignPlaces,
-      children: [
-        Text(
-          context.strings.assignPlacesHelp,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-        ),
-        const SizedBox(height: 12),
-        for (final entry in group.photos) ...[
-          _PhotoPlaceReviewTile(
-            entry: entry,
-            onTap: () => onPhotoTap(entry),
-          ),
-          const SizedBox(height: 10),
-        ],
-      ],
-    );
-  }
-}
-
-class _PhotoPlaceReviewTile extends StatelessWidget {
-  const _PhotoPlaceReviewTile({required this.entry, required this.onTap});
-
-  final _PhotoEntry entry;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final placeName = entry.selectedPlace?.displayName;
-
-    return Material(
-      color: const Color(0x08000000),
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: SizedBox(
-                  width: 72,
-                  height: 72,
-                  child: _PhotoImage(photo: entry.photo),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.timeLabel,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      placeName ?? context.strings.notSelected,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: placeName == null
-                            ? Colors.black54
-                            : Colors.black87,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (!entry.metadata.hasLocation) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        context.strings.noGpsForSuggestions,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.black45,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filledTonal(
-                onPressed: onTap,
-                tooltip: placeName == null
-                    ? context.strings.choosePlace
-                    : context.strings.changePlace,
-                icon: const Icon(Icons.edit_location_alt_outlined),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -911,21 +980,7 @@ class _PhotoTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            FutureBuilder(
-              future: entry.photo.readAsBytes(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(
-                    child: SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  );
-                }
-
-                return Image.memory(snapshot.data!, fit: BoxFit.cover);
-              },
-            ),
+            _PhotoImage(photo: entry.photo, cacheWidth: 320),
             if (entry.selectedPlace != null)
               Positioned(
                 left: 4,
@@ -995,28 +1050,48 @@ class _PhotoTile extends StatelessWidget {
 }
 
 class _PhotoImage extends StatelessWidget {
-  const _PhotoImage({required this.photo});
+  const _PhotoImage({
+    required this.photo,
+    this.height,
+    this.width,
+    this.cacheWidth = 640,
+  });
 
   final XFile photo;
+  final double? height;
+  final double? width;
+  final int cacheWidth;
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: photo.readAsBytes(),
+    return FutureBuilder<Uint8List>(
+      future: _PhotoBytesCache.load(photo),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const ColoredBox(
-            color: Colors.black12,
-            child: Center(
-              child: SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+          return SizedBox(
+            height: height,
+            width: width,
+            child: const ColoredBox(
+              color: Colors.black12,
+              child: Center(
+                child: SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               ),
             ),
           );
         }
 
-        return Image.memory(snapshot.data!, fit: BoxFit.cover);
+        return Image.memory(
+          snapshot.data!,
+          height: height,
+          width: width,
+          fit: BoxFit.cover,
+          cacheWidth: cacheWidth,
+          filterQuality: FilterQuality.low,
+          gaplessPlayback: true,
+        );
       },
     );
   }
@@ -1030,32 +1105,43 @@ class _PhotoPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: photo.readAsBytes(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return Container(
-            height: height,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.black12,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const CircularProgressIndicator(),
-          );
-        }
-
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.memory(
-            snapshot.data!,
-            height: height,
-            width: double.infinity,
-            fit: BoxFit.cover,
-          ),
-        );
-      },
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: _PhotoImage(
+        photo: photo,
+        height: height,
+        width: double.infinity,
+        cacheWidth: 900,
+      ),
     );
+  }
+}
+
+class _PhotoBytesCache {
+  static final _cache = LinkedHashMap<String, Future<Uint8List>>();
+  static const _maxEntries = 48;
+
+  static Future<Uint8List> load(XFile photo) {
+    final key = photo.path.isNotEmpty ? photo.path : photo.name;
+    final cached = _cache.remove(key);
+    if (cached != null) {
+      _cache[key] = cached;
+      return cached;
+    }
+
+    final future = photo.readAsBytes().catchError((
+      Object error,
+      StackTrace stackTrace,
+    ) {
+      _cache.remove(key);
+      return Error.throwWithStackTrace(error, stackTrace);
+    });
+    _cache[key] = future;
+    if (_cache.length > _maxEntries) {
+      _cache.remove(_cache.keys.first);
+    }
+
+    return future;
   }
 }
 
@@ -1077,7 +1163,10 @@ class _PhotoDetailsSheet extends StatefulWidget {
 
 class _PhotoDetailsSheetState extends State<_PhotoDetailsSheet> {
   Future<PlaceCandidateResult>? _candidateFuture;
+  Future<PlaceCandidateResult>? _searchFuture;
   PlaceCandidate? _selectedPlace;
+  final _searchController = TextEditingController();
+  String? _searchQuery;
 
   @override
   void initState() {
@@ -1094,33 +1183,73 @@ class _PhotoDetailsSheetState extends State<_PhotoDetailsSheet> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _PhotoPreview(photo: widget.entry.photo, height: 320),
-        const SizedBox(height: 16),
-        _MetadataPanel(
-          metadata: widget.entry.metadata,
-          selectedPlace: _selectedPlace,
+        const SizedBox(height: 14),
+        TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            labelText: context.strings.searchPlace,
+            hintText: context.strings.exampleCafe,
+            suffixIcon: IconButton(
+              onPressed: _searchPlace,
+              tooltip: context.strings.searchPlace,
+              icon: const Icon(Icons.search),
+            ),
+            border: const OutlineInputBorder(),
+          ),
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => _searchPlace(),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         _PlaceCandidatePanel(
           metadata: widget.entry.metadata,
           selectedPlace: _selectedPlace,
-          candidateFuture: _candidateFuture,
+          title: _searchQuery == null
+              ? context.strings.suggestedPlaces
+              : context.strings.placeSearchResults(_searchQuery!),
+          candidateFuture: _searchFuture ?? _candidateFuture,
           onSelected: (candidate) {
             _selectPlace(candidate);
           },
         ),
         const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _showManualPlaceDialog,
-          icon: const Icon(Icons.edit_location_alt_outlined),
-          label: Text(context.strings.enterPlaceManually),
+        TextButton.icon(
+          onPressed: _addManualPlace,
+          icon: const Icon(Icons.add),
+          label: Text(context.strings.addPlace),
         ),
       ],
     );
+  }
+
+  void _searchPlace() {
+    final query = _searchController.text.trim();
+    if (query.length < 2) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.strings.enterPlaceName)));
+      return;
+    }
+
+    final metadata = widget.entry.metadata;
+    setState(() {
+      _searchQuery = query;
+      _searchFuture = widget.placeCandidateService.searchByKeyword(
+        query,
+        latitude: metadata.hasLocation ? metadata.latitude : null,
+        longitude: metadata.hasLocation ? metadata.longitude : null,
+      );
+    });
   }
 
   void _selectPlace(PlaceCandidate candidate) {
@@ -1130,41 +1259,8 @@ class _PhotoDetailsSheetState extends State<_PhotoDetailsSheet> {
     widget.onPlaceSelected(widget.entry.id, candidate);
   }
 
-  Future<void> _showManualPlaceDialog() async {
-    final candidate = await showDialog<PlaceCandidate>(
-      context: context,
-      builder: (context) => const _ManualPlaceDialog(),
-    );
-    if (candidate == null) {
-      return;
-    }
-
-    _selectPlace(candidate);
-  }
-}
-
-class _ManualPlaceDialog extends StatefulWidget {
-  const _ManualPlaceDialog();
-
-  @override
-  State<_ManualPlaceDialog> createState() => _ManualPlaceDialogState();
-}
-
-class _ManualPlaceDialogState extends State<_ManualPlaceDialog> {
-  final _nameController = TextEditingController();
-  final _categoryController = TextEditingController();
-  final _addressController = TextEditingController();
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _categoryController.dispose();
-    _addressController.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final name = _nameController.text.trim();
+  void _addManualPlace() {
+    final name = _searchController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -1172,108 +1268,13 @@ class _ManualPlaceDialogState extends State<_ManualPlaceDialog> {
       return;
     }
 
-    Navigator.of(context).pop(
+    _selectPlace(
       PlaceCandidate(
         id: 'manual-${DateTime.now().microsecondsSinceEpoch}',
         name: name,
-        address: _addressController.text.trim(),
+        address: '',
         source: 'manual',
-        category: _categoryController.text.trim().isEmpty
-            ? null
-            : _categoryController.text.trim(),
       ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = context.strings;
-
-    return AlertDialog(
-      title: Text(strings.enterPlaceManually),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _nameController,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: strings.placeName,
-                hintText: strings.exampleCafe,
-              ),
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _categoryController,
-              decoration: InputDecoration(
-                labelText: strings.category,
-                hintText: strings.categoryHint,
-              ),
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _addressController,
-              decoration: InputDecoration(
-                labelText: strings.address,
-                hintText: strings.optional,
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.cancel),
-        ),
-        FilledButton(onPressed: _submit, child: Text(strings.add)),
-      ],
-    );
-  }
-}
-
-class _MetadataPanel extends StatelessWidget {
-  const _MetadataPanel({required this.metadata, required this.selectedPlace});
-
-  final PhotoMetadata metadata;
-  final PlaceCandidate? selectedPlace;
-
-  @override
-  Widget build(BuildContext context) {
-    return _Panel(
-      title: context.strings.photoDetails,
-      children: [
-        _InfoRow(label: context.strings.file, value: metadata.fileName),
-        _InfoRow(
-          label: context.strings.takenAt,
-          value: metadata.hasTakenAt
-              ? _formatDate(metadata.takenAt!)
-              : context.strings.none,
-        ),
-        _InfoRow(
-          label: context.strings.latitude,
-          value: metadata.latitude?.toStringAsFixed(6) ?? context.strings.none,
-        ),
-        _InfoRow(
-          label: context.strings.longitude,
-          value: metadata.longitude?.toStringAsFixed(6) ?? context.strings.none,
-        ),
-        _InfoRow(
-          label: context.strings.camera,
-          value: [metadata.cameraMake, metadata.cameraModel]
-              .whereType<String>()
-              .where((value) => value.isNotEmpty)
-              .join(' ')
-              .ifEmpty(context.strings.none),
-        ),
-        _InfoRow(
-          label: context.strings.place,
-          value: selectedPlace?.displayName ?? context.strings.notSelected,
-        ),
-      ],
     );
   }
 }
@@ -1282,21 +1283,21 @@ class _PlaceCandidatePanel extends StatelessWidget {
   const _PlaceCandidatePanel({
     required this.metadata,
     required this.selectedPlace,
+    required this.title,
     required this.candidateFuture,
     required this.onSelected,
   });
 
   final PhotoMetadata metadata;
   final PlaceCandidate? selectedPlace;
+  final String title;
   final Future<PlaceCandidateResult>? candidateFuture;
   final ValueChanged<PlaceCandidate> onSelected;
 
   @override
   Widget build(BuildContext context) {
     if (!metadata.hasLocation) {
-      return const _MessagePanel(
-        messageKey: _MessageKey.noGpsForSuggestions,
-      );
+      return const _MessagePanel(messageKey: _MessageKey.noGpsForSuggestions);
     }
 
     final future = candidateFuture;
@@ -1307,7 +1308,7 @@ class _PlaceCandidatePanel extends StatelessWidget {
     }
 
     return _Panel(
-      title: context.strings.suggestedPlaces,
+      title: title,
       children: [
         FutureBuilder<PlaceCandidateResult>(
           future: future,
@@ -1328,6 +1329,10 @@ class _PlaceCandidatePanel extends StatelessWidget {
 
             if (!result.isSuccess) {
               return Text(result.errorMessage!);
+            }
+
+            if (result.candidates.isEmpty) {
+              return Text(context.strings.noMatchingPlaces);
             }
 
             return Column(
@@ -1366,23 +1371,17 @@ class _MultiMapPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final points = group.photos
-        .where((entry) => entry.metadata.hasLocation)
-        .map(
-          (entry) => MapPoint(
-            latitude: entry.metadata.latitude!,
-            longitude: entry.metadata.longitude!,
-          ),
-        )
+        .map((entry) => entry.mapPoint)
+        .whereType<MapPoint>()
         .toList();
 
     if (points.isEmpty) {
-      return const _MessagePanel(
-        messageKey: _MessageKey.noGpsForDate,
-      );
+      return const _MessagePanel(messageKey: _MessageKey.noGpsForDate);
     }
 
     return _Panel(
-      title: '${_displayGroupLabel(context, group)} ${context.strings.dynamicMapSuffix}',
+      title:
+          '${_displayGroupLabel(context, group)} ${context.strings.dynamicMapSuffix}',
       children: [
         Text(
           context.strings.markerCount(points.length),
@@ -1475,14 +1474,17 @@ class _MessagePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedMessage = message ?? switch (messageKey) {
-      _MessageKey.noGpsForSuggestions => context.strings.noGpsForSuggestions,
-      _MessageKey.placeSuggestionsUnavailable =>
-        context.strings.placeSuggestionsUnavailable,
-      _MessageKey.noGpsForDate => context.strings.noGpsForDate,
-      _MessageKey.emptyPhotoState => context.strings.emptyPhotoState,
-      null => '',
-    };
+    final resolvedMessage =
+        message ??
+        switch (messageKey) {
+          _MessageKey.noGpsForSuggestions =>
+            context.strings.noGpsForSuggestions,
+          _MessageKey.placeSuggestionsUnavailable =>
+            context.strings.placeSuggestionsUnavailable,
+          _MessageKey.noGpsForDate => context.strings.noGpsForDate,
+          _MessageKey.emptyPhotoState => context.strings.emptyPhotoState,
+          null => '',
+        };
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1509,9 +1511,7 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _MessagePanel(
-      messageKey: _MessageKey.emptyPhotoState,
-    );
+    return const _MessagePanel(messageKey: _MessageKey.emptyPhotoState);
   }
 }
 
@@ -1532,6 +1532,22 @@ class _PhotoEntry {
     }
 
     return '${metadata.fileName}_${metadata.takenAt?.toIso8601String() ?? ''}';
+  }
+
+  MapPoint? get mapPoint {
+    final place = selectedPlace;
+    if (place != null && place.hasLocation) {
+      return MapPoint(latitude: place.latitude!, longitude: place.longitude!);
+    }
+
+    if (metadata.hasLocation) {
+      return MapPoint(
+        latitude: metadata.latitude!,
+        longitude: metadata.longitude!,
+      );
+    }
+
+    return null;
   }
 
   _PhotoEntry copyWith({PlaceCandidate? selectedPlace}) {
@@ -1595,11 +1611,6 @@ int _compareEntriesByTime(_PhotoEntry a, _PhotoEntry b) {
   return aTime.compareTo(bTime);
 }
 
-String _formatDate(DateTime date) {
-  return '${date.year}.${_two(date.month)}.${_two(date.day)} '
-      '${_two(date.hour)}:${_two(date.minute)}';
-}
-
 String _two(int value) => value.toString().padLeft(2, '0');
 
 String _displayGroupLabel(BuildContext context, _PhotoDateGroup group) {
@@ -1616,8 +1627,4 @@ String? _nullIfEmpty(String? value) {
   }
 
   return value;
-}
-
-extension on String {
-  String ifEmpty(String fallback) => isEmpty ? fallback : this;
 }

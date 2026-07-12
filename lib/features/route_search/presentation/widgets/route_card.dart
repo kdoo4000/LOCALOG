@@ -21,16 +21,16 @@ class RouteCard extends StatelessWidget {
 
     return AppCard(
       onTap: onTap,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 52,
+            height: 52,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.sky,
-              borderRadius: BorderRadius.circular(8),
+              color: AppColors.accentLime,
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Text(
               cityInitial,
@@ -52,9 +52,9 @@ class RouteCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        height: 1.16,
-                      ),
+                    fontWeight: FontWeight.w900,
+                    height: 1.16,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -62,16 +62,55 @@ class RouteCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: AppColors.gray500,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    color: AppColors.gray500,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
+                if (route.tags.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final tag in route.tags.take(4))
+                        _RouteTagChip(label: tag),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          const Icon(Icons.chevron_right, color: AppColors.gray400),
         ],
+      ),
+    );
+  }
+}
+
+class _RouteTagChip extends StatelessWidget {
+  const _RouteTagChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.gray50,
+        border: Border.all(color: AppColors.gray200),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Text(
+          '#$label',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: AppColors.primaryBlue,
+            fontWeight: FontWeight.w900,
+            height: 1,
+          ),
+        ),
       ),
     );
   }

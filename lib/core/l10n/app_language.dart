@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum AppLanguage {
-  ko,
-  en,
-}
+enum AppLanguage { ko, en }
 
 class AppLanguageController extends ChangeNotifier {
   AppLanguage _language = AppLanguage.ko;
@@ -76,7 +73,8 @@ class AppStrings {
   String shortcutComing(String label) => isKo
       ? '$label 화면은 다음 단계에서 연결할게요.'
       : '$label will be connected in the next step.';
-  String get monthlyRecommend => isKo ? 'July\'s local picks' : 'July\'s local picks';
+  String get monthlyRecommend =>
+      isKo ? 'July\'s local picks' : 'July\'s local picks';
   String get shortcutRouteSearch => isKo ? 'Route' : 'Route';
   String get shortcutScanReceipt => isKo ? 'Receipt' : 'Receipt';
   String get shortcutUploadRoute => isKo ? 'Upload' : 'Upload';
@@ -84,13 +82,24 @@ class AppStrings {
   String get shortcutMapView => isKo ? 'Map' : 'Map';
   String get shortcutNotifications => isKo ? 'Alerts' : 'Alerts';
 
-  String get routeSearchTitle => isKo ? '어떤 로컬 루트를 찾아볼까요?' : 'Find a local route';
-  String get routeSearchHint => isKo ? '성수, 야경, 한식...' : 'Seongsu, night view, food...';
+  String get routeSearchTitle =>
+      isKo ? '어떤 로컬 루트를 찾아볼까요?' : 'Find a local route';
+  String get routeSearchHint =>
+      isKo ? '성수, 야경, 한식...' : 'Seongsu, night view, food...';
   String get noMatchingRoutes =>
       isKo ? '조건에 맞는 루트가 없어요.' : 'No routes match your search.';
   List<String> get searchTags => isKo
       ? const ['성수', '홍대', '야경', '궁궐', '박물관', '닭한마리', '이태원', '기념품']
-      : const ['Seongsu', 'Hongdae', 'Night', 'Palace', 'Museum', 'Food', 'Itaewon', 'Souvenir'];
+      : const [
+          'Seongsu',
+          'Hongdae',
+          'Night',
+          'Palace',
+          'Museum',
+          'Food',
+          'Itaewon',
+          'Souvenir',
+        ];
   List<String> searchAliases(String keyword) {
     final normalized = keyword.trim().toLowerCase();
     final aliases = <String>{normalized};
@@ -123,14 +132,17 @@ class AppStrings {
     return aliases.where((alias) => alias.isNotEmpty).toList();
   }
 
-  String get photoTitle => isKo ? '사진을 업로드하면 루트가 자동 생성돼요' : 'Upload photos to build a route';
+  String get photoTitle =>
+      isKo ? '사진을 업로드하면 루트가 자동 생성돼요' : 'Upload photos to build a route';
   String get photoSubtitle => isKo
       ? '사진 메타데이터를 읽어 방문 장소와 순서를 분석합니다.'
       : 'Read photo metadata, sort stops by time, and review places on a map.';
-  String get choosePhotos => isKo ? '여행 사진 2~30장 업로드' : 'Upload 2-30 trip photos';
+  String get choosePhotos =>
+      isKo ? '여행 사진 업로드' : 'Upload trip photos';
   String get readingPhotos => isKo ? '사진 읽는 중' : 'Reading photos';
-  String photoReadFailed(Object error) =>
-      isKo ? '사진 메타데이터를 읽지 못했어요. $error' : 'Could not read photo metadata. $error';
+  String photoReadFailed(Object error) => isKo
+      ? '사진 메타데이터를 읽지 못했어요. $error'
+      : 'Could not read photo metadata. $error';
   String get selectedPhotos => isKo ? '생성된 방문 장소' : 'Generated stops';
   String get photos => isKo ? '사진' : 'Photos';
   String get withGps => isKo ? 'GPS 있음' : 'With GPS';
@@ -138,8 +150,9 @@ class AppStrings {
   String get createRoute => isKo ? '루트 만들기' : 'Create route';
   String get selectPhotoDateToCreateRoute =>
       isKo ? '루트로 만들 날짜를 선택하세요.' : 'Select a photo date to create a route.';
-  String routablePhotoStops(int count) =>
-      isKo ? '$count개의 사진 지점을 루트로 저장할 수 있어요.' : '$count photo stop(s) can be saved as a route.';
+  String routablePhotoStops(int count) => isKo
+      ? '$count개의 사진 지점을 루트로 저장할 수 있어요.'
+      : '$count photo stop(s) can be saved as a route.';
   String get saveSelectedDayAsRoute =>
       isKo ? '선택한 날짜를 루트로 저장' : 'Save selected day as route';
   String get reviewAndSaveRoute =>
@@ -149,11 +162,15 @@ class AppStrings {
       ? '제목, 방문 순서, 포함할 사진 지점을 확인하고 저장해요.'
       : 'Check the title, visit order, and photo stops before saving.';
   String get routeDescriptionLabel => isKo ? '상세 설명' : 'Description';
-  String reviewPhotoStops(int count) =>
-      isKo ? '$count개의 사진 지점을 바로 수정하고 루트로 저장합니다.' : 'Edit $count photo stop(s) here and save as a route.';
+  String reviewPhotoStops(int count) => isKo
+      ? '$count개의 사진 지점을 바로 수정하고 루트로 저장합니다.'
+      : 'Edit $count photo stop(s) here and save as a route.';
   String missingPlaceWarning(int count) => isKo
-      ? '장소가 지정되지 않은 사진 $count장이 있어요. 저장 후에도 보완할 수 있습니다.'
-      : '$count photo(s) do not have a selected place. You can refine them later.';
+      ? '장소가 지정되지 않은 사진 $count장이 있어요. 모든 사진의 장소를 지정해야 루트를 저장할 수 있습니다.'
+      : '$count photo(s) do not have a selected place. Select a place for every photo before saving.';
+  String get selectAllPlacesBeforeSave => isKo
+      ? '모든 사진의 장소를 지정한 뒤 루트를 저장해 주세요.'
+      : 'Select a place for every photo before saving the route.';
   String get includedStops => isKo ? '포함된 지점' : 'Included stops';
   String get atLeastOneStopRequired =>
       isKo ? '루트에는 최소 한 개의 지점이 필요해요.' : 'A route needs at least one stop.';
@@ -167,22 +184,27 @@ class AppStrings {
       isKo ? '루트를 저장하지 못했어요. $error' : 'Could not save route. $error';
   String photoRouteTitle(String dateLabel) =>
       isKo ? '사진 루트 - $dateLabel' : 'Photo route - $dateLabel';
-  String photoRouteDescription(int count) =>
-      isKo ? '$count개의 사진 지점으로 만든 개인 루트입니다.' : 'A personal route created from $count photo stop(s).';
+  String photoRouteDescription(int count) => isKo
+      ? '$count개의 사진 지점으로 만든 개인 루트입니다.'
+      : 'A personal route created from $count photo stop(s).';
   String get myTrip => isKo ? '내 여행' : 'My trip';
   String get me => isKo ? '나' : 'Me';
   String get photoTag => isKo ? '사진' : 'Photo';
   String get localTag => isKo ? '로컬' : 'Local';
-  String photoStop(int index) => isKo ? '사진 지점 ${index + 1}' : 'Photo stop ${index + 1}';
+  String photoStop(int index) =>
+      isKo ? '사진 지점 ${index + 1}' : 'Photo stop ${index + 1}';
   String get photoSpot => isKo ? '사진 명소' : 'Photo spot';
-  String takenAtFromFile(String timeLabel, String fileName) =>
-      isKo ? '$timeLabel에 촬영한 사진입니다. 파일: $fileName' : 'Taken at $timeLabel from $fileName.';
+  String takenAtFromFile(String timeLabel, String fileName) => isKo
+      ? '$timeLabel에 촬영한 사진입니다. 파일: $fileName'
+      : 'Taken at $timeLabel from $fileName.';
   String get timelineSuffix => isKo ? '타임라인' : 'timeline';
   String get dynamicMapSuffix => isKo ? '동적 지도' : 'dynamic map';
-  String markerCount(int count) =>
-      isKo ? '$count개의 마커를 촬영 시간순으로 연결했어요.' : '$count marker(s), connected in taken-time order.';
-  String get noGpsForDate =>
-      isKo ? '이 날짜에는 GPS 메타데이터가 없어요.' : 'No GPS metadata is available for this date.';
+  String markerCount(int count) => isKo
+      ? '$count개의 마커를 촬영 시간순으로 연결했어요.'
+      : '$count marker(s), connected in taken-time order.';
+  String get noGpsForDate => isKo
+      ? '이 날짜에는 GPS 메타데이터가 없어요.'
+      : 'No GPS metadata is available for this date.';
   String get emptyPhotoState => isKo
       ? '여행 사진을 선택하면 방문 장소와 루트를 자동으로 정리해요.'
       : 'Choose photos to build a date-grouped route and map.';
@@ -212,6 +234,10 @@ class AppStrings {
   String get choosePlace => isKo ? '장소 지정' : 'Choose place';
   String get changePlace => isKo ? '장소 변경' : 'Change place';
   String get enterPlaceManually => isKo ? '장소 직접 입력' : 'Enter place manually';
+  String get searchPlace => isKo ? '장소 검색' : 'Search place';
+  String placeSearchResults(String query) =>
+      isKo ? '"$query" 검색 결과' : 'Results for "$query"';
+  String get noMatchingPlaces => isKo ? '검색 결과가 없어요.' : 'No places were found.';
 
   String get routeDetailTitle => isKo ? '루트 상세' : 'Route Detail';
   String get routeNotFound => isKo ? '루트를 찾을 수 없어요.' : 'Route not found.';
@@ -219,10 +245,16 @@ class AppStrings {
   String get visitTimeline => isKo ? '방문 타임라인' : 'Visit timeline';
   String get routeMap => isKo ? '루트 지도' : 'Route map';
   String routeStopCount(int count) => isKo ? '$count곳' : '$count stops';
-  String get noRouteMapPoints =>
-      isKo ? '지도에 표시할 좌표가 아직 없어요.' : 'No coordinates are available for this route yet.';
-  String get editMyRoute => isKo ? '수정해서 저장' : 'Edit and save';
-  String get downloadAndCustomize => isKo ? '다운로드' : 'Download';
+  String get noRouteMapPoints => isKo
+      ? '지도에 표시할 좌표가 아직 없어요.'
+      : 'No coordinates are available for this route yet.';
+  String get mapLoadFailed =>
+      isKo ? '지도를 불러오지 못했어요.' : 'Could not load the map.';
+  String get naverDynamicMapKeyMissing => isKo
+      ? '네이버 동적 지도 키가 설정되지 않았어요.'
+      : 'Naver Dynamic Map key is not configured.';
+  String get editMyRoute => isKo ? '수정하기' : 'Edit';
+  String get downloadAndCustomize => isKo ? '다운로드 및 편집' : 'Download and Edit';
   String get savedRoute => isKo ? '저장된 루트' : 'Saved route';
   String authorRoute(String authorName) =>
       isKo ? '@$authorName의 루트' : '@$authorName route';
@@ -265,6 +297,13 @@ class AppStrings {
   String get address => isKo ? '주소' : 'Address';
   String get optional => isKo ? '선택 입력' : 'Optional';
   String get memo => isKo ? '메모' : 'Memo';
+  String get placeDescription => isKo ? '지점 설명' : 'Stop description';
+  String get estimatedCost => isKo ? '예상 비용' : 'Estimated cost';
+  String get estimatedCostWon => isKo ? '예상 비용(원)' : 'Estimated cost (KRW)';
+  String get costHint => isKo ? '예: 12000' : 'Example: 12000';
+  String get editPlace => isKo ? '장소 수정' : 'Edit place';
+  String get invalidCost =>
+      isKo ? '비용은 숫자로 입력하세요.' : 'Enter the cost as a number.';
   String get cancel => isKo ? '취소' : 'Cancel';
   String get close => isKo ? '닫기' : 'Close';
   String get add => isKo ? '추가' : 'Add';
@@ -284,7 +323,7 @@ class AppStrings {
       isKo ? '"$title" 루트를 프로필에서 삭제할까요?' : 'Delete "$title" from your profile?';
   String get routeDeleted => isKo ? '루트를 삭제했어요.' : 'Route deleted.';
   String get savedRouteLabel => isKo ? '저장된 루트' : 'Saved route';
-  String get uploadedRoutes => isKo ? '내가 업로드한 루트' : 'Routes I uploaded';
+  String get uploadedRoutes => isKo ? '업로드한 루트' : 'Uploaded routes';
   String get downloadedRoutes => isKo ? '다운로드한 루트' : 'Downloaded routes';
   String get uploadedRouteLabel => isKo ? '사진으로 만든 루트' : 'Created from photos';
   String get downloadedRouteLabel => isKo ? '다운로드한 루트' : 'Downloaded route';

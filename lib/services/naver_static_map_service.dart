@@ -17,14 +17,12 @@ class NaverStaticMapService {
   final String proxyBaseUrl;
 
   bool get isConfigured {
-    if (kIsWeb) {
-      return proxyBaseUrl.isNotEmpty || hasDirectKeys;
-    }
-
-    return hasDirectKeys;
+    return proxyBaseUrl.isNotEmpty || hasDirectKeys;
   }
 
   bool get hasDirectKeys => clientId.isNotEmpty && clientSecret.isNotEmpty;
+
+  bool get _shouldUseProxy => proxyBaseUrl.isNotEmpty;
 
   Uri buildMapUri({
     required double latitude,
@@ -85,7 +83,13 @@ class NaverStaticMapService {
       );
     }
 
-    if (kIsWeb && proxyBaseUrl.isEmpty) {
+    if (!isConfigured) {
+      return StaticMapResult.failure(
+        'Naver Static Map is not configured. Run with NAVER_MAP_PROXY_BASE_URL, or provide NAVER_MAP_CLIENT_ID and NAVER_MAP_CLIENT_SECRET.',
+      );
+    }
+
+    if (kIsWeb && !_shouldUseProxy) {
       return StaticMapResult.failure(
         'Flutter Web cannot call Naver Static Map directly because the browser blocks the required API-key headers. '
         'Run with NAVER_MAP_PROXY_BASE_URL pointing to a small backend/proxy, or test this feature on Android/iOS.',
@@ -94,10 +98,10 @@ class NaverStaticMapService {
 
     try {
       final response = await http.get(
-        kIsWeb
+        _shouldUseProxy
             ? buildProxyMapUri(points: points)
             : buildMultiMarkerMapUri(points: points),
-        headers: kIsWeb ? const {} : headers,
+        headers: _shouldUseProxy ? const {} : headers,
       );
 
       final contentType = response.headers['content-type'] ?? '';

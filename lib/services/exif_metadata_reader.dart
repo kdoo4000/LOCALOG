@@ -57,8 +57,17 @@ class ExifMetadataReader {
     var result = 0.0;
     var unit = 1.0;
     for (final ratio in values.ratios) {
-      result += ratio.toDouble() * unit;
+      final value = ratio.toDouble();
+      if (!value.isFinite) {
+        return null;
+      }
+
+      result += value * unit;
       unit /= 60.0;
+    }
+
+    if (!result.isFinite) {
+      return null;
     }
 
     return ref == negativeRef ? -result : result;

@@ -46,22 +46,27 @@ class _MainShellScreenState extends State<MainShellScreen> {
           destinations: [
             NavigationDestination(
               icon: const Icon(Icons.home_outlined),
+              selectedIcon: const Icon(Icons.home_rounded),
               label: strings.navHome,
             ),
             NavigationDestination(
               icon: const Icon(Icons.search),
+              selectedIcon: const Icon(Icons.search_rounded),
               label: strings.navSearch,
             ),
             NavigationDestination(
               icon: const Icon(Icons.add_photo_alternate_outlined),
+              selectedIcon: const Icon(Icons.add_photo_alternate_rounded),
               label: strings.navUpload,
             ),
             NavigationDestination(
               icon: const Icon(Icons.receipt_long_outlined),
+              selectedIcon: const Icon(Icons.receipt_long_rounded),
               label: strings.navMap,
             ),
             NavigationDestination(
               icon: const Icon(Icons.person_outline),
+              selectedIcon: const Icon(Icons.person_rounded),
               label: strings.navProfile,
             ),
           ],

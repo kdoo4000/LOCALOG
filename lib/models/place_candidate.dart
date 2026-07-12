@@ -5,6 +5,9 @@ class PlaceCandidate {
     required this.address,
     required this.source,
     this.category,
+    this.distanceMeters,
+    this.latitude,
+    this.longitude,
   });
 
   factory PlaceCandidate.fromJson(Map<String, dynamic> json) {
@@ -14,6 +17,9 @@ class PlaceCandidate {
       address: json['address'] as String? ?? '',
       source: json['source'] as String? ?? 'unknown',
       category: json['category'] as String?,
+      distanceMeters: (json['distanceMeters'] as num?)?.round(),
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
     );
   }
 
@@ -22,12 +28,22 @@ class PlaceCandidate {
   final String address;
   final String source;
   final String? category;
+  final int? distanceMeters;
+  final double? latitude;
+  final double? longitude;
+
+  bool get hasLocation =>
+      latitude != null &&
+      longitude != null &&
+      latitude!.isFinite &&
+      longitude!.isFinite;
 
   String get displayName => name.isEmpty ? address : name;
 
   String get displayDetail {
     final parts = [
       if (category != null && category!.isNotEmpty) category!,
+      if (distanceMeters != null) '약 ${distanceMeters}m',
       if (address.isNotEmpty) address,
     ];
     if (parts.isEmpty) {

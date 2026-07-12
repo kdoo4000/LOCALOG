@@ -9,6 +9,7 @@ class RoutePlace {
     this.memo,
     this.latitude,
     this.longitude,
+    this.estimatedCostWon,
     this.photoUrls = const [],
     this.purchasedItems = const [],
   });
@@ -22,19 +23,27 @@ class RoutePlace {
   final String? memo;
   final double? latitude;
   final double? longitude;
+  final int? estimatedCostWon;
   final List<String> photoUrls;
   final List<String> purchasedItems;
+
+  bool get hasLocation {
+    final lat = latitude;
+    final lng = longitude;
+    return lat != null && lng != null && lat.isFinite && lng.isFinite;
+  }
 
   RoutePlace copyWith({
     String? id,
     String? name,
     String? category,
     int? orderIndex,
-    String? address,
+    Object? address = _keepValue,
     DateTime? visitedAt,
-    String? memo,
+    Object? memo = _keepValue,
     double? latitude,
     double? longitude,
+    Object? estimatedCostWon = _keepValue,
     List<String>? photoUrls,
     List<String>? purchasedItems,
   }) {
@@ -43,13 +52,20 @@ class RoutePlace {
       name: name ?? this.name,
       category: category ?? this.category,
       orderIndex: orderIndex ?? this.orderIndex,
-      address: address ?? this.address,
+      address: identical(address, _keepValue)
+          ? this.address
+          : address as String?,
       visitedAt: visitedAt ?? this.visitedAt,
-      memo: memo ?? this.memo,
+      memo: identical(memo, _keepValue) ? this.memo : memo as String?,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      estimatedCostWon: identical(estimatedCostWon, _keepValue)
+          ? this.estimatedCostWon
+          : estimatedCostWon as int?,
       photoUrls: photoUrls ?? this.photoUrls,
       purchasedItems: purchasedItems ?? this.purchasedItems,
     );
   }
 }
+
+const Object _keepValue = Object();

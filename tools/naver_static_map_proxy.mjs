@@ -10,6 +10,105 @@ const searchClientSecret =
   process.env.NAVER_SEARCH_CLIENT_SECRET ??
   process.env.NAVER_OPENAPI_CLIENT_SECRET;
 
+const hardExcludedPlaceKeywords = [
+  '매표소',
+  '티켓',
+  'ticket',
+  '주차장',
+  '주차타워',
+  'parking',
+  '게이트',
+  '입구',
+  '출구',
+  '화장실',
+  '고객센터',
+  '안내센터',
+  '안내소',
+  '관리사무소',
+  '경비실',
+  '정문',
+  '후문',
+  '동문',
+  '서문',
+  '남문',
+  '북문',
+];
+
+const weakExcludedPlaceKeywords = [
+  '아파트',
+  '오피스텔',
+  '주민센터',
+  '행정복지센터',
+  '구청',
+  '시청',
+  '군청',
+  '경찰서',
+  '파출소',
+  '지구대',
+  '소방서',
+  '우체국',
+  '세무서',
+  '법원',
+  '등기소',
+  '보건소',
+  '은행',
+  'atm',
+  '병원',
+  '약국',
+  '학교',
+  '어린이집',
+  '유치원',
+  '부동산',
+];
+
+const travelFriendlyKeywords = [
+  '관광',
+  '전망',
+  '전망대',
+  '공원',
+  '박물관',
+  '미술관',
+  '전시',
+  '갤러리',
+  '궁',
+  '궁궐',
+  '성',
+  '시장',
+  '거리',
+  '골목',
+  '해변',
+  '해수욕장',
+  '테마파크',
+  '놀이공원',
+  '월드',
+  '타워',
+  '스퀘어',
+  '플라자',
+  '쇼핑',
+  '몰',
+  '기념품',
+  '소품샵',
+  '서점',
+];
+
+const foodAndCafeKeywords = [
+  '카페',
+  '커피',
+  '디저트',
+  '베이커리',
+  '맛집',
+  '음식',
+  '식당',
+  '분식',
+  '한식',
+  '일식',
+  '중식',
+  '양식',
+  '레스토랑',
+  '펍',
+  '바',
+];
+
 if (!mapClientId || !mapClientSecret) {
   console.error(
     'Set NAVER_MAP_CLIENT_ID and NAVER_MAP_CLIENT_SECRET before starting the proxy.',
@@ -40,6 +139,11 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === '/place-candidates') {
       await handlePlaceCandidates(requestUrl, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/place-search') {
+      await handlePlaceSearch(requestUrl, response);
       return;
     }
 
@@ -74,6 +178,33 @@ async function handleStaticMap(requestUrl, response) {
   response.end(bytes);
 }
 
+async function handlePlaceSearch(requestUrl, response) {
+  const query = (requestUrl.searchParams.get('query') ?? '').trim();
+  const lat = Number.parseFloat(requestUrl.searchParams.get('lat') ?? '');
+  const lng = Number.parseFloat(requestUrl.searchParams.get('lng') ?? '');
+  const origin =
+    Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  if (query.length < 2) {
+    sendText(response, 400, 'query must be at least 2 characters.');
+    return;
+  }
+
+  if (!searchClientId || !searchClientSecret) {
+    sendJson(response, 200, { candidates: [], hasLocalSearch: false });
+    return;
+  }
+
+  const items = await fetchLocalSearchItems(query, { display: 10 });
+  const candidates = rankKeywordSearchItems(items, query, origin)
+    .slice(0, 8)
+    .map((item) => buildPlaceCandidateJson(item, 'search'));
+
+  sendJson(response, 200, {
+    candidates,
+    hasLocalSearch: true,
+  });
+}
+
 async function handlePlaceCandidates(requestUrl, response) {
   const lat = Number.parseFloat(requestUrl.searchParams.get('lat') ?? '');
   const lng = Number.parseFloat(requestUrl.searchParams.get('lng') ?? '');
@@ -83,8 +214,14 @@ async function handlePlaceCandidates(requestUrl, response) {
   }
 
   const reverseGeocodeJson = await fetchReverseGeocode({ lat, lng });
-  const addressCandidates = buildAddressCandidates(reverseGeocodeJson);
-  const placeCandidates = await searchLocalPlaceCandidates(reverseGeocodeJson);
+  const addressCandidates = buildAddressCandidates(reverseGeocodeJson, {
+    lat,
+    lng,
+  });
+  const placeCandidates = await searchLocalPlaceCandidates(reverseGeocodeJson, {
+    lat,
+    lng,
+  });
 
   sendJson(response, 200, {
     candidates:
@@ -106,7 +243,7 @@ async function fetchReverseGeocode({ lat, lng }) {
   return JSON.parse(body);
 }
 
-async function searchLocalPlaceCandidates(reverseGeocodeJson) {
+async function searchLocalPlaceCandidates(reverseGeocodeJson, origin) {
   if (!searchClientId || !searchClientSecret) {
     return [];
   }
@@ -118,24 +255,34 @@ async function searchLocalPlaceCandidates(reverseGeocodeJson) {
   );
   const addressTargets = buildAddressSearchTargets(reverseGeocodeJson);
 
-  return rankLocalItems(items, addressTargets)
-    .filter((item) => item.score >= 45)
+  return rankLocalItems(items, addressTargets, origin)
+    .filter((item) => item.score >= 45 && !item.isExcluded)
     .slice(0, 5)
-    .map((item) => ({
-      id: `local_${cleanText(item.title)}_${item.roadAddress || item.address}`,
-      name: cleanText(item.title),
-      address: item.roadAddress || item.address || '',
-      category: cleanText(item.category ?? ''),
-      source: 'naver_local_search',
-    }));
+    .map((item) => buildPlaceCandidateJson(item, 'local'));
 }
 
-async function fetchLocalSearchItems(query) {
+function buildPlaceCandidateJson(item, prefix) {
+  const coordinates = localItemCoordinates(item);
+  return {
+    id: `${prefix}_${cleanText(item.title)}_${item.roadAddress || item.address}`,
+    name: cleanText(item.title),
+    address: item.roadAddress || item.address || '',
+    category: cleanText(item.category ?? ''),
+    source: 'naver_local_search',
+    distanceMeters: Number.isFinite(item.distanceMeters)
+      ? Math.round(item.distanceMeters)
+      : null,
+    latitude: Number.isFinite(coordinates.lat) ? coordinates.lat : null,
+    longitude: Number.isFinite(coordinates.lng) ? coordinates.lng : null,
+  };
+}
+
+async function fetchLocalSearchItems(query, { display = 5 } = {}) {
   const url = new URL('https://openapi.naver.com/v1/search/local.json');
   url.searchParams.set('query', query);
-  url.searchParams.set('display', '5');
+  url.searchParams.set('display', String(display));
   url.searchParams.set('start', '1');
-  url.searchParams.set('sort', 'random');
+  url.searchParams.set('sort', 'comment');
 
   const response = await fetch(url, {
     headers: {
@@ -149,6 +296,47 @@ async function fetchLocalSearchItems(query) {
 
   const json = await response.json();
   return Array.isArray(json?.items) ? json.items : [];
+}
+
+function rankKeywordSearchItems(items, query, origin) {
+  const queryTokens = addressTokens(query);
+  return dedupeBy(
+    items
+      .map((item) => {
+        const distanceMeters = localItemDistanceMeters(item, origin);
+        return {
+          ...item,
+          distanceMeters,
+          score:
+            keywordMatchScore(item, query, queryTokens) -
+            distanceScorePenalty(distanceMeters),
+        };
+      })
+      .sort((a, b) => b.score - a.score),
+    (item) => `${cleanText(item.title)}_${item.roadAddress || item.address}`,
+  );
+}
+
+function keywordMatchScore(item, query, queryTokens) {
+  const name = cleanText(item.title);
+  const category = cleanText(item.category ?? '');
+  const address = cleanText(`${item.roadAddress ?? ''} ${item.address ?? ''}`);
+  const haystack = `${name} ${category} ${address}`;
+  const normalizedQuery = cleanText(query);
+
+  let score = 0;
+  if (name === normalizedQuery) score += 120;
+  if (name.includes(normalizedQuery)) score += 80;
+  if (category.includes(normalizedQuery)) score += 35;
+  if (address.includes(normalizedQuery)) score += 20;
+
+  for (const token of queryTokens) {
+    if (name.includes(token)) score += 24;
+    if (category.includes(token)) score += 10;
+    if (address.includes(token)) score += 6;
+  }
+
+  return score;
 }
 
 function buildLocalSearchQueries(reverseGeocodeJson) {
@@ -192,7 +380,7 @@ function buildAddressSearchTargets(reverseGeocodeJson) {
   );
 }
 
-function rankLocalItems(items, addressTargets) {
+function rankLocalItems(items, addressTargets, origin) {
   const byKey = new Map();
   for (const item of items) {
     const name = cleanText(item.title);
@@ -202,17 +390,24 @@ function rankLocalItems(items, addressTargets) {
     }
 
     const key = `${name}_${address}`;
-    const score = localItemScore(item, addressTargets);
+    const quality = placeQuality(item);
+    const distanceMeters = localItemDistanceMeters(item, origin);
+    const score = localItemScore(item, addressTargets, quality, distanceMeters);
     const current = byKey.get(key);
     if (!current || score > current.score) {
-      byKey.set(key, { ...item, score });
+      byKey.set(key, {
+        ...item,
+        score,
+        distanceMeters,
+        isExcluded: quality.excluded,
+      });
     }
   }
 
   return [...byKey.values()].sort((a, b) => b.score - a.score);
 }
 
-function localItemScore(item, addressTargets) {
+function localItemScore(item, addressTargets, quality, distanceMeters) {
   const address = `${item.roadAddress ?? ''} ${item.address ?? ''}`;
   const itemTokens = addressTokens(address);
   let bestScore = 0;
@@ -232,19 +427,113 @@ function localItemScore(item, addressTargets) {
     );
   }
 
-  return bestScore;
+  const distancePenalty = distanceScorePenalty(distanceMeters);
+  return bestScore + quality.score - distancePenalty;
 }
 
-function buildAddressCandidates(reverseGeocodeJson) {
+function placeQuality(item) {
+  const name = cleanText(item.title);
+  const category = cleanText(item.category ?? '');
+  const haystack = `${name} ${category} ${item.roadAddress ?? ''} ${
+    item.address ?? ''
+  }`;
+
+  if (containsAny(haystack, hardExcludedPlaceKeywords)) {
+    return { score: -200, excluded: true };
+  }
+
+  let score = 0;
+  if (containsAny(haystack, weakExcludedPlaceKeywords)) {
+    score -= 80;
+  }
+  if (containsAny(haystack, travelFriendlyKeywords)) {
+    score += 35;
+  }
+  if (containsAny(haystack, foodAndCafeKeywords)) {
+    score += 20;
+  }
+
+  return { score, excluded: false };
+}
+
+function distanceScorePenalty(distanceMeters) {
+  if (!Number.isFinite(distanceMeters)) {
+    return 20;
+  }
+  if (distanceMeters <= 80) return 0;
+  if (distanceMeters <= 150) return 8;
+  if (distanceMeters <= 300) return 28;
+  if (distanceMeters <= 500) return 70;
+  return 120;
+}
+
+function localItemDistanceMeters(item, origin) {
+  const coordinates = localItemCoordinates(item);
+  if (
+    !Number.isFinite(origin?.lat) ||
+    !Number.isFinite(origin?.lng) ||
+    !Number.isFinite(coordinates.lat) ||
+    !Number.isFinite(coordinates.lng)
+  ) {
+    return Number.NaN;
+  }
+
+  return haversineMeters(origin.lat, origin.lng, coordinates.lat, coordinates.lng);
+}
+
+function localItemCoordinates(item) {
+  return {
+    lat: normalizeCoordinate(item.mapy, 'lat'),
+    lng: normalizeCoordinate(item.mapx, 'lng'),
+  };
+}
+
+function normalizeCoordinate(value, axis) {
+  const numeric = Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(numeric)) {
+    return Number.NaN;
+  }
+
+  const candidates = [numeric, numeric / 1e7, numeric / 1e6, numeric / 1e5];
+  return (
+    candidates.find((candidate) =>
+      axis === 'lat'
+        ? candidate >= 30 && candidate <= 45
+        : candidate >= 120 && candidate <= 135,
+    ) ?? Number.NaN
+  );
+}
+
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const earthRadiusMeters = 6371000;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLng / 2) ** 2;
+  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function toRadians(degrees) {
+  return (degrees * Math.PI) / 180;
+}
+
+function containsAny(value, keywords) {
+  return keywords.some((keyword) => value.includes(keyword));
+}
+
+function buildAddressCandidates(reverseGeocodeJson, origin) {
   const results = Array.isArray(reverseGeocodeJson?.results)
     ? reverseGeocodeJson.results
     : [];
   return results
-    .map((result) => addressCandidateFromReverseGeocodeResult(result))
+    .map((result) => addressCandidateFromReverseGeocodeResult(result, origin))
     .filter(Boolean);
 }
 
-function addressCandidateFromReverseGeocodeResult(result) {
+function addressCandidateFromReverseGeocodeResult(result, origin) {
   const source = result?.name ?? 'reverse_geocode';
   const address = dedupe([
     ...regionNames(result?.region),
@@ -260,6 +549,8 @@ function addressCandidateFromReverseGeocodeResult(result) {
     address,
     category: addressTitleForSource(source),
     source: 'naver_reverse_geocode',
+    latitude: Number.isFinite(origin?.lat) ? origin.lat : null,
+    longitude: Number.isFinite(origin?.lng) ? origin.lng : null,
   };
 }
 

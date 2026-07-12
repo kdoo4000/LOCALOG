@@ -1,5 +1,7 @@
 import 'route_place.dart';
 
+enum RouteVisibility { public, private }
+
 class TravelRoute {
   const TravelRoute({
     required this.id,
@@ -15,6 +17,9 @@ class TravelRoute {
     this.coverImageUrl,
     this.sourceRouteId,
     this.isDownloaded = false,
+    this.isCreatedByCurrentUser = false,
+    this.visibility = RouteVisibility.public,
+    this.publishedAt,
   });
 
   final String id;
@@ -30,6 +35,12 @@ class TravelRoute {
   final String? coverImageUrl;
   final String? sourceRouteId;
   final bool isDownloaded;
+  final bool isCreatedByCurrentUser;
+  final RouteVisibility visibility;
+  final DateTime? publishedAt;
+
+  bool get isPublished => publishedAt != null;
+  bool get isPublic => visibility == RouteVisibility.public;
 
   bool get isDownloadedCopy => isDownloaded;
 
@@ -47,6 +58,9 @@ class TravelRoute {
     String? coverImageUrl,
     String? sourceRouteId,
     bool? isDownloaded,
+    bool? isCreatedByCurrentUser,
+    RouteVisibility? visibility,
+    DateTime? publishedAt,
   }) {
     return TravelRoute(
       id: id ?? this.id,
@@ -63,6 +77,10 @@ class TravelRoute {
       coverImageUrl: coverImageUrl ?? this.coverImageUrl,
       sourceRouteId: sourceRouteId ?? this.sourceRouteId,
       isDownloaded: isDownloaded ?? this.isDownloaded,
+      isCreatedByCurrentUser:
+          isCreatedByCurrentUser ?? this.isCreatedByCurrentUser,
+      visibility: visibility ?? this.visibility,
+      publishedAt: publishedAt ?? this.publishedAt,
     );
   }
 }

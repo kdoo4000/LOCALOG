@@ -107,21 +107,13 @@ class _HomeHeader extends StatelessWidget {
       children: [
         Row(
           children: [
-            Container(
-              width: 56,
-              height: 56,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.primaryBlue,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                'LL',
-                style: TextStyle(
-                  color: AppColors.white,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0,
-                ),
+            const Text(
+              'LIKE LOCAL',
+              style: TextStyle(
+                color: AppColors.ink,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.6,
               ),
             ),
             const Spacer(),
@@ -139,24 +131,58 @@ class _HomeHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 22),
-        Text(
-          strings.homeHeroTitle,
-          style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: AppColors.ink,
-                fontSize: 30,
-                fontWeight: FontWeight.w900,
-                height: 1.08,
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(22, 24, 22, 26),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [AppColors.primaryBlue, AppColors.primaryBlueDark],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.accentLime,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'LOCAL CURATION',
+                  style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .4,
+                  ),
+                ),
               ),
+              const SizedBox(height: 16),
+              Text(
+                strings.homeHeroTitle,
+                style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                      color: AppColors.white,
+                      fontSize: 30,
+                      fontWeight: FontWeight.w900,
+                      height: 1.08,
+                    ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 18),
         Material(
           color: AppColors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(18),
             side: const BorderSide(color: AppColors.gray200),
           ),
           child: InkWell(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(18),
             onTap: onDestinationTap,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -215,9 +241,9 @@ class _ShortcutGrid extends StatelessWidget {
         for (final item in items)
           Material(
             color: item.$3,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(18),
             child: InkWell(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(18),
               onTap: () => onShortcutTap(item.$2),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -259,10 +285,6 @@ class _PopularPlacesPanel extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        border: Border(top: BorderSide(color: AppColors.gray100)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
