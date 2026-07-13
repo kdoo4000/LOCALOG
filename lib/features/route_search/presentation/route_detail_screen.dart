@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/l10n/app_language.dart';
@@ -614,7 +613,7 @@ class _StoredRoutePhoto extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Uint8List>(
-      future: XFile(path).readAsBytes(),
+      future: _readRoutePhoto(path),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return SizedBox(
@@ -646,6 +645,14 @@ class _StoredRoutePhoto extends StatelessWidget {
       },
     );
   }
+}
+
+Future<Uint8List> _readRoutePhoto(String path) async {
+  if (path.startsWith('assets/')) {
+    final data = await rootBundle.load(path);
+    return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+  }
+  return XFile(path).readAsBytes();
 }
 
 String _placeMetaText(BuildContext context, RoutePlace place) {

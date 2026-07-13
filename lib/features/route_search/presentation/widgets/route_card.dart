@@ -24,21 +24,24 @@ class RouteCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       child: Row(
         children: [
-          Container(
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
             width: 52,
             height: 52,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
               color: AppColors.accentLime,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              cityInitial,
-              style: const TextStyle(
-                color: AppColors.primaryBlue,
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-              ),
+              child: route.coverImageUrl?.startsWith('assets/') == true
+                  ? Image.asset(
+                      route.coverImageUrl!,
+                      width: 52,
+                      height: 52,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _CityInitial(
+                        initial: cityInitial,
+                      ),
+                    )
+                  : _CityInitial(initial: cityInitial),
             ),
           ),
           const SizedBox(width: 14),
@@ -81,6 +84,26 @@ class RouteCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CityInitial extends StatelessWidget {
+  const _CityInitial({required this.initial});
+
+  final String initial;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: AppColors.primaryBlue,
+          fontSize: 22,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }

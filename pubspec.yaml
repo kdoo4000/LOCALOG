@@ -69,6 +69,12 @@ flutter:
     - assets/localog_blue.svg
     - assets/localog_blue.png
     - assets/localog_text_vertical.svg
+    - assets/mock_routes/seongsu_cafe.jpg
+    - assets/mock_routes/busan_night.jpg
+    - assets/mock_routes/palace_walk.jpg
+    - assets/mock_routes/seongsu_cafe.jpg
+    - assets/mock_routes/busan_night.jpg
+    - assets/mock_routes/palace_walk.jpg
     - assets/localog_blue.png
     - assets/localog_text_vertical.svg
 

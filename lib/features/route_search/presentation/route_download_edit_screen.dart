@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_language.dart';
+import '../../../models/place_candidate.dart';
+import '../../../services/place_candidate_service.dart';
 import '../data/mock_route_repository.dart';
 import '../domain/route_place.dart';
 import '../domain/travel_route.dart';
@@ -333,11 +335,15 @@ class _PlaceDialog extends StatefulWidget {
 }
 
 class _PlaceDialogState extends State<_PlaceDialog> {
+  final _placeCandidateService = const PlaceCandidateService();
+  final _searchController = TextEditingController();
   final _nameController = TextEditingController();
   final _categoryController = TextEditingController();
   final _addressController = TextEditingController();
   final _memoController = TextEditingController();
   final _costController = TextEditingController();
+  Future<PlaceCandidateResult>? _searchFuture;
+  PlaceCandidate? _selectedCandidate;
 
   bool get _isEditing => widget.initialPlace != null;
 
@@ -358,6 +364,7 @@ class _PlaceDialogState extends State<_PlaceDialog> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _nameController.dispose();
     _categoryController.dispose();
     _addressController.dispose();
@@ -366,7 +373,38 @@ class _PlaceDialogState extends State<_PlaceDialog> {
     super.dispose();
   }
 
+  void _searchPlace() {
+    final query = _searchController.text.trim();
+    if (query.length < 2) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.strings.enterPlaceName)));
+      return;
+    }
+
+    setState(() {
+      _selectedCandidate = null;
+      _searchFuture = _placeCandidateService.searchByKeyword(query);
+    });
+  }
+
+  void _selectCandidate(PlaceCandidate candidate) {
+    setState(() {
+      _selectedCandidate = candidate;
+      _nameController.text = candidate.displayName;
+      _categoryController.text = candidate.category?.trim() ?? '';
+      _addressController.text = candidate.address.trim();
+    });
+  }
+
   void _submit() {
+    if (!_isEditing && _selectedCandidate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('검색 결과에서 장소를 선택해 주세요.')),
+      );
+      return;
+    }
+
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(
@@ -392,7 +430,7 @@ class _PlaceDialogState extends State<_PlaceDialog> {
             'custom-${DateTime.now().microsecondsSinceEpoch}',
         name: name,
         category: _categoryController.text.trim().isEmpty
-            ? 'Custom'
+            ? '장소'
             : _categoryController.text.trim(),
         address: _addressController.text.trim().isEmpty
             ? null
@@ -400,8 +438,8 @@ class _PlaceDialogState extends State<_PlaceDialog> {
         memo: _memoController.text.trim().isEmpty
             ? null
             : _memoController.text.trim(),
-        latitude: initialPlace?.latitude,
-        longitude: initialPlace?.longitude,
+        latitude: initialPlace?.latitude ?? _selectedCandidate?.latitude,
+        longitude: initialPlace?.longitude ?? _selectedCandidate?.longitude,
         estimatedCostWon: estimatedCost,
         photoUrls: initialPlace?.photoUrls ?? const [],
         purchasedItems: initialPlace?.purchasedItems ?? const [],
@@ -417,62 +455,62 @@ class _PlaceDialogState extends State<_PlaceDialog> {
     return AlertDialog(
       title: Text(widget.title),
       content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_isEditing) ...[
-              _LockedPlaceSummary(place: widget.initialPlace!),
-              const SizedBox(height: 12),
-            ] else ...[
-              TextField(
-                controller: _nameController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: strings.placeName,
-                  hintText: strings.exampleCafe,
+        child: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_isEditing) ...[
+                _LockedPlaceSummary(place: widget.initialPlace!),
+                const SizedBox(height: 12),
+              ] else ...[
+                TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: strings.searchPlace,
+                    hintText: strings.exampleCafe,
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(
+                      onPressed: _searchPlace,
+                      tooltip: strings.searchPlace,
+                      icon: const Icon(Icons.arrow_forward),
+                    ),
+                    border: const OutlineInputBorder(),
+                  ),
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _searchPlace(),
                 ),
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _categoryController,
-                decoration: InputDecoration(
-                  labelText: strings.category,
-                  hintText: strings.categoryHint,
+                const SizedBox(height: 10),
+                _PlaceSearchResults(
+                  searchFuture: _searchFuture,
+                  selectedCandidate: _selectedCandidate,
+                  onSelected: _selectCandidate,
                 ),
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 10),
+                const SizedBox(height: 10),
+              ],
               TextField(
-                controller: _addressController,
+                controller: _memoController,
                 decoration: InputDecoration(
-                  labelText: strings.address,
+                  labelText: strings.placeDescription,
                   hintText: strings.optional,
                 ),
-                textInputAction: TextInputAction.next,
+                minLines: 1,
+                maxLines: 3,
               ),
               const SizedBox(height: 10),
+              TextField(
+                controller: _costController,
+                decoration: InputDecoration(
+                  labelText: strings.estimatedCostWon,
+                  hintText: strings.costHint,
+                ),
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+              ),
             ],
-            TextField(
-              controller: _memoController,
-              decoration: InputDecoration(
-                labelText: strings.placeDescription,
-                hintText: strings.optional,
-              ),
-              minLines: 1,
-              maxLines: 3,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _costController,
-              decoration: InputDecoration(
-                labelText: strings.estimatedCostWon,
-                hintText: strings.costHint,
-              ),
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.done,
-            ),
-          ],
+          ),
         ),
       ),
       actions: [
@@ -482,6 +520,131 @@ class _PlaceDialogState extends State<_PlaceDialog> {
         ),
         FilledButton(onPressed: _submit, child: Text(widget.actionLabel)),
       ],
+    );
+  }
+}
+
+class _PlaceSearchResults extends StatelessWidget {
+  const _PlaceSearchResults({
+    required this.searchFuture,
+    required this.selectedCandidate,
+    required this.onSelected,
+  });
+
+  final Future<PlaceCandidateResult>? searchFuture;
+  final PlaceCandidate? selectedCandidate;
+  final ValueChanged<PlaceCandidate> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final future = searchFuture;
+    if (future == null) {
+      return Text(
+        '장소명을 검색한 뒤 결과에서 장소를 선택하세요. 카테고리와 주소는 자동으로 입력됩니다.',
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: Colors.black54, height: 1.4),
+      );
+    }
+
+    return FutureBuilder<PlaceCandidateResult>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        final result = snapshot.data;
+        if (result == null || !result.isSuccess) {
+          return _SearchMessage(
+            icon: Icons.error_outline,
+            message: result?.errorMessage ?? '장소 검색 결과를 불러오지 못했어요.',
+          );
+        }
+        if (result.candidates.isEmpty) {
+          return _SearchMessage(
+            icon: Icons.location_off_outlined,
+            message: context.strings.noMatchingPlaces,
+          );
+        }
+
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 260),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: result.candidates.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final candidate = result.candidates[index];
+              final selected = selectedCandidate?.id == candidate.id;
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                selected: selected,
+                selectedTileColor: Theme.of(
+                  context,
+                ).colorScheme.primaryContainer.withValues(alpha: 0.45),
+                leading: Icon(
+                  selected
+                      ? Icons.check_circle
+                      : Icons.location_on_outlined,
+                  color: selected
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.black45,
+                ),
+                title: Text(
+                  candidate.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  candidate.displayDetail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () => onSelected(candidate),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SearchMessage extends StatelessWidget {
+  const _SearchMessage({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.black45),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(height: 1.4),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
