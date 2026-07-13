@@ -34,11 +34,26 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 72),
             Align(
               alignment: Alignment.centerLeft,
-              child: SvgPicture.asset(
-                'assets/localog_text.svg',
-                width: 240,
-                height: 135,
-                fit: BoxFit.contain,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SvgPicture.asset(
+                    'assets/localog_blue.svg',
+                    width: 76,
+                    height: 76,
+                    fit: BoxFit.contain,
+                    semanticsLabel: 'LOCALOG',
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    'LOCALOG',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      color: const Color(0xFF145CFF),
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 36),

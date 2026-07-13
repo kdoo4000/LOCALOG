@@ -1,5 +1,5 @@
 param(
-  [string]$Source = (Join-Path $PSScriptRoot '..\assets\localog_logo.png')
+  [string]$Source = (Join-Path $PSScriptRoot '..\assets\localog_blue.png')
 )
 
 Add-Type -AssemblyName System.Drawing
@@ -14,6 +14,11 @@ function Write-IconPng {
       try {
         $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
         $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        if ($Path -like '*\ios\Runner\Assets.xcassets\AppIcon.appiconset\*') {
+          $graphics.Clear([System.Drawing.Color]::White)
+        } else {
+          $graphics.Clear([System.Drawing.Color]::Transparent)
+        }
         $graphics.DrawImage($sourceImage, 0, 0, $Size, $Size)
       } finally {
         $graphics.Dispose()

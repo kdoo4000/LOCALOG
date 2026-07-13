@@ -33,22 +33,12 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ClipRRect(
-              borderRadius: const BorderRadius.all(Radius.circular(32)),
-              child: SvgPicture.asset(
-                'assets/localog_logo.svg',
-                width: 180,
-                height: 180,
-                fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Your best local guide',
-              style: TextStyle(
-                color: AppColors.white,
-                fontWeight: FontWeight.w600,
-              ),
+            SvgPicture.asset(
+              'assets/localog_text_vertical.svg',
+              width: 176,
+              height: 239,
+              fit: BoxFit.contain,
+              semanticsLabel: 'LOCALOG',
             ),
           ],
         ),

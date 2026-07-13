@@ -30,12 +30,20 @@ class RouteDetailScreen extends StatefulWidget {
 
 class _RouteDetailScreenState extends State<RouteDetailScreen> {
   final _repository = const MockRouteRepository();
+  final _scrollController = ScrollController();
   late Future<_RouteDetailData?> _detailFuture;
+  bool _didSetInitialScrollPosition = false;
 
   @override
   void initState() {
     super.initState();
     _detailFuture = _loadDetail();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<_RouteDetailData?> _loadDetail() async {
@@ -105,49 +113,110 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               detail.savedRoute != null || route.isCreatedByCurrentUser;
           final sortedPlaces = [...route.places]
             ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+          final coverHeight = MediaQuery.sizeOf(context).height;
+          if (!_didSetInitialScrollPosition) {
+            _didSetInitialScrollPosition = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!_scrollController.hasClients) return;
+              final target = (coverHeight * 0.5).clamp(
+                0.0,
+                _scrollController.position.maxScrollExtent,
+              );
+              _scrollController.jumpTo(target);
+            });
+          }
 
-          return SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(28, 16, 28, 28),
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              _DetailHero(
+                route: route,
+                height: coverHeight,
+              ),
+              ListView(
+                controller: _scrollController,
+                padding: EdgeInsets.zero,
+                children: [
+                  SizedBox(height: coverHeight),
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: AppColors.gray50,
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(30),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0x29000000),
+                          blurRadius: 20,
+                          offset: Offset(0, -4),
+                        ),
+                      ],
+                    ),
+                    padding: EdgeInsets.fromLTRB(
+                      28,
+                      30,
+                      28,
+                      28 + MediaQuery.paddingOf(context).bottom,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (route.description.trim().isNotEmpty) ...[
+                          Text(
+                            route.description,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: AppColors.ink, height: 1.45),
+                          ),
+                          const SizedBox(height: 28),
+                        ],
+                        Text(
+                          strings.visitTimeline,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 14),
+                        for (final place in sortedPlaces) ...[
+                          _TimelinePlace(place: place),
+                          const SizedBox(height: 12),
+                        ],
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () => _openDownloadEdit(routeToEdit),
+                            icon: Icon(
+                              hasSavedCopy
+                                  ? Icons.edit_note_outlined
+                                  : Icons.download_outlined,
+                            ),
+                            label: Text(
+                              hasSavedCopy
+                                  ? strings.editMyRoute
+                                  : strings.downloadAndCustomize,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        _RouteMapPanel(places: sortedPlaces),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 12,
+                left: 16,
+                child: Material(
+                  color: const Color(0x66000000),
+                  shape: const CircleBorder(),
                   child: IconButton(
                     onPressed: () => Navigator.of(context).maybePop(),
+                    color: AppColors.white,
                     icon: const Icon(Icons.arrow_back),
                   ),
                 ),
-                _DetailHero(route: route),
-                const SizedBox(height: 28),
-                Text(
-                  strings.visitTimeline,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                for (final place in sortedPlaces) ...[
-                  _TimelinePlace(place: place),
-                  const SizedBox(height: 12),
-                ],
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: () => _openDownloadEdit(routeToEdit),
-                  icon: Icon(
-                    hasSavedCopy
-                        ? Icons.edit_note_outlined
-                        : Icons.download_outlined,
-                  ),
-                  label: Text(
-                    hasSavedCopy
-                        ? strings.editMyRoute
-                        : strings.downloadAndCustomize,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _RouteMapPanel(places: sortedPlaces),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),
@@ -173,138 +242,165 @@ class _RouteDetailData {
 }
 
 class _DetailHero extends StatelessWidget {
-  const _DetailHero({required this.route});
+  const _DetailHero({
+    required this.route,
+    required this.height,
+  });
 
   final TravelRoute route;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
     final upvote = '${(route.upvoteRatio * 100).round()}%';
+    const tagColors = [AppColors.sky, AppColors.yellow, AppColors.mint];
     final coverPath = route.coverImageUrl;
     final routePhotos = route.places
         .expand((place) => place.photoUrls)
         .toSet()
         .toList();
+    final topPadding = MediaQuery.paddingOf(context).top;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GestureDetector(
-          onTap: routePhotos.isEmpty
-              ? null
-              : () => _openPhotoViewer(context, routePhotos, 0),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: SizedBox(
-            width: double.infinity,
-            height: 236,
-            child: Stack(
-              fit: StackFit.expand,
+    return SizedBox(
+      width: double.infinity,
+      height: height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          GestureDetector(
+            onTap: routePhotos.isEmpty
+                ? null
+                : () => _openPhotoViewer(context, routePhotos, 0),
+            child: coverPath != null
+                ? _StoredRoutePhoto(path: coverPath)
+                : const ColoredBox(color: AppColors.primaryBlue),
+          ),
+          const IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xB3000000), Color(0x26000000)],
+                  stops: [0, 0.7],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(28, topPadding + 76, 28, 62),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (coverPath != null)
-                  _StoredRoutePhoto(path: coverPath)
-                else
-                  const ColoredBox(color: AppColors.primaryBlue),
-                const ColoredBox(color: Color(0x59000000)),
-                Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.accentLime,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          '추천 $upvote',
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(
-                                color: AppColors.ink,
-                                fontWeight: FontWeight.w900,
-                              ),
-                        ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _HeroPill(
+                      label: '추천 $upvote',
+                      color: AppColors.accentLime,
+                    ),
+                    for (var index = 0; index < route.tags.length; index++)
+                      _HeroPill(
+                        label: route.tags[index].startsWith('#')
+                            ? route.tags[index]
+                            : '#${route.tags[index]}',
+                        color: tagColors[index % tagColors.length],
                       ),
-                      const Spacer(),
-                      Text(
-                        route.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              color: AppColors.white,
-                              fontWeight: FontWeight.w900,
-                              height: 1.12,
-                            ),
-                      ),
-                    ],
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  route.title,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w900,
+                    height: 1.12,
                   ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 15,
+                      backgroundColor: AppColors.white,
+                      child: Text(
+                        _authorInitial(route.authorName),
+                        style: const TextStyle(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        '@${route.authorName} · ${strings.durationLabel(route.estimatedDurationMinutes)} · ${route.places.length}곳',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 7),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 17,
+                      color: AppColors.white,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        route.city,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroPill extends StatelessWidget {
+  const _HeroPill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: AppColors.ink,
+          fontWeight: FontWeight.w900,
         ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: AppColors.sky,
-              child: Text(
-                _authorInitial(route.authorName),
-                style: const TextStyle(
-                  color: AppColors.primaryBlue,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '@${route.authorName}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    '원본 루트 제작자',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.gray500,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(
-          '${strings.durationLabel(route.estimatedDurationMinutes)} · ${route.places.length}곳 · ${route.city}',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.gray500,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          route.description,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.ink, height: 1.45),
-        ),
-      ],
+      ),
     );
   }
 }

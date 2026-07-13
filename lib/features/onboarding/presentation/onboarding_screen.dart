@@ -25,13 +25,16 @@ class OnboardingScreen extends StatelessWidget {
                   color: AppColors.secondaryLavender,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  child: SvgPicture.asset(
-                    'assets/localog_logo.svg',
-                    width: 172,
-                    height: 172,
-                    fit: BoxFit.cover,
+                child: Center(
+                  child: SizedBox(
+                    width: 280,
+                    height: 158,
+                    child: SvgPicture.asset(
+                      'assets/localog_text.svg',
+                      fit: BoxFit.contain,
+                      alignment: Alignment.center,
+                      semanticsLabel: 'LOCALOG',
+                    ),
                   ),
                 ),
               ),

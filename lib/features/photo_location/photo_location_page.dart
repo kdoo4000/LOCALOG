@@ -2,7 +2,6 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/l10n/app_language.dart';
@@ -283,12 +282,15 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: SvgPicture.asset(
-          'assets/localog_text.svg',
-          width: 116,
-          height: 42,
-          fit: BoxFit.contain,
-          alignment: Alignment.centerLeft,
+        title: const Text(
+          'LOCALOG',
+          style: TextStyle(
+            color: AppColors.primaryBlue,
+            fontFamily: 'Pretendard',
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.7,
+          ),
         ),
         centerTitle: false,
       ),

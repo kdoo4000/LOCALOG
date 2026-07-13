@@ -7,7 +7,6 @@ void main() {
     await tester.pumpWidget(const LocalogApp());
 
     expect(find.byType(SvgPicture), findsOneWidget);
-    expect(find.text('Your best local guide'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 901));
     await tester.pumpAndSettle();
