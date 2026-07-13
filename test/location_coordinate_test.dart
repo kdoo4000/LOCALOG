@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:like_local/features/route_search/domain/route_place.dart';
-import 'package:like_local/models/photo_metadata.dart';
+import 'package:localog/features/route_search/domain/route_place.dart';
+import 'package:localog/models/photo_metadata.dart';
 
 void main() {
   test('photo metadata ignores non-finite coordinates', () {

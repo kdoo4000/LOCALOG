@@ -2,6 +2,7 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/l10n/app_language.dart';
@@ -186,6 +187,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
         draft.city,
         draft.tags,
         draft.visibility,
+        draft.coverImagePath,
         draft.entries,
       );
       final savedRoute = await _routeRepository.saveCreatedRoute(route);
@@ -223,6 +225,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     String city,
     List<String> tags,
     RouteVisibility visibility,
+    String coverImagePath,
     List<_PhotoEntry> routeEntries,
   ) {
     final routeId = 'photo-route-${DateTime.now().microsecondsSinceEpoch}';
@@ -242,9 +245,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       upvoteRatio: 1,
       downloadCount: 0,
       estimatedDurationMinutes: routeEntries.length * 45,
-      coverImageUrl: routeEntries.first.photo.path.isEmpty
-          ? null
-          : routeEntries.first.photo.path,
+      coverImageUrl: coverImagePath.isEmpty ? null : coverImagePath,
       isDownloaded: true,
       isCreatedByCurrentUser: true,
       visibility: visibility,
@@ -281,7 +282,16 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     final selectedGroup = _selectedGroup;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('LIKE LOCAL'), centerTitle: false),
+      appBar: AppBar(
+        title: SvgPicture.asset(
+          'assets/localog_text.svg',
+          width: 116,
+          height: 42,
+          fit: BoxFit.contain,
+          alignment: Alignment.centerLeft,
+        ),
+        centerTitle: false,
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
@@ -470,6 +480,7 @@ class _RouteDraftResult {
     required this.city,
     required this.tags,
     required this.visibility,
+    required this.coverImagePath,
     required this.entries,
   });
 
@@ -478,6 +489,7 @@ class _RouteDraftResult {
   final String city;
   final List<String> tags;
   final RouteVisibility visibility;
+  final String coverImagePath;
   final List<_PhotoEntry> entries;
 }
 
@@ -519,6 +531,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
   late List<String> _tags;
   RouteVisibility _visibility = RouteVisibility.public;
   bool _regionSelectedManually = false;
+  String? _selectedCoverEntryId;
   String? _editingEntryId;
 
   @override
@@ -532,6 +545,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
     _tagsController = TextEditingController();
     _tags = [...widget.initialTags];
     _entries = [...widget.entries];
+    _selectedCoverEntryId = _entries.firstOrNull?.id;
     _applySuggestedRegion();
   }
 
@@ -581,6 +595,9 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
 
     setState(() {
       _entries = _entries.where((item) => item.id != entry.id).toList();
+      if (_selectedCoverEntryId == entry.id) {
+        _selectedCoverEntryId = _entries.firstOrNull?.id;
+      }
       if (_editingEntryId == entry.id) {
         _editingEntryId = null;
       }
@@ -617,6 +634,11 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
         city: city,
         tags: _tags,
         visibility: _visibility,
+        coverImagePath: _entries
+            .where((entry) => entry.id == _selectedCoverEntryId)
+            .firstOrNull
+            ?.photo
+            .path ?? '',
         entries: _entries,
       ),
     );
@@ -698,6 +720,65 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          '대표 이미지',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 84,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _entries.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final entry = _entries[index];
+              final selected = entry.id == _selectedCoverEntryId;
+              return GestureDetector(
+                onTap: () => setState(() => _selectedCoverEntryId = entry.id),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 84,
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? AppColors.primaryBlue
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(11),
+                        child: _PhotoImage(photo: entry.photo, cacheWidth: 240),
+                      ),
+                      if (selected)
+                        const Align(
+                          alignment: Alignment.topRight,
+                          child: Padding(
+                            padding: EdgeInsets.all(5),
+                            child: CircleAvatar(
+                              radius: 10,
+                              backgroundColor: AppColors.accentLime,
+                              child: Icon(
+                                Icons.check,
+                                size: 14,
+                                color: AppColors.ink,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
         TextField(
           controller: _titleController,
           decoration: InputDecoration(

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
@@ -26,23 +27,23 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       backgroundColor: AppColors.primaryBlue,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'LIKE LOCAL',
-              style: TextStyle(
-                color: AppColors.white,
-                fontSize: 34,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0,
+            ClipRRect(
+              borderRadius: const BorderRadius.all(Radius.circular(32)),
+              child: SvgPicture.asset(
+                'assets/localog_logo.svg',
+                width: 180,
+                height: 180,
+                fit: BoxFit.cover,
               ),
             ),
-            SizedBox(height: 10),
-            Text(
+            const SizedBox(height: 20),
+            const Text(
               'Your best local guide',
               style: TextStyle(
                 color: AppColors.white,

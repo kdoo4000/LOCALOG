@@ -48,7 +48,7 @@ class AppStrings {
 
   bool get isKo => appLanguage == AppLanguage.ko;
 
-  String get appTitle => 'Like Local';
+  String get appTitle => 'LOCALOG';
 
   String get korean => '한국어';
   String get english => 'English';

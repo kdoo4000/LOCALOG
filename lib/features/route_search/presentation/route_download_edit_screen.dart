@@ -7,9 +7,14 @@ import '../domain/travel_route.dart';
 import 'widgets/route_stop_edit_tile.dart';
 
 class RouteDownloadEditScreen extends StatefulWidget {
-  const RouteDownloadEditScreen({super.key, required this.routeId});
+  const RouteDownloadEditScreen({
+    super.key,
+    required this.routeId,
+    this.createNewCopy = false,
+  });
 
   final String routeId;
+  final bool createNewCopy;
 
   @override
   State<RouteDownloadEditScreen> createState() =>
@@ -39,7 +44,9 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
   }
 
   Future<void> _loadRouteCopy() async {
-    final route = await _repository.getRouteById(widget.routeId);
+    final route = widget.createNewCopy
+        ? await _repository.getSourceRouteById(widget.routeId)
+        : await _repository.getRouteById(widget.routeId);
     if (!mounted) {
       return;
     }
@@ -296,6 +303,16 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
             ),
     );
   }
+}
+
+class RouteDownloadEditArguments {
+  const RouteDownloadEditArguments({
+    required this.routeId,
+    this.createNewCopy = false,
+  });
+
+  final String routeId;
+  final bool createNewCopy;
 }
 
 class _PlaceDialog extends StatefulWidget {

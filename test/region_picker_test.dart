@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:like_local/features/route_search/presentation/region_picker_screen.dart';
+import 'package:localog/features/route_search/presentation/region_picker_screen.dart';
 
 void main() {
   test('selects the region appearing in the most photo addresses', () {
@@ -13,13 +13,7 @@ void main() {
   });
 
   test('maps former Gwangju and Jeonnam addresses to the integrated city', () {
-    expect(
-      inferMostFrequentRegion(['광주광역시 동구 문화전당로 38']),
-      '전남광주통합특별시 > 동구',
-    );
-    expect(
-      inferMostFrequentRegion(['전라남도 여수시 시청로 1']),
-      '전남광주통합특별시 > 여수시',
-    );
+    expect(inferMostFrequentRegion(['광주광역시 동구 문화전당로 38']), '전남광주통합특별시 > 동구');
+    expect(inferMostFrequentRegion(['전라남도 여수시 시청로 1']), '전남광주통합특별시 > 여수시');
   });
 }

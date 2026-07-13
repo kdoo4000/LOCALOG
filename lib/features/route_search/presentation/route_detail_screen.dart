@@ -12,6 +12,7 @@ import '../../photo_location/naver_dynamic_map.dart';
 import '../data/mock_route_repository.dart';
 import '../domain/route_place.dart';
 import '../domain/travel_route.dart';
+import 'route_download_edit_screen.dart';
 
 class RouteDetailScreen extends StatefulWidget {
   const RouteDetailScreen({
@@ -45,9 +46,11 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       return null;
     }
 
-    // A source route always remains the content shown from search. A saved copy
-    // is only used to decide which route should open in the editor.
-    final savedRoute = route.sourceRouteId == null && !route.isDownloadedCopy
+    // Search always starts from the source route so each download can create a
+    // new independent copy. Profile routes continue to open their saved copy.
+    final savedRoute = widget.showSourceRoute
+        ? null
+        : route.sourceRouteId == null && !route.isDownloadedCopy
         ? await _repository.getDownloadedRouteForSource(route.id)
         : route;
     return _RouteDetailData(route: route, savedRoute: savedRoute);
@@ -56,7 +59,14 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   Future<void> _openDownloadEdit(TravelRoute route) async {
     final updated = await Navigator.of(
       context,
-    ).pushNamed(RouteNames.routeDownloadEdit, arguments: route.id);
+    ).pushNamed(
+      RouteNames.routeDownloadEdit,
+      arguments: RouteDownloadEditArguments(
+        routeId: route.id,
+        createNewCopy:
+            widget.showSourceRoute && !route.isCreatedByCurrentUser,
+      ),
+    );
 
     if (!mounted) {
       return;
@@ -91,7 +101,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           final detail = snapshot.data!;
           final route = detail.route;
           final routeToEdit = detail.savedRoute ?? route;
-          final hasSavedCopy = detail.savedRoute != null;
+          final hasSavedCopy =
+              detail.savedRoute != null || route.isCreatedByCurrentUser;
           final sortedPlaces = [...route.places]
             ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
 
@@ -240,6 +251,45 @@ class _DetailHero extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
+        Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: AppColors.sky,
+              child: Text(
+                _authorInitial(route.authorName),
+                style: const TextStyle(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '@${route.authorName}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Text(
+                    '원본 루트 제작자',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.gray500,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         Text(
           '${strings.durationLabel(route.estimatedDurationMinutes)} · ${route.places.length}곳 · ${route.city}',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -257,6 +307,11 @@ class _DetailHero extends StatelessWidget {
       ],
     );
   }
+}
+
+String _authorInitial(String authorName) {
+  final trimmed = authorName.trim();
+  return trimmed.isEmpty ? '?' : trimmed.substring(0, 1).toUpperCase();
 }
 
 class _TimelinePlace extends StatelessWidget {

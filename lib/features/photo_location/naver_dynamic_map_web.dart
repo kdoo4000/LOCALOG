@@ -28,7 +28,7 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
     ),
   );
   static Completer<void>? _scriptCompleter;
-  static const _callbackName = '__likeLocalNaverMapReady';
+  static const _callbackName = '__localogNaverMapReady';
   static const _authFailureName = 'navermap_authFailure';
 
   late final String _viewType;

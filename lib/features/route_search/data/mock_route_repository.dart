@@ -33,7 +33,20 @@ class MockRouteRepository implements RouteRepository {
   @override
   Future<TravelRoute?> getSourceRouteById(String routeId) async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
-    return _findSourceRoute(routeId);
+    final bundledRoute = _findSourceRoute(routeId);
+    if (bundledRoute != null) {
+      return bundledRoute;
+    }
+
+    final createdRoute = _downloadedRoutesById[routeId];
+    if (createdRoute != null &&
+        createdRoute.isCreatedByCurrentUser &&
+        createdRoute.isPublished &&
+        createdRoute.isPublic) {
+      return createdRoute;
+    }
+
+    return null;
   }
 
   @override
@@ -87,7 +100,7 @@ class MockRouteRepository implements RouteRepository {
     }
 
     final sourceRouteId = route.sourceRouteId ?? _sourceIdFor(route.id);
-    final downloadedId = route.isDownloadedCopy
+    final downloadedId = route.sourceRouteId != null
         ? route.id
         : _nextDownloadedId(sourceRouteId);
     final updated = route.copyWith(

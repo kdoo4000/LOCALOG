@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/router/route_names.dart';
 
@@ -31,20 +32,16 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.all(24),
           children: [
             const SizedBox(height: 72),
-            Text(
-              'LIKE LOCAL',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w900),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SvgPicture.asset(
+                'assets/localog_text.svg',
+                width: 240,
+                height: 135,
+                fit: BoxFit.contain,
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Your best local guide',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(color: Colors.black54),
-            ),
-            const SizedBox(height: 44),
+            const SizedBox(height: 36),
             FilledButton(
               onPressed: _continue,
               child: const Text('Google로 계속하기'),

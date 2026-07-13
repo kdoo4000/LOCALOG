@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
@@ -24,14 +25,13 @@ class OnboardingScreen extends StatelessWidget {
                   color: AppColors.secondaryLavender,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  '여행,\n일상처럼.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.ink,
-                    height: 1.15,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: SvgPicture.asset(
+                    'assets/localog_logo.svg',
+                    width: 172,
+                    height: 172,
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),

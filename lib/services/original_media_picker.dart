@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 class OriginalMediaPicker {
   const OriginalMediaPicker();
 
-  static const _channel = MethodChannel('like_local/original_media_picker');
+  static const _channel = MethodChannel('localog/original_media_picker');
 
   Future<List<XFile>> pickImages() async {
     if (defaultTargetPlatform != TargetPlatform.android) {

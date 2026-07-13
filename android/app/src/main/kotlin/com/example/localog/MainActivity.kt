@@ -1,4 +1,4 @@
-package com.example.like_local
+package com.example.localog
 
 import android.Manifest
 import android.app.Activity
@@ -20,7 +20,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "like_local/original_media_picker"
+            "localog/original_media_picker"
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "pickImages" -> pickImages(result)

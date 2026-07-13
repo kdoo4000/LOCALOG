@@ -19,9 +19,8 @@ abstract final class AppRouter {
           RouteNames.login => const LoginScreen(),
           RouteNames.main => const MainShellScreen(),
           RouteNames.routeDetail => _routeDetailScreen(settings.arguments),
-          RouteNames.routeDownloadEdit => RouteDownloadEditScreen(
-            routeId: settings.arguments as String,
-          ),
+          RouteNames.routeDownloadEdit =>
+            _routeDownloadEditScreen(settings.arguments),
           _ => const SplashScreen(),
         };
       },
@@ -37,5 +36,16 @@ abstract final class AppRouter {
     }
 
     return RouteDetailScreen(routeId: arguments as String);
+  }
+
+  static Widget _routeDownloadEditScreen(Object? arguments) {
+    if (arguments is RouteDownloadEditArguments) {
+      return RouteDownloadEditScreen(
+        routeId: arguments.routeId,
+        createNewCopy: arguments.createNewCopy,
+      );
+    }
+
+    return RouteDownloadEditScreen(routeId: arguments as String);
   }
 }

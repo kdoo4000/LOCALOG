@@ -5,14 +5,14 @@ import 'core/router/app_router.dart';
 import 'core/router/route_names.dart';
 import 'core/theme/app_theme.dart';
 
-class LikeLocalApp extends StatefulWidget {
-  const LikeLocalApp({super.key});
+class LocalogApp extends StatefulWidget {
+  const LocalogApp({super.key});
 
   @override
-  State<LikeLocalApp> createState() => _LikeLocalAppState();
+  State<LocalogApp> createState() => _LocalogAppState();
 }
 
-class _LikeLocalAppState extends State<LikeLocalApp> {
+class _LocalogAppState extends State<LocalogApp> {
   final _languageController = AppLanguageController();
 
   @override
@@ -30,7 +30,7 @@ class _LikeLocalAppState extends State<LikeLocalApp> {
         builder: (context, _) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
-            title: 'Like Local',
+            title: 'LOCALOG',
             locale: Locale(_languageController.language.name),
             theme: AppTheme.light,
             initialRoute: RouteNames.splash,

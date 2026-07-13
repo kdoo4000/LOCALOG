@@ -1,5 +1,5 @@
-name: like_local
-description: "A new Flutter project."
+name: localog
+description: "LOCALOG travel route app."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -38,6 +38,7 @@ dependencies:
   exif: ^3.3.0
   http: ^1.6.0
   flutter_naver_map: ^1.4.4
+  flutter_svg: ^2.3.0
 
 dev_dependencies:
   flutter_test:
@@ -60,6 +61,12 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/localog_logo.png
+    - assets/localog_logo.svg
+    - assets/localog_text.svg
+    - assets/localog_blue.svg
 
   fonts:
     - family: Pretendard

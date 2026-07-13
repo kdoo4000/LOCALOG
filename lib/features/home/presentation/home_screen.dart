@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/l10n/app_language.dart';
 import '../../../core/router/route_names.dart';
@@ -107,14 +108,12 @@ class _HomeHeader extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Text(
-              'LIKE LOCAL',
-              style: TextStyle(
-                color: AppColors.ink,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.6,
-              ),
+            SvgPicture.asset(
+              'assets/localog_text.svg',
+              width: 150,
+              height: 56,
+              fit: BoxFit.contain,
+              alignment: Alignment.centerLeft,
             ),
             const Spacer(),
             CircleAvatar(

@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "like_local" "\0"
+            VALUE "FileDescription", "LOCALOG" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "like_local" "\0"
+            VALUE "InternalName", "localog" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "like_local.exe" "\0"
-            VALUE "ProductName", "like_local" "\0"
+            VALUE "OriginalFilename", "localog.exe" "\0"
+            VALUE "ProductName", "LOCALOG" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

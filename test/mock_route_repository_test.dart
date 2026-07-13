@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:like_local/features/route_search/data/mock_route_repository.dart';
-import 'package:like_local/features/route_search/domain/travel_route.dart';
+import 'package:localog/features/route_search/data/mock_route_repository.dart';
+import 'package:localog/features/route_search/domain/travel_route.dart';
 
 void main() {
   test('editing a downloaded copy does not change its source route', () async {
@@ -121,5 +121,46 @@ void main() {
       recommendations.any((route) => route.id == updated.id),
       isFalse,
     );
+  });
+
+  test('editing a source route repeatedly creates independent copies', () async {
+    const repository = MockRouteRepository();
+    const sourceId = 'busan-night-route';
+    final source = await repository.getSourceRouteById(sourceId);
+
+    final firstCopy = await repository.updateDownloadedRoute(
+      source!.copyWith(title: '첫 번째 여행 계획'),
+    );
+    final secondCopy = await repository.updateDownloadedRoute(
+      source.copyWith(title: '두 번째 여행 계획'),
+    );
+
+    expect(firstCopy.id, isNot(secondCopy.id));
+    expect(firstCopy.sourceRouteId, sourceId);
+    expect(secondCopy.sourceRouteId, sourceId);
+  });
+
+  test('a published created route can be opened as a search source', () async {
+    const repository = MockRouteRepository();
+    const routeId = 'created-search-source-route';
+    await repository.saveCreatedRoute(
+      const TravelRoute(
+        id: routeId,
+        title: '검색 가능한 내 루트',
+        description: '',
+        city: '서울특별시 > 중구',
+        authorName: 'me',
+        places: [],
+        tags: [],
+        upvoteRatio: 1,
+        downloadCount: 0,
+        estimatedDurationMinutes: 0,
+      ),
+    );
+
+    final source = await repository.getSourceRouteById(routeId);
+
+    expect(source, isNotNull);
+    expect(source!.isCreatedByCurrentUser, isTrue);
   });
 }
