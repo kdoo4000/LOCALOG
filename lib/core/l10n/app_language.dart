@@ -276,6 +276,15 @@ class AppStrings {
   }
 
   String get upvote => isKo ? '추천' : 'Upvote';
+  String get downvote => isKo ? '비추천' : 'Downvote';
+  String get routeVoteTitle =>
+      isKo ? '이 루트가 마음에 드나요?' : 'Do you recommend this route?';
+  String routeVoteRatio(int percentage) =>
+      isKo ? '현재 추천율 $percentage%' : '$percentage% recommend this route';
+  String get voteLoginRequired =>
+      isKo ? '추천 또는 비추천하려면 로그인해 주세요.' : 'Sign in to vote on routes.';
+  String get voteFailed =>
+      isKo ? '추천 정보를 반영하지 못했습니다.' : 'Could not save your vote.';
   String get downloads => isKo ? '다운로드' : 'Downloads';
 
   String get editRouteTitle => isKo ? '루트 편집' : 'Edit Route';

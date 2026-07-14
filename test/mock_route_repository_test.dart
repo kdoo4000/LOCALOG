@@ -163,4 +163,22 @@ void main() {
     expect(source, isNotNull);
     expect(source!.isCreatedByCurrentUser, isTrue);
   });
+
+  test('a user can recommend, downvote, and clear a route vote', () async {
+    const repository = MockRouteRepository();
+    const routeId = 'seongsu-cafe-local-route';
+    final original = await repository.getRouteById(routeId);
+
+    final recommended = await repository.setRouteVote(routeId, true);
+    expect(recommended.currentUserVote, isTrue);
+    expect(recommended.upvoteRatio, 1);
+
+    final downvoted = await repository.setRouteVote(routeId, false);
+    expect(downvoted.currentUserVote, isFalse);
+    expect(downvoted.upvoteRatio, 0);
+
+    final cleared = await repository.setRouteVote(routeId, null);
+    expect(cleared.currentUserVote, isNull);
+    expect(cleared.upvoteRatio, original!.upvoteRatio);
+  });
 }

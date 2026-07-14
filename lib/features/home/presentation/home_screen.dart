@@ -1,10 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_language.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
-import '../../route_search/data/mock_route_repository.dart';
+import '../../route_search/data/route_repository_provider.dart';
 import '../../route_search/domain/travel_route.dart';
 import '../../route_search/presentation/route_detail_screen.dart';
 import '../../route_search/presentation/widgets/route_card.dart';
@@ -17,13 +19,27 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final _repository = const MockRouteRepository();
-  late final Future<List<TravelRoute>> _routesFuture;
+  final _repository = routeRepository;
+  late Future<List<TravelRoute>> _routesFuture;
+  StreamSubscription<void>? _routesSubscription;
 
   @override
   void initState() {
     super.initState();
     _routesFuture = _repository.getRecommendedRoutes();
+    _routesSubscription = _repository.routesChanged.listen((_) {
+      if (mounted) _reloadRoutes();
+    });
+  }
+
+  @override
+  void dispose() {
+    _routesSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _reloadRoutes() {
+    setState(() => _routesFuture = _repository.getRecommendedRoutes());
   }
 
   void _openRoute(TravelRoute route) {
@@ -71,6 +87,9 @@ class _HomeScreenState extends State<HomeScreen> {
             FutureBuilder<List<TravelRoute>>(
               future: _routesFuture,
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return _LoadError(onRetry: _reloadRoutes);
+                }
                 if (!snapshot.hasData) {
                   return const Center(
                     child: Padding(
@@ -80,7 +99,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
 
-                final featured = snapshot.data!.first;
+                final routes = snapshot.data!;
+                if (routes.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: AppColors.sky,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Text('아직 공개된 루트가 없습니다.'),
+                  );
+                }
+                final featured = routes.first;
                 return RouteCard(route: featured, onTap: () => _openRoute(featured));
               },
             ),
@@ -88,6 +118,26 @@ class _HomeScreenState extends State<HomeScreen> {
             const _PopularPlacesPanel(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _LoadError extends StatelessWidget {
+  const _LoadError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('추천 루트를 불러오지 못했습니다.'),
+          const SizedBox(height: 8),
+          OutlinedButton(onPressed: onRetry, child: const Text('다시 시도')),
+        ],
       ),
     );
   }

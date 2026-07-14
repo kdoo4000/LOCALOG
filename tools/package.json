@@ -1,0 +1,11 @@
+{
+  "name": "localog-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start:naver-proxy": "node --env-file=.env naver_static_map_proxy.mjs"
+  },
+  "dependencies": {
+    "@supabase/server": "1.3.0"
+  }
+}

@@ -11,6 +11,7 @@ class RoutePlace {
     this.longitude,
     this.estimatedCostWon,
     this.photoUrls = const [],
+    this.photoStoragePaths = const [],
     this.purchasedItems = const [],
   });
 
@@ -25,6 +26,7 @@ class RoutePlace {
   final double? longitude;
   final int? estimatedCostWon;
   final List<String> photoUrls;
+  final List<String> photoStoragePaths;
   final List<String> purchasedItems;
 
   bool get hasLocation {
@@ -45,6 +47,7 @@ class RoutePlace {
     double? longitude,
     Object? estimatedCostWon = _keepValue,
     List<String>? photoUrls,
+    List<String>? photoStoragePaths,
     List<String>? purchasedItems,
   }) {
     return RoutePlace(
@@ -63,6 +66,7 @@ class RoutePlace {
           ? this.estimatedCostWon
           : estimatedCostWon as int?,
       photoUrls: photoUrls ?? this.photoUrls,
+      photoStoragePaths: photoStoragePaths ?? this.photoStoragePaths,
       purchasedItems: purchasedItems ?? this.purchasedItems,
     );
   }

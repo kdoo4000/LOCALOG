@@ -13,7 +13,7 @@ import '../../services/exif_metadata_reader.dart';
 import '../../services/naver_static_map_service.dart';
 import '../../services/original_media_picker.dart';
 import '../../services/place_candidate_service.dart';
-import '../route_search/data/mock_route_repository.dart';
+import '../route_search/data/route_repository_provider.dart';
 import '../route_search/domain/route_place.dart';
 import '../route_search/domain/travel_route.dart';
 import '../route_search/presentation/widgets/route_stop_edit_tile.dart';
@@ -32,7 +32,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
   final _originalMediaPicker = const OriginalMediaPicker();
   final _metadataReader = ExifMetadataReader();
   final _placeCandidateService = const PlaceCandidateService();
-  final _routeRepository = const MockRouteRepository();
+  final _routeRepository = routeRepository;
 
   List<_PhotoEntry> _entries = const [];
   String? _selectedDateKey;
@@ -241,14 +241,14 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       authorName: context.strings.me,
       places: places,
       tags: tags,
-      upvoteRatio: 1,
+      upvoteRatio: 0,
       downloadCount: 0,
       estimatedDurationMinutes: routeEntries.length * 45,
       coverImageUrl: coverImagePath.isEmpty ? null : coverImagePath,
       isDownloaded: true,
       isCreatedByCurrentUser: true,
       visibility: visibility,
-      publishedAt: DateTime.now(),
+      publishedAt: visibility == RouteVisibility.public ? DateTime.now() : null,
     );
   }
 

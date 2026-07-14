@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/place_candidate.dart';
+import 'supabase_initializer.dart';
 
 class PlaceCandidateService {
   const PlaceCandidateService({
@@ -22,7 +23,12 @@ class PlaceCandidateService {
   }) async {
     if (!isConfigured) {
       return const PlaceCandidateResult.failure(
-        'Place suggestions are not configured. Run the proxy and pass NAVER_MAP_PROXY_BASE_URL.',
+        'Place suggestions are not configured. Set NAVER_MAP_PROXY_BASE_URL to the deployed Supabase Edge Function.',
+      );
+    }
+    if (!hasSupabaseSession) {
+      return const PlaceCandidateResult.failure(
+        '장소 추천을 사용하려면 로그인해 주세요.',
       );
     }
 
@@ -32,7 +38,9 @@ class PlaceCandidateService {
         path: _joinPath(base.path, 'place-candidates'),
         queryParameters: {'lat': '$latitude', 'lng': '$longitude'},
       );
-      final response = await http.get(uri).timeout(_requestTimeout);
+      final response = await http
+          .get(uri, headers: supabaseEdgeFunctionHeaders)
+          .timeout(_requestTimeout);
       final body = utf8.decode(response.bodyBytes, allowMalformed: true);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return PlaceCandidateResult.failure(
@@ -63,7 +71,12 @@ class PlaceCandidateService {
 
     if (!isConfigured) {
       return const PlaceCandidateResult.failure(
-        'Place search is not configured. Run the proxy and pass NAVER_MAP_PROXY_BASE_URL.',
+        'Place search is not configured. Set NAVER_MAP_PROXY_BASE_URL to the deployed Supabase Edge Function.',
+      );
+    }
+    if (!hasSupabaseSession) {
+      return const PlaceCandidateResult.failure(
+        '장소 검색을 사용하려면 로그인해 주세요.',
       );
     }
 
@@ -77,7 +90,9 @@ class PlaceCandidateService {
           if (longitude != null && longitude.isFinite) 'lng': '$longitude',
         },
       );
-      final response = await http.get(uri).timeout(_requestTimeout);
+      final response = await http
+          .get(uri, headers: supabaseEdgeFunctionHeaders)
+          .timeout(_requestTimeout);
       final body = utf8.decode(response.bodyBytes, allowMalformed: true);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return PlaceCandidateResult.failure(

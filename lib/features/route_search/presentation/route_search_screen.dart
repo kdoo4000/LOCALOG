@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n/app_language.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
-import '../data/mock_route_repository.dart';
+import '../data/route_repository_provider.dart';
 import '../domain/travel_route.dart';
 import 'route_detail_screen.dart';
 import 'widgets/route_card.dart';
@@ -18,7 +18,7 @@ class RouteSearchScreen extends StatefulWidget {
 }
 
 class _RouteSearchScreenState extends State<RouteSearchScreen> {
-  final _repository = const MockRouteRepository();
+  final _repository = routeRepository;
   late Future<List<TravelRoute>> _routesFuture;
   StreamSubscription<void>? _routesSubscription;
   String _keyword = '';
@@ -28,7 +28,7 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
   void initState() {
     super.initState();
     _routesFuture = _repository.getRecommendedRoutes();
-    _routesSubscription = _repository.downloadedRoutesChanged.listen((_) {
+    _routesSubscription = _repository.routesChanged.listen((_) {
       if (mounted) {
         setState(() {
           _routesFuture = _repository.getRecommendedRoutes();
@@ -98,6 +98,10 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
     });
   }
 
+  void _reloadRoutes() {
+    setState(() => _routesFuture = _repository.getRecommendedRoutes());
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
@@ -163,7 +167,20 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                       ),
                 ),
                 const SizedBox(height: 12),
-                if (!snapshot.hasData)
+                if (snapshot.hasError)
+                  Center(
+                    child: Column(
+                      children: [
+                        const Text('검색 결과를 불러오지 못했습니다.'),
+                        const SizedBox(height: 8),
+                        OutlinedButton(
+                          onPressed: _reloadRoutes,
+                          child: const Text('다시 시도'),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (!snapshot.hasData)
                   const Center(
                     child: Padding(
                       padding: EdgeInsets.all(24),

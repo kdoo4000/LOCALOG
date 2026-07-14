@@ -7,8 +7,9 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../services/naver_static_map_service.dart';
+import '../../../services/supabase_initializer.dart';
 import '../../photo_location/naver_dynamic_map.dart';
-import '../data/mock_route_repository.dart';
+import '../data/route_repository_provider.dart';
 import '../domain/route_place.dart';
 import '../domain/travel_route.dart';
 import 'route_download_edit_screen.dart';
@@ -28,10 +29,11 @@ class RouteDetailScreen extends StatefulWidget {
 }
 
 class _RouteDetailScreenState extends State<RouteDetailScreen> {
-  final _repository = const MockRouteRepository();
+  final _repository = routeRepository;
   final _scrollController = ScrollController();
   late Future<_RouteDetailData?> _detailFuture;
   bool _didSetInitialScrollPosition = false;
+  bool _isVoting = false;
 
   @override
   void initState() {
@@ -89,6 +91,38 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     }
   }
 
+  Future<void> _voteOnRoute(
+    _RouteDetailData detail,
+    bool isPositive,
+  ) async {
+    if (isSupabaseConfigured && !hasSupabaseSession) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.strings.voteLoginRequired)),
+      );
+      return;
+    }
+    final route = detail.route;
+    if (_isVoting || route.isCreatedByCurrentUser || !route.isPublic) return;
+    final nextVote = route.currentUserVote == isPositive ? null : isPositive;
+    setState(() => _isVoting = true);
+    try {
+      final updated = await _repository.setRouteVote(route.id, nextVote);
+      if (!mounted) return;
+      setState(() {
+        _isVoting = false;
+        _detailFuture = Future.value(
+          _RouteDetailData(route: updated, savedRoute: detail.savedRoute),
+        );
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isVoting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${context.strings.voteFailed}: $error')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
@@ -97,6 +131,26 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       body: FutureBuilder<_RouteDetailData?>(
         future: _detailFuture,
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('루트 정보를 불러오지 못했습니다.'),
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed: () {
+                      setState(() {
+                        _didSetInitialScrollPosition = false;
+                        _detailFuture = _loadDetail();
+                      });
+                    },
+                    child: const Text('다시 시도'),
+                  ),
+                ],
+              ),
+            );
+          }
           if (!snapshot.hasData) {
             if (snapshot.connectionState == ConnectionState.done) {
               return Center(child: Text(strings.routeNotFound));
@@ -160,6 +214,15 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (route.isPublic &&
+                            !route.isCreatedByCurrentUser) ...[
+                          _RouteVotePanel(
+                            route: route,
+                            isVoting: _isVoting,
+                            onVote: (value) => _voteOnRoute(detail, value),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
                         if (route.description.trim().isNotEmpty) ...[
                           Text(
                             route.description,
@@ -238,6 +301,106 @@ class _RouteDetailData {
 
   final TravelRoute route;
   final TravelRoute? savedRoute;
+}
+
+class _RouteVotePanel extends StatelessWidget {
+  const _RouteVotePanel({
+    required this.route,
+    required this.isVoting,
+    required this.onVote,
+  });
+
+  final TravelRoute route;
+  final bool isVoting;
+  final ValueChanged<bool> onVote;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final percentage = (route.upvoteRatio * 100).round();
+    final positiveSelected = route.currentUserVote == true;
+    final negativeSelected = route.currentUserVote == false;
+
+    Widget voteButton({
+      required bool positive,
+      required bool selected,
+      required IconData icon,
+      required String label,
+    }) {
+      if (selected) {
+        return FilledButton.icon(
+          onPressed: isVoting ? null : () => onVote(positive),
+          style: FilledButton.styleFrom(
+            backgroundColor: positive
+                ? AppColors.primaryBlue
+                : Theme.of(context).colorScheme.error,
+          ),
+          icon: Icon(icon),
+          label: Text(label),
+        );
+      }
+      return OutlinedButton.icon(
+        onPressed: isVoting ? null : () => onVote(positive),
+        icon: Icon(icon),
+        label: Text(label),
+      );
+    }
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  strings.routeVoteTitle,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (isVoting)
+                const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            strings.routeVoteRatio(percentage),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.gray500,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: voteButton(
+                  positive: true,
+                  selected: positiveSelected,
+                  icon: Icons.thumb_up_alt_outlined,
+                  label: strings.upvote,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: voteButton(
+                  positive: false,
+                  selected: negativeSelected,
+                  icon: Icons.thumb_down_alt_outlined,
+                  label: strings.downvote,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DetailHero extends StatelessWidget {
@@ -612,27 +775,44 @@ class _StoredRoutePhoto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (_isNetworkPhoto(path)) {
+      return Image.network(
+        path,
+        width: width,
+        height: height,
+        fit: fit,
+        gaplessPlayback: true,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) {
+            return child;
+          }
+          return _RoutePhotoPlaceholder(
+            width: width,
+            height: height,
+            isLoading: true,
+          );
+        },
+        errorBuilder: (_, _, _) => _RoutePhotoPlaceholder(
+          width: width,
+          height: height,
+        ),
+      );
+    }
+
     return FutureBuilder<Uint8List>(
       future: _readRoutePhoto(path),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return SizedBox(
+          return _RoutePhotoPlaceholder(
             width: width,
             height: height,
-            child: const ColoredBox(
-              color: AppColors.gray200,
-              child: Icon(Icons.broken_image_outlined),
-            ),
           );
         }
         if (!snapshot.hasData) {
-          return SizedBox(
+          return _RoutePhotoPlaceholder(
             width: width,
             height: height,
-            child: const ColoredBox(
-              color: AppColors.gray100,
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            ),
+            isLoading: true,
           );
         }
         return Image.memory(
@@ -645,6 +825,39 @@ class _StoredRoutePhoto extends StatelessWidget {
       },
     );
   }
+}
+
+class _RoutePhotoPlaceholder extends StatelessWidget {
+  const _RoutePhotoPlaceholder({
+    required this.width,
+    required this.height,
+    this.isLoading = false,
+  });
+
+  final double? width;
+  final double? height;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      height: height,
+      child: ColoredBox(
+        color: isLoading ? AppColors.gray100 : AppColors.gray200,
+        child: Center(
+          child: isLoading
+              ? const CircularProgressIndicator(strokeWidth: 2)
+              : const Icon(Icons.broken_image_outlined),
+        ),
+      ),
+    );
+  }
+}
+
+bool _isNetworkPhoto(String path) {
+  final uri = Uri.tryParse(path);
+  return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
 }
 
 Future<Uint8List> _readRoutePhoto(String path) async {

@@ -9,10 +9,14 @@ class MockRouteRepository implements RouteRepository {
 
   static final Map<String, TravelRoute> _downloadedRoutesById = {};
   static int _downloadSequence = 0;
+  static final Map<String, bool> _votesByRouteId = {};
   static final StreamController<void> _downloadedRoutesChanged =
       StreamController<void>.broadcast();
 
-  Stream<void> get downloadedRoutesChanged => _downloadedRoutesChanged.stream;
+  @override
+  Stream<void> get routesChanged => _downloadedRoutesChanged.stream;
+
+  Stream<void> get downloadedRoutesChanged => routesChanged;
 
   @override
   Future<List<TravelRoute>> getRecommendedRoutes() async {
@@ -21,13 +25,17 @@ class MockRouteRepository implements RouteRepository {
       (route) =>
           route.isCreatedByCurrentUser && route.isPublished && route.isPublic,
     );
-    return [...publishedByUser, ..._routes];
+    return [
+      ...publishedByUser,
+      for (final route in _routes) _withVote(route),
+    ];
   }
 
   @override
   Future<TravelRoute?> getRouteById(String routeId) async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
-    return _downloadedRoutesById[routeId] ?? _findSourceRoute(routeId);
+    final route = _downloadedRoutesById[routeId] ?? _findSourceRoute(routeId);
+    return route == null ? null : _withVote(route);
   }
 
   @override
@@ -35,7 +43,7 @@ class MockRouteRepository implements RouteRepository {
     await Future<void>.delayed(const Duration(milliseconds: 120));
     final bundledRoute = _findSourceRoute(routeId);
     if (bundledRoute != null) {
-      return bundledRoute;
+      return _withVote(bundledRoute);
     }
 
     final createdRoute = _downloadedRoutesById[routeId];
@@ -66,6 +74,18 @@ class MockRouteRepository implements RouteRepository {
   }
 
   @override
+  Future<RouteProfileStats> getProfileStats() async {
+    final routes = await getDownloadedRoutes();
+    return RouteProfileStats(
+      receivedLikes: routes.fold(
+        0,
+        (sum, route) => sum + (route.upvoteRatio * 100).round(),
+      ),
+      downloads: routes.fold(0, (sum, route) => sum + route.downloadCount),
+    );
+  }
+
+  @override
   Future<TravelRoute> downloadRoute(String routeId) async {
     final existingCopy = _downloadedRoutesById[routeId];
     if (existingCopy != null) {
@@ -83,6 +103,7 @@ class MockRouteRepository implements RouteRepository {
       id: downloadedId,
       sourceRouteId: source.id,
       isDownloaded: true,
+      downloadedCopy: true,
     );
     _downloadedRoutesById[downloadedId] = downloaded;
     _notifyDownloadedRoutesChanged();
@@ -107,6 +128,7 @@ class MockRouteRepository implements RouteRepository {
       id: downloadedId,
       sourceRouteId: sourceRouteId,
       isDownloaded: true,
+      downloadedCopy: true,
     );
     _downloadedRoutesById[downloadedId] = updated;
     _notifyDownloadedRoutesChanged();
@@ -118,6 +140,7 @@ class MockRouteRepository implements RouteRepository {
     await Future<void>.delayed(const Duration(milliseconds: 120));
     final created = route.copyWith(
       isDownloaded: true,
+      downloadedCopy: false,
       isCreatedByCurrentUser: true,
       publishedAt: route.publishedAt ?? DateTime.now(),
     );
@@ -133,6 +156,31 @@ class MockRouteRepository implements RouteRepository {
     if (removed != null) {
       _notifyDownloadedRoutesChanged();
     }
+  }
+
+  @override
+  Future<TravelRoute> setRouteVote(String routeId, bool? isPositive) async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    final route = _findSourceRoute(routeId);
+    if (route == null || route.isCreatedByCurrentUser || !route.isPublic) {
+      throw StateError('추천할 수 없는 루트입니다.');
+    }
+    if (isPositive == null) {
+      _votesByRouteId.remove(routeId);
+    } else {
+      _votesByRouteId[routeId] = isPositive;
+    }
+    _notifyDownloadedRoutesChanged();
+    return _withVote(route);
+  }
+
+  static TravelRoute _withVote(TravelRoute route) {
+    if (!_votesByRouteId.containsKey(route.id)) return route;
+    final vote = _votesByRouteId[route.id]!;
+    return route.copyWith(
+      currentUserVote: vote,
+      upvoteRatio: vote ? 1 : 0,
+    );
   }
 
   void _notifyDownloadedRoutesChanged() {

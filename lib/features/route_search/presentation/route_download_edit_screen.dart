@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n/app_language.dart';
 import '../../../models/place_candidate.dart';
 import '../../../services/place_candidate_service.dart';
-import '../data/mock_route_repository.dart';
+import '../data/route_repository_provider.dart';
 import '../domain/route_place.dart';
 import '../domain/travel_route.dart';
 import 'widgets/route_stop_edit_tile.dart';
@@ -24,13 +24,14 @@ class RouteDownloadEditScreen extends StatefulWidget {
 }
 
 class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
-  final _repository = const MockRouteRepository();
+  final _repository = routeRepository;
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   TravelRoute? _route;
   List<RoutePlace> _places = [];
   RouteVisibility _visibility = RouteVisibility.public;
   bool _isSaving = false;
+  Object? _loadError;
 
   @override
   void initState() {
@@ -46,9 +47,15 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
   }
 
   Future<void> _loadRouteCopy() async {
-    final route = widget.createNewCopy
-        ? await _repository.getSourceRouteById(widget.routeId)
-        : await _repository.getRouteById(widget.routeId);
+    TravelRoute? route;
+    try {
+      route = widget.createNewCopy
+          ? await _repository.getSourceRouteById(widget.routeId)
+          : await _repository.getRouteById(widget.routeId);
+    } catch (error) {
+      if (mounted) setState(() => _loadError = error);
+      return;
+    }
     if (!mounted) {
       return;
     }
@@ -60,13 +67,16 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
       Navigator.of(context).pop(false);
       return;
     }
+    final loadedRoute = route;
 
     setState(() {
-      _route = route;
-      _titleController.text = route.title;
-      _descriptionController.text = route.description;
-      _visibility = route.visibility;
-      _places = [...route.places]
+      _route = loadedRoute;
+      _titleController.text = loadedRoute.title;
+      _descriptionController.text = loadedRoute.description;
+      _visibility = widget.createNewCopy
+          ? RouteVisibility.private
+          : loadedRoute.visibility;
+      _places = [...loadedRoute.places]
         ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     });
   }
@@ -89,23 +99,53 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
       title: _titleController.text.trim().isEmpty
           ? route.title
           : _titleController.text.trim(),
-      description: _descriptionController.text.trim().isEmpty
-          ? route.description
-          : _descriptionController.text.trim(),
+      description: _descriptionController.text.trim(),
       places: orderedPlaces,
       visibility: _visibility,
       isDownloaded: true,
     );
-    await _repository.updateDownloadedRoute(updated);
-
-    if (!mounted) {
-      return;
+    try {
+      if (widget.createNewCopy) {
+        final copy = await _repository.downloadRoute(route.id);
+        final copiedPlaces = [...copy.places]
+          ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+        final mergedPlaces = <RoutePlace>[
+          for (var index = 0; index < orderedPlaces.length; index++)
+            if (index < copiedPlaces.length)
+              orderedPlaces[index].copyWith(
+                id: copiedPlaces[index].id,
+                photoUrls: copiedPlaces[index].photoUrls,
+                photoStoragePaths: copiedPlaces[index].photoStoragePaths,
+              )
+            else
+              orderedPlaces[index],
+        ];
+        await _repository.updateDownloadedRoute(
+          updated.copyWith(
+            id: copy.id,
+            sourceRouteId: copy.sourceRouteId,
+            places: mergedPlaces,
+            coverImageUrl: copy.coverImageUrl,
+            coverImageStoragePath: copy.coverImageStoragePath,
+          ),
+        );
+      } else {
+        await _repository.updateDownloadedRoute(updated);
+      }
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('루트 저장에 실패했습니다: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
-
-    setState(() {
-      _isSaving = false;
-    });
-    Navigator.of(context).pop(true);
   }
 
   void _removePlace(RoutePlace place) {
@@ -181,7 +221,26 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(strings.editRouteTitle)),
-      body: route == null
+      body: _loadError != null
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 40),
+                  const SizedBox(height: 12),
+                  const Text('루트를 불러오지 못했습니다.'),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () {
+                      setState(() => _loadError = null);
+                      _loadRouteCopy();
+                    },
+                    child: const Text('다시 시도'),
+                  ),
+                ],
+              ),
+            )
+          : route == null
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
               child: Column(
@@ -442,6 +501,7 @@ class _PlaceDialogState extends State<_PlaceDialog> {
         longitude: initialPlace?.longitude ?? _selectedCandidate?.longitude,
         estimatedCostWon: estimatedCost,
         photoUrls: initialPlace?.photoUrls ?? const [],
+        photoStoragePaths: initialPlace?.photoStoragePaths ?? const [],
         purchasedItems: initialPlace?.purchasedItems ?? const [],
         orderIndex: widget.orderIndex,
       ),

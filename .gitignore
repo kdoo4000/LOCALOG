@@ -35,6 +35,15 @@ migrate_working_dir/
 
 # Local API configuration
 /config/local.json
+/tools/.env
+/tools/node_modules/
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Local agent configuration and skills
+/.agents/
 
 # Symbolication related
 app.*.symbols

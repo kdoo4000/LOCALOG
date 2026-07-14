@@ -1,69 +1,20 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
+import 'supabase_initializer.dart';
 
 class NaverStaticMapService {
   const NaverStaticMapService({
-    this.clientId = const String.fromEnvironment('NAVER_MAP_CLIENT_ID'),
-    this.clientSecret = const String.fromEnvironment('NAVER_MAP_CLIENT_SECRET'),
     this.proxyBaseUrl = const String.fromEnvironment(
       'NAVER_MAP_PROXY_BASE_URL',
     ),
   });
 
-  final String clientId;
-  final String clientSecret;
   final String proxyBaseUrl;
 
-  bool get isConfigured {
-    return proxyBaseUrl.isNotEmpty || hasDirectKeys;
-  }
-
-  bool get hasDirectKeys => clientId.isNotEmpty && clientSecret.isNotEmpty;
-
-  bool get _shouldUseProxy => proxyBaseUrl.isNotEmpty;
-
-  Uri buildMapUri({
-    required double latitude,
-    required double longitude,
-    int width = 720,
-    int height = 420,
-    int level = 15,
-  }) {
-    return buildMultiMarkerMapUri(
-      points: [MapPoint(latitude: latitude, longitude: longitude)],
-      width: width,
-      height: height,
-      level: level,
-    );
-  }
-
-  Uri buildMultiMarkerMapUri({
-    required List<MapPoint> points,
-    int width = 720,
-    int height = 420,
-    int? level,
-  }) {
-    final center = MapBounds.from(points).center;
-    return Uri(
-      scheme: 'https',
-      host: 'maps.apigw.ntruss.com',
-      path: '/map-static/v2/raster',
-      query: _buildStaticMapQuery(
-        center: center,
-        points: points,
-        width: width,
-        height: height,
-        level: level ?? _estimateLevel(points),
-      ),
-    );
-  }
-
-  Map<String, String> get headers => {
-    'X-NCP-APIGW-API-KEY-ID': clientId,
-    'X-NCP-APIGW-API-KEY': clientSecret,
-  };
+  bool get isConfigured => proxyBaseUrl.isNotEmpty;
 
   Future<StaticMapResult> fetchMap({
     required double latitude,
@@ -85,23 +36,18 @@ class NaverStaticMapService {
 
     if (!isConfigured) {
       return StaticMapResult.failure(
-        'Naver Static Map is not configured. Run with NAVER_MAP_PROXY_BASE_URL, or provide NAVER_MAP_CLIENT_ID and NAVER_MAP_CLIENT_SECRET.',
+        'Naver Static Map is not configured. Set NAVER_MAP_PROXY_BASE_URL to the deployed Supabase Edge Function.',
       );
     }
 
-    if (kIsWeb && !_shouldUseProxy) {
-      return StaticMapResult.failure(
-        'Flutter Web cannot call Naver Static Map directly because the browser blocks the required API-key headers. '
-        'Run with NAVER_MAP_PROXY_BASE_URL pointing to a small backend/proxy, or test this feature on Android/iOS.',
-      );
+    if (!hasSupabaseSession) {
+      return StaticMapResult.failure('지도를 보려면 로그인해 주세요.');
     }
 
     try {
       final response = await http.get(
-        _shouldUseProxy
-            ? buildProxyMapUri(points: points)
-            : buildMultiMarkerMapUri(points: points),
-        headers: _shouldUseProxy ? const {} : headers,
+        buildProxyMapUri(points: points),
+        headers: supabaseEdgeFunctionHeaders,
       );
 
       final contentType = response.headers['content-type'] ?? '';
@@ -154,42 +100,6 @@ class NaverStaticMapService {
     return '${body.substring(0, 300)}...';
   }
 
-  String _buildStaticMapQuery({
-    required MapPoint center,
-    required List<MapPoint> points,
-    required int width,
-    required int height,
-    required int level,
-  }) {
-    final params = <String>[
-      'center=${Uri.encodeQueryComponent('${center.longitude},${center.latitude}')}',
-      'level=$level',
-      'w=$width',
-      'h=$height',
-      for (final point in points)
-        'markers=${Uri.encodeQueryComponent('type:d|size:mid|pos:${point.longitude} ${point.latitude}|color:red')}',
-    ];
-
-    return params.join('&');
-  }
-
-  int _estimateLevel(List<MapPoint> points) {
-    if (points.length <= 1) {
-      return 15;
-    }
-
-    final bounds = MapBounds.from(points);
-    final span = bounds.maxSpan;
-    if (span >= 2.0) return 7;
-    if (span >= 1.0) return 8;
-    if (span >= 0.5) return 9;
-    if (span >= 0.25) return 10;
-    if (span >= 0.12) return 11;
-    if (span >= 0.06) return 12;
-    if (span >= 0.03) return 13;
-    if (span >= 0.015) return 14;
-    return 15;
-  }
 }
 
 class MapPoint {

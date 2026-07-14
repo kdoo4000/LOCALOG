@@ -15,8 +15,11 @@ class TravelRoute {
     required this.downloadCount,
     required this.estimatedDurationMinutes,
     this.coverImageUrl,
+    this.coverImageStoragePath,
     this.sourceRouteId,
     this.isDownloaded = false,
+    this.downloadedCopy = false,
+    this.currentUserVote,
     this.isCreatedByCurrentUser = false,
     this.visibility = RouteVisibility.public,
     this.publishedAt,
@@ -33,8 +36,11 @@ class TravelRoute {
   final int downloadCount;
   final int estimatedDurationMinutes;
   final String? coverImageUrl;
+  final String? coverImageStoragePath;
   final String? sourceRouteId;
   final bool isDownloaded;
+  final bool downloadedCopy;
+  final bool? currentUserVote;
   final bool isCreatedByCurrentUser;
   final RouteVisibility visibility;
   final DateTime? publishedAt;
@@ -42,7 +48,7 @@ class TravelRoute {
   bool get isPublished => publishedAt != null;
   bool get isPublic => visibility == RouteVisibility.public;
 
-  bool get isDownloadedCopy => isDownloaded;
+  bool get isDownloadedCopy => downloadedCopy;
 
   TravelRoute copyWith({
     String? id,
@@ -55,12 +61,15 @@ class TravelRoute {
     double? upvoteRatio,
     int? downloadCount,
     int? estimatedDurationMinutes,
-    String? coverImageUrl,
-    String? sourceRouteId,
+    Object? coverImageUrl = _keepValue,
+    Object? coverImageStoragePath = _keepValue,
+    Object? sourceRouteId = _keepValue,
     bool? isDownloaded,
+    bool? downloadedCopy,
+    Object? currentUserVote = _keepValue,
     bool? isCreatedByCurrentUser,
     RouteVisibility? visibility,
-    DateTime? publishedAt,
+    Object? publishedAt = _keepValue,
   }) {
     return TravelRoute(
       id: id ?? this.id,
@@ -74,13 +83,28 @@ class TravelRoute {
       downloadCount: downloadCount ?? this.downloadCount,
       estimatedDurationMinutes:
           estimatedDurationMinutes ?? this.estimatedDurationMinutes,
-      coverImageUrl: coverImageUrl ?? this.coverImageUrl,
-      sourceRouteId: sourceRouteId ?? this.sourceRouteId,
+      coverImageUrl: identical(coverImageUrl, _keepValue)
+          ? this.coverImageUrl
+          : coverImageUrl as String?,
+      coverImageStoragePath: identical(coverImageStoragePath, _keepValue)
+          ? this.coverImageStoragePath
+          : coverImageStoragePath as String?,
+      sourceRouteId: identical(sourceRouteId, _keepValue)
+          ? this.sourceRouteId
+          : sourceRouteId as String?,
       isDownloaded: isDownloaded ?? this.isDownloaded,
+      downloadedCopy: downloadedCopy ?? this.downloadedCopy,
+      currentUserVote: identical(currentUserVote, _keepValue)
+          ? this.currentUserVote
+          : currentUserVote as bool?,
       isCreatedByCurrentUser:
           isCreatedByCurrentUser ?? this.isCreatedByCurrentUser,
       visibility: visibility ?? this.visibility,
-      publishedAt: publishedAt ?? this.publishedAt,
+      publishedAt: identical(publishedAt, _keepValue)
+          ? this.publishedAt
+          : publishedAt as DateTime?,
     );
   }
 }
+
+const Object _keepValue = Object();

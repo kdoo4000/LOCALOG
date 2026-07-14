@@ -31,17 +31,10 @@ class RouteCard extends StatelessWidget {
             height: 52,
             alignment: Alignment.center,
               color: AppColors.accentLime,
-              child: route.coverImageUrl?.startsWith('assets/') == true
-                  ? Image.asset(
-                      route.coverImageUrl!,
-                      width: 52,
-                      height: 52,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _CityInitial(
-                        initial: cityInitial,
-                      ),
-                    )
-                  : _CityInitial(initial: cityInitial),
+              child: _RouteCoverImage(
+                path: route.coverImageUrl,
+                fallbackInitial: cityInitial,
+              ),
             ),
           ),
           const SizedBox(width: 14),
@@ -86,6 +79,47 @@ class RouteCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _RouteCoverImage extends StatelessWidget {
+  const _RouteCoverImage({
+    required this.path,
+    required this.fallbackInitial,
+  });
+
+  final String? path;
+  final String fallbackInitial;
+
+  @override
+  Widget build(BuildContext context) {
+    final imagePath = path;
+    if (imagePath == null || imagePath.isEmpty) {
+      return _CityInitial(initial: fallbackInitial);
+    }
+
+    if (imagePath.startsWith('assets/')) {
+      return Image.asset(
+        imagePath,
+        width: 52,
+        height: 52,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _CityInitial(initial: fallbackInitial),
+      );
+    }
+
+    final uri = Uri.tryParse(imagePath);
+    if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+      return Image.network(
+        imagePath,
+        width: 52,
+        height: 52,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _CityInitial(initial: fallbackInitial),
+      );
+    }
+
+    return _CityInitial(initial: fallbackInitial);
   }
 }
 
