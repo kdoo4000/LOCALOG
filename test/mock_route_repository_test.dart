@@ -29,6 +29,31 @@ void main() {
     expect(savedCopy?.places.first.id, downloaded.places.last.id);
   });
 
+  test(
+    'downloaded copies exclude creator media and personal records',
+    () async {
+      const repository = MockRouteRepository();
+      const sourceId = 'seongsu-cafe-local-route';
+
+      final source = await repository.getRouteById(sourceId);
+      final downloaded = await repository.downloadRoute(sourceId);
+
+      expect(source?.coverImageUrl, isNotNull);
+      expect(source?.places.any((place) => place.memo != null), isTrue);
+      expect(downloaded.coverImageUrl, isNull);
+      expect(downloaded.coverImageStoragePath, isNull);
+      expect(downloaded.isCreatedByCurrentUser, isTrue);
+      for (final place in downloaded.places) {
+        expect(place.photoUrls, isEmpty);
+        expect(place.photoStoragePaths, isEmpty);
+        expect(place.visitedAt, isNull);
+        expect(place.memo, isNull);
+        expect(place.estimatedCostWon, isNull);
+        expect(place.purchasedItems, isEmpty);
+      }
+    },
+  );
+
   test('source-only lookup ignores a saved route with the same id', () async {
     const repository = MockRouteRepository();
     const sourceId = 'palace-night-market-half-day';
@@ -117,28 +142,28 @@ void main() {
 
     expect(updated.visibility, RouteVisibility.private);
     expect(updated.sourceRouteId, isNull);
-    expect(
-      recommendations.any((route) => route.id == updated.id),
-      isFalse,
-    );
+    expect(recommendations.any((route) => route.id == updated.id), isFalse);
   });
 
-  test('editing a source route repeatedly creates independent copies', () async {
-    const repository = MockRouteRepository();
-    const sourceId = 'busan-night-route';
-    final source = await repository.getSourceRouteById(sourceId);
+  test(
+    'editing a source route repeatedly creates independent copies',
+    () async {
+      const repository = MockRouteRepository();
+      const sourceId = 'busan-night-route';
+      final source = await repository.getSourceRouteById(sourceId);
 
-    final firstCopy = await repository.updateDownloadedRoute(
-      source!.copyWith(title: '첫 번째 여행 계획'),
-    );
-    final secondCopy = await repository.updateDownloadedRoute(
-      source.copyWith(title: '두 번째 여행 계획'),
-    );
+      final firstCopy = await repository.updateDownloadedRoute(
+        source!.copyWith(title: '첫 번째 여행 계획'),
+      );
+      final secondCopy = await repository.updateDownloadedRoute(
+        source.copyWith(title: '두 번째 여행 계획'),
+      );
 
-    expect(firstCopy.id, isNot(secondCopy.id));
-    expect(firstCopy.sourceRouteId, sourceId);
-    expect(secondCopy.sourceRouteId, sourceId);
-  });
+      expect(firstCopy.id, isNot(secondCopy.id));
+      expect(firstCopy.sourceRouteId, sourceId);
+      expect(secondCopy.sourceRouteId, sourceId);
+    },
+  );
 
   test('a published created route can be opened as a search source', () async {
     const repository = MockRouteRepository();
@@ -180,5 +205,23 @@ void main() {
     final cleared = await repository.setRouteVote(routeId, null);
     expect(cleared.currentUserVote, isNull);
     expect(cleared.upvoteRatio, original!.upvoteRatio);
+  });
+
+  test('downloaded copies always remain private', () async {
+    const repository = MockRouteRepository();
+    final downloaded = await repository.downloadRoute('busan-night-route');
+
+    expect(downloaded.isDownloadedCopy, isTrue);
+    expect(downloaded.visibility, RouteVisibility.private);
+    expect(downloaded.publishedAt, isNull);
+
+    final updated = await repository.updateDownloadedRoute(
+      downloaded.copyWith(
+        visibility: RouteVisibility.public,
+        publishedAt: DateTime.now(),
+      ),
+    );
+    expect(updated.visibility, RouteVisibility.private);
+    expect(updated.publishedAt, isNull);
   });
 }

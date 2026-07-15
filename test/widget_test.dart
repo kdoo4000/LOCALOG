@@ -11,6 +11,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 901));
     await tester.pumpAndSettle();
 
-    expect(find.text('사진만 올리면 로컬 루트가 됩니다'), findsOneWidget);
+    expect(find.text('사진만 올리면 로컬 로그가 됩니다'), findsOneWidget);
   });
 }

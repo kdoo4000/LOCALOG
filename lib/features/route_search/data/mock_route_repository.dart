@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../domain/route_place.dart';
+import '../domain/route_download_template.dart';
 import '../domain/travel_route.dart';
 import 'route_repository.dart';
 
@@ -25,10 +26,7 @@ class MockRouteRepository implements RouteRepository {
       (route) =>
           route.isCreatedByCurrentUser && route.isPublished && route.isPublic,
     );
-    return [
-      ...publishedByUser,
-      for (final route in _routes) _withVote(route),
-    ];
+    return [...publishedByUser, for (final route in _routes) _withVote(route)];
   }
 
   @override
@@ -95,15 +93,18 @@ class MockRouteRepository implements RouteRepository {
     final sourceRouteId = _sourceIdFor(routeId);
     final source = _findSourceRoute(sourceRouteId);
     if (source == null) {
-      throw StateError('Route not found: $routeId');
+      throw StateError('Log not found: $routeId');
     }
 
     final downloadedId = _nextDownloadedId(source.id);
-    final downloaded = source.copyWith(
+    final downloaded = withoutCreatorMediaAndPersonalData(source).copyWith(
       id: downloadedId,
       sourceRouteId: source.id,
       isDownloaded: true,
       downloadedCopy: true,
+      isCreatedByCurrentUser: true,
+      visibility: RouteVisibility.private,
+      publishedAt: null,
     );
     _downloadedRoutesById[downloadedId] = downloaded;
     _notifyDownloadedRoutesChanged();
@@ -114,7 +115,13 @@ class MockRouteRepository implements RouteRepository {
   Future<TravelRoute> updateDownloadedRoute(TravelRoute route) async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
     if (route.isCreatedByCurrentUser) {
-      final updated = route.copyWith(isDownloaded: true);
+      final updated = route.copyWith(
+        isDownloaded: true,
+        visibility: route.isDownloadedCopy
+            ? RouteVisibility.private
+            : route.visibility,
+        publishedAt: route.isDownloadedCopy ? null : route.publishedAt,
+      );
       _downloadedRoutesById[updated.id] = updated;
       _notifyDownloadedRoutesChanged();
       return updated;
@@ -124,11 +131,14 @@ class MockRouteRepository implements RouteRepository {
     final downloadedId = route.sourceRouteId != null
         ? route.id
         : _nextDownloadedId(sourceRouteId);
-    final updated = route.copyWith(
+    final updated = withoutCreatorMediaAndPersonalData(route).copyWith(
       id: downloadedId,
       sourceRouteId: sourceRouteId,
       isDownloaded: true,
       downloadedCopy: true,
+      isCreatedByCurrentUser: true,
+      visibility: RouteVisibility.private,
+      publishedAt: null,
     );
     _downloadedRoutesById[downloadedId] = updated;
     _notifyDownloadedRoutesChanged();
@@ -163,7 +173,7 @@ class MockRouteRepository implements RouteRepository {
     await Future<void>.delayed(const Duration(milliseconds: 120));
     final route = _findSourceRoute(routeId);
     if (route == null || route.isCreatedByCurrentUser || !route.isPublic) {
-      throw StateError('추천할 수 없는 루트입니다.');
+      throw StateError('추천할 수 없는 로그입니다.');
     }
     if (isPositive == null) {
       _votesByRouteId.remove(routeId);
@@ -177,10 +187,7 @@ class MockRouteRepository implements RouteRepository {
   static TravelRoute _withVote(TravelRoute route) {
     if (!_votesByRouteId.containsKey(route.id)) return route;
     final vote = _votesByRouteId[route.id]!;
-    return route.copyWith(
-      currentUserVote: vote,
-      upvoteRatio: vote ? 1 : 0,
-    );
+    return route.copyWith(currentUserVote: vote, upvoteRatio: vote ? 1 : 0);
   }
 
   void _notifyDownloadedRoutesChanged() {
@@ -211,7 +218,7 @@ class MockRouteRepository implements RouteRepository {
 final _routes = <TravelRoute>[
   TravelRoute(
     id: 'seongsu-cafe-local-route',
-    title: '성수 카페거리 로컬 루트',
+    title: '성수 카페거리 로컬 로그',
     description: '골목 카페, 편집샵, 서울숲을 가볍게 잇는 반나절 산책 코스입니다.',
     city: '서울',
     authorName: 'local.mina',
@@ -256,7 +263,7 @@ final _routes = <TravelRoute>[
         name: '서울숲',
         category: '산책',
         address: '서울 성동구 뚝섬로 273',
-        memo: '해질 무렵 산책으로 루트를 마무리하세요.',
+        memo: '해질 무렵 산책으로 로그를 마무리하세요.',
         latitude: 37.544388,
         longitude: 127.037442,
         orderIndex: 3,
@@ -265,8 +272,8 @@ final _routes = <TravelRoute>[
   ),
   TravelRoute(
     id: 'busan-night-route',
-    title: 'Busan Night Route',
-    description: '야경, 해변, 로컬 음식을 한 번에 즐기는 부산 저녁 루트입니다.',
+    title: 'Busan Night Log',
+    description: '야경, 해변, 로컬 음식을 한 번에 즐기는 부산 저녁 로그입니다.',
     city: '부산',
     authorName: 'busan.local',
     coverImageUrl: 'assets/mock_routes/busan_night.jpg',
@@ -320,7 +327,7 @@ final _routes = <TravelRoute>[
   TravelRoute(
     id: 'palace-night-market-half-day',
     title: '궁궐과 야시장 반나절',
-    description: '궁궐 산책, 박물관, 시장 먹거리를 엮은 서울 역사 루트입니다.',
+    description: '궁궐 산책, 박물관, 시장 먹거리를 엮은 서울 역사 로그입니다.',
     city: '서울',
     authorName: 'hanok.walker',
     coverImageUrl: 'assets/mock_routes/palace_walk.jpg',
@@ -334,7 +341,7 @@ final _routes = <TravelRoute>[
         name: '경복궁',
         category: '궁궐',
         address: '서울 종로구 사직로 161',
-        memo: '서울의 고전적인 풍경으로 루트를 시작합니다.',
+        memo: '서울의 고전적인 풍경으로 로그를 시작합니다.',
         latitude: 37.579617,
         longitude: 126.977041,
         orderIndex: 0,

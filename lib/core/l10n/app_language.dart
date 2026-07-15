@@ -56,6 +56,7 @@ class AppStrings {
   String get navHome => isKo ? '홈' : 'Home';
   String get navSearch => isKo ? '검색' : 'Search';
   String get navUpload => isKo ? '업로드' : 'Upload';
+  String get navPlan => isKo ? '계획' : 'Plan';
   String get navMap => isKo ? '정산' : 'Split';
   String get navProfile => isKo ? '프로필' : 'Profile';
 
@@ -75,19 +76,18 @@ class AppStrings {
       : '$label will be connected in the next step.';
   String get monthlyRecommend =>
       isKo ? 'July\'s local picks' : 'July\'s local picks';
-  String get shortcutRouteSearch => isKo ? 'Route' : 'Route';
+  String get shortcutRouteSearch => isKo ? 'Log' : 'Log';
   String get shortcutScanReceipt => isKo ? 'Receipt' : 'Receipt';
   String get shortcutUploadRoute => isKo ? 'Upload' : 'Upload';
-  String get shortcutDownload => isKo ? 'Download' : 'Download';
+  String get shortcutDownload => isKo ? 'Plan' : 'Plan';
   String get shortcutMapView => isKo ? 'Map' : 'Map';
   String get shortcutNotifications => isKo ? 'Alerts' : 'Alerts';
 
-  String get routeSearchTitle =>
-      isKo ? '어떤 로컬 루트를 찾아볼까요?' : 'Find a local route';
+  String get routeSearchTitle => isKo ? '어떤 로컬 로그를 찾아볼까요?' : 'Find a local log';
   String get routeSearchHint =>
       isKo ? '성수, 야경, 한식...' : 'Seongsu, night view, food...';
   String get noMatchingRoutes =>
-      isKo ? '조건에 맞는 루트가 없어요.' : 'No routes match your search.';
+      isKo ? '조건에 맞는 로그가 없어요.' : 'No logs match your search.';
   List<String> get searchTags => isKo
       ? const ['성수', '홍대', '야경', '궁궐', '박물관', '닭한마리', '이태원', '기념품']
       : const [
@@ -133,12 +133,11 @@ class AppStrings {
   }
 
   String get photoTitle =>
-      isKo ? '사진을 업로드하면 루트가 자동 생성돼요' : 'Upload photos to build a route';
+      isKo ? '사진을 업로드하면 로그가 자동 생성돼요' : 'Upload photos to build a log';
   String get photoSubtitle => isKo
       ? '사진 메타데이터를 읽어 방문 장소와 순서를 분석합니다.'
       : 'Read photo metadata, sort stops by time, and review places on a map.';
-  String get choosePhotos =>
-      isKo ? '여행 사진 업로드' : 'Upload trip photos';
+  String get choosePhotos => isKo ? '여행 사진 업로드' : 'Upload trip photos';
   String get readingPhotos => isKo ? '사진 읽는 중' : 'Reading photos';
   String photoReadFailed(Object error) => isKo
       ? '사진 메타데이터를 읽지 못했어요. $error'
@@ -147,46 +146,45 @@ class AppStrings {
   String get photos => isKo ? '사진' : 'Photos';
   String get withGps => isKo ? 'GPS 있음' : 'With GPS';
   String get withoutGps => isKo ? 'GPS 없음' : 'Without GPS';
-  String get createRoute => isKo ? '루트 만들기' : 'Create route';
+  String get createRoute => isKo ? '로그 만들기' : 'Create log';
   String get selectPhotoDateToCreateRoute =>
-      isKo ? '루트로 만들 날짜를 선택하세요.' : 'Select a photo date to create a route.';
+      isKo ? '로그로 만들 날짜를 선택하세요.' : 'Select a photo date to create a log.';
   String routablePhotoStops(int count) => isKo
-      ? '$count개의 사진 지점을 루트로 저장할 수 있어요.'
-      : '$count photo stop(s) can be saved as a route.';
+      ? '$count개의 사진 지점을 로그로 저장할 수 있어요.'
+      : '$count photo stop(s) can be saved as a log.';
   String get saveSelectedDayAsRoute =>
-      isKo ? '선택한 날짜를 루트로 저장' : 'Save selected day as route';
-  String get reviewAndSaveRoute =>
-      isKo ? '검토하고 루트 저장' : 'Review and save route';
-  String get routePreviewTitle => isKo ? '루트 저장 전 확인' : 'Review route';
+      isKo ? '선택한 날짜를 로그로 저장' : 'Save selected day as log';
+  String get reviewAndSaveRoute => isKo ? '검토하고 로그 저장' : 'Review and save log';
+  String get routePreviewTitle => isKo ? '로그 저장 전 확인' : 'Review log';
   String get routePreviewSubtitle => isKo
       ? '제목, 방문 순서, 포함할 사진 지점을 확인하고 저장해요.'
       : 'Check the title, visit order, and photo stops before saving.';
   String get routeDescriptionLabel => isKo ? '상세 설명' : 'Description';
   String reviewPhotoStops(int count) => isKo
-      ? '$count개의 사진 지점을 바로 수정하고 루트로 저장합니다.'
-      : 'Edit $count photo stop(s) here and save as a route.';
+      ? '$count개의 사진 지점을 바로 수정하고 로그로 저장합니다.'
+      : 'Edit $count photo stop(s) here and save as a log.';
   String missingPlaceWarning(int count) => isKo
-      ? '장소가 지정되지 않은 사진 $count장이 있어요. 모든 사진의 장소를 지정해야 루트를 저장할 수 있습니다.'
+      ? '장소가 지정되지 않은 사진 $count장이 있어요. 모든 사진의 장소를 지정해야 로그를 저장할 수 있습니다.'
       : '$count photo(s) do not have a selected place. Select a place for every photo before saving.';
   String get selectAllPlacesBeforeSave => isKo
-      ? '모든 사진의 장소를 지정한 뒤 루트를 저장해 주세요.'
-      : 'Select a place for every photo before saving the route.';
+      ? '모든 사진의 장소를 지정한 뒤 로그를 저장해 주세요.'
+      : 'Select a place for every photo before saving the log.';
   String get includedStops => isKo ? '포함된 지점' : 'Included stops';
   String get atLeastOneStopRequired =>
-      isKo ? '루트에는 최소 한 개의 지점이 필요해요.' : 'A route needs at least one stop.';
-  String get savingRoute => isKo ? '루트 저장 중' : 'Saving route';
+      isKo ? '로그에는 최소 한 개의 지점이 필요해요.' : 'A log needs at least one stop.';
+  String get savingRoute => isKo ? '로그 저장 중' : 'Saving log';
   String get chooseRoutablePhotosFirst => isKo
       ? 'GPS가 있거나 장소가 선택된 사진을 먼저 선택하세요.'
       : 'Choose photos with GPS or selected places first.';
   String get savedPhotoRouteToProfile =>
-      isKo ? '사진 루트를 프로필에 저장했어요.' : 'Saved photo route to Profile.';
+      isKo ? '사진 로그를 프로필에 저장했어요.' : 'Saved photo log to Profile.';
   String saveRouteFailed(Object error) =>
-      isKo ? '루트를 저장하지 못했어요. $error' : 'Could not save route. $error';
+      isKo ? '로그를 저장하지 못했어요. $error' : 'Could not save log. $error';
   String photoRouteTitle(String dateLabel) =>
-      isKo ? '사진 루트 - $dateLabel' : 'Photo route - $dateLabel';
+      isKo ? '사진 로그 - $dateLabel' : 'Photo log - $dateLabel';
   String photoRouteDescription(int count) => isKo
-      ? '$count개의 사진 지점으로 만든 개인 루트입니다.'
-      : 'A personal route created from $count photo stop(s).';
+      ? '$count개의 사진 지점으로 만든 개인 로그입니다.'
+      : 'A personal log created from $count photo stop(s).';
   String get myTrip => isKo ? '내 여행' : 'My trip';
   String get me => isKo ? '나' : 'Me';
   String get photoTag => isKo ? '사진' : 'Photo';
@@ -206,8 +204,8 @@ class AppStrings {
       ? '이 날짜에는 GPS 메타데이터가 없어요.'
       : 'No GPS metadata is available for this date.';
   String get emptyPhotoState => isKo
-      ? '여행 사진을 선택하면 방문 장소와 루트를 자동으로 정리해요.'
-      : 'Choose photos to build a date-grouped route and map.';
+      ? '여행 사진을 선택하면 방문 장소와 로그를 자동으로 정리해요.'
+      : 'Choose photos to build a date-grouped log and map.';
   String get photoDetails => isKo ? '사진 정보' : 'Photo details';
   String get file => isKo ? '파일' : 'File';
   String get takenAt => isKo ? '촬영 시간' : 'Taken at';
@@ -239,25 +237,26 @@ class AppStrings {
       isKo ? '"$query" 검색 결과' : 'Results for "$query"';
   String get noMatchingPlaces => isKo ? '검색 결과가 없어요.' : 'No places were found.';
 
-  String get routeDetailTitle => isKo ? '루트 상세' : 'Route Detail';
-  String get routeNotFound => isKo ? '루트를 찾을 수 없어요.' : 'Route not found.';
-  String get routeSaved => isKo ? '루트를 저장했어요.' : 'Route saved.';
+  String get routeDetailTitle => isKo ? '로그 상세' : 'Log Detail';
+  String get routeNotFound => isKo ? '로그를 찾을 수 없어요.' : 'Log not found.';
+  String get routeSaved => isKo ? '로그를 저장했어요.' : 'Log saved.';
   String get visitTimeline => isKo ? '방문 타임라인' : 'Visit timeline';
-  String get routeMap => isKo ? '루트 지도' : 'Route map';
+  String get routeMap => isKo ? '로그 지도' : 'Log map';
   String routeStopCount(int count) => isKo ? '$count곳' : '$count stops';
   String get noRouteMapPoints => isKo
       ? '지도에 표시할 좌표가 아직 없어요.'
-      : 'No coordinates are available for this route yet.';
+      : 'No coordinates are available for this log yet.';
   String get mapLoadFailed =>
       isKo ? '지도를 불러오지 못했어요.' : 'Could not load the map.';
   String get naverDynamicMapKeyMissing => isKo
       ? '네이버 동적 지도 키가 설정되지 않았어요.'
       : 'Naver Dynamic Map key is not configured.';
   String get editMyRoute => isKo ? '수정하기' : 'Edit';
-  String get downloadAndCustomize => isKo ? '다운로드 및 편집' : 'Download and Edit';
-  String get savedRoute => isKo ? '저장된 루트' : 'Saved route';
+  String get downloadAndCustomize =>
+      isKo ? '이 루트로 여행 계획하기' : 'Plan with this route';
+  String get savedRoute => isKo ? '저장된 로그' : 'Saved log';
   String authorRoute(String authorName) =>
-      isKo ? '@$authorName의 루트' : '@$authorName route';
+      isKo ? '@$authorName의 로그' : '@$authorName\'s log';
   String get duration => isKo ? '소요 시간' : 'Duration';
   String durationLabel(int minutes) {
     if (minutes < 60) {
@@ -278,24 +277,27 @@ class AppStrings {
   String get upvote => isKo ? '추천' : 'Upvote';
   String get downvote => isKo ? '비추천' : 'Downvote';
   String get routeVoteTitle =>
-      isKo ? '이 루트가 마음에 드나요?' : 'Do you recommend this route?';
+      isKo ? '이 로그가 마음에 드나요?' : 'Do you recommend this log?';
   String routeVoteRatio(int percentage) =>
-      isKo ? '현재 추천율 $percentage%' : '$percentage% recommend this route';
+      isKo ? '현재 추천율 $percentage%' : '$percentage% recommend this log';
   String get voteLoginRequired =>
-      isKo ? '추천 또는 비추천하려면 로그인해 주세요.' : 'Sign in to vote on routes.';
+      isKo ? '추천 또는 비추천하려면 로그인해 주세요.' : 'Sign in to vote on logs.';
   String get voteFailed =>
       isKo ? '추천 정보를 반영하지 못했습니다.' : 'Could not save your vote.';
-  String get downloads => isKo ? '다운로드' : 'Downloads';
+  String get downloads => isKo ? '루트 참고' : 'Route uses';
 
-  String get editRouteTitle => isKo ? '루트 편집' : 'Edit Route';
-  String get customizeYourRoute => isKo ? '내 루트 편집하기' : 'Customize your route';
+  String get editRouteTitle => isKo ? '로그 편집' : 'Edit Log';
+  String get customizeYourRoute => isKo ? '내 로그 편집하기' : 'Customize your log';
   String get customizeYourRouteSubtitle => isKo
-      ? '루트 이름과 장소 순서를 조정하거나 장소를 추가, 삭제할 수 있어요.'
-      : 'Rename the route, reorder stops, remove places, or add another stop.';
-  String get routeTitleLabel => isKo ? '루트 이름 입력' : 'Route title';
+      ? '로그 이름과 장소 순서를 조정하거나 장소를 추가, 삭제할 수 있어요.'
+      : 'Rename the log, reorder stops, remove places, or add another stop.';
+  String get routeImportPrivacyNotice => isKo
+      ? '장소와 이동 순서만 가져옵니다. 원작자의 사진, 방문 시각, 메모, 비용 및 구매 내역은 저장하지 않아요.'
+      : 'Only places and their order are imported. The creator\'s photos, visit times, notes, costs, and purchases are not saved.';
+  String get routeTitleLabel => isKo ? '로그 이름 입력' : 'Log title';
   String get addPlace => isKo ? '장소 추가' : 'Add place';
   String get routeNeedsOnePlace =>
-      isKo ? '루트에는 최소 한 곳 이상의 장소가 필요해요.' : 'A route needs at least one place.';
+      isKo ? '로그에는 최소 한 곳 이상의 장소가 필요해요.' : 'A log needs at least one place.';
   String get saveRoute => isKo ? '저장' : 'Save';
   String get saving => isKo ? '저장 중' : 'Saving';
   String get enterPlaceName => isKo ? '장소명을 입력하세요.' : 'Enter a place name.';
@@ -317,26 +319,29 @@ class AppStrings {
   String get close => isKo ? '닫기' : 'Close';
   String get add => isKo ? '추가' : 'Add';
   String get dragToReorder => isKo ? '끌어서 순서 변경' : 'Drag to reorder';
+  String get routeEditGestureHelp => isKo
+      ? '카드를 길게 눌러 순서를 바꾸고, 좌우로 밀어서 삭제할 수 있어요.'
+      : 'Long-press a card to reorder it, or swipe either way to delete it.';
   String get moveUp => isKo ? '위로 이동' : 'Move up';
   String get moveDown => isKo ? '아래로 이동' : 'Move down';
   String get delete => isKo ? '삭제' : 'Delete';
 
   String get profileTitle => isKo ? '프로필' : 'Profile';
   String get language => isKo ? '언어 설정' : 'Language';
-  String get myRouteList => isKo ? '내 루트' : 'My routes';
+  String get myRouteList => isKo ? '내 로그' : 'My logs';
   String get myRouteListSubtitle => isKo
-      ? '다운로드하거나 사진으로 만든 루트를 여행 일정으로 관리해요.'
-      : 'Manage downloaded and photo-created routes as your own travel plans.';
-  String get deleteRouteTitle => isKo ? '루트 삭제' : 'Delete route';
+      ? '사진으로 기록한 하루치 로그를 관리해요.'
+      : 'Manage the daily logs you created from your photos.';
+  String get deleteRouteTitle => isKo ? '로그 삭제' : 'Delete log';
   String deleteRouteMessage(String title) =>
-      isKo ? '"$title" 루트를 프로필에서 삭제할까요?' : 'Delete "$title" from your profile?';
-  String get routeDeleted => isKo ? '루트를 삭제했어요.' : 'Route deleted.';
-  String get savedRouteLabel => isKo ? '저장된 루트' : 'Saved route';
-  String get uploadedRoutes => isKo ? '업로드한 루트' : 'Uploaded routes';
-  String get downloadedRoutes => isKo ? '다운로드한 루트' : 'Downloaded routes';
-  String get uploadedRouteLabel => isKo ? '사진으로 만든 루트' : 'Created from photos';
-  String get downloadedRouteLabel => isKo ? '다운로드한 루트' : 'Downloaded route';
+      isKo ? '"$title" 로그를 프로필에서 삭제할까요?' : 'Delete "$title" from your profile?';
+  String get routeDeleted => isKo ? '로그를 삭제했어요.' : 'Log deleted.';
+  String get savedRouteLabel => isKo ? '저장된 로그' : 'Saved log';
+  String get uploadedRoutes => isKo ? '업로드한 로그' : 'Uploaded logs';
+  String get downloadedRoutes => isKo ? '보관된 이전 루트' : 'Legacy saved routes';
+  String get uploadedRouteLabel => isKo ? '사진으로 만든 로그' : 'Created from photos';
+  String get downloadedRouteLabel => isKo ? '보관된 이전 루트' : 'Legacy saved route';
   String get emptyDownloadedRoutes => isKo
-      ? '아직 저장한 루트가 없어요. 검색이나 사진 업로드에서 마음에 드는 루트를 저장해보세요.'
-      : 'No saved routes yet. Save a route from Search or photo upload.';
+      ? '아직 만든 로그가 없어요. 사진을 업로드해 하루의 기록을 만들어보세요.'
+      : 'No logs yet. Upload photos to record a day of travel.';
 }

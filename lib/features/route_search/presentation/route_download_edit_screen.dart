@@ -4,6 +4,7 @@ import '../../../core/l10n/app_language.dart';
 import '../../../models/place_candidate.dart';
 import '../../../services/place_candidate_service.dart';
 import '../data/route_repository_provider.dart';
+import '../domain/route_download_template.dart';
 import '../domain/route_place.dart';
 import '../domain/travel_route.dart';
 import 'widgets/route_stop_edit_tile.dart';
@@ -67,7 +68,9 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
       Navigator.of(context).pop(false);
       return;
     }
-    final loadedRoute = route;
+    final loadedRoute = widget.createNewCopy
+        ? withoutCreatorMediaAndPersonalData(route)
+        : route;
 
     setState(() {
       _route = loadedRoute;
@@ -101,7 +104,9 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
           : _titleController.text.trim(),
       description: _descriptionController.text.trim(),
       places: orderedPlaces,
-      visibility: _visibility,
+      visibility: widget.createNewCopy || route.isDownloadedCopy
+          ? RouteVisibility.private
+          : _visibility,
       isDownloaded: true,
     );
     try {
@@ -109,24 +114,26 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
         final copy = await _repository.downloadRoute(route.id);
         final copiedPlaces = [...copy.places]
           ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+        final copiedIdBySourceId = <String, String>{
+          for (
+            var index = 0;
+            index < route.places.length && index < copiedPlaces.length;
+            index++
+          )
+            route.places[index].id: copiedPlaces[index].id,
+        };
         final mergedPlaces = <RoutePlace>[
-          for (var index = 0; index < orderedPlaces.length; index++)
-            if (index < copiedPlaces.length)
-              orderedPlaces[index].copyWith(
-                id: copiedPlaces[index].id,
-                photoUrls: copiedPlaces[index].photoUrls,
-                photoStoragePaths: copiedPlaces[index].photoStoragePaths,
-              )
-            else
-              orderedPlaces[index],
+          for (final place in orderedPlaces)
+            place.copyWith(id: copiedIdBySourceId[place.id] ?? place.id),
         ];
         await _repository.updateDownloadedRoute(
           updated.copyWith(
             id: copy.id,
             sourceRouteId: copy.sourceRouteId,
+            downloadedCopy: true,
             places: mergedPlaces,
-            coverImageUrl: copy.coverImageUrl,
-            coverImageStoragePath: copy.coverImageStoragePath,
+            coverImageUrl: null,
+            coverImageStoragePath: null,
           ),
         );
       } else {
@@ -137,9 +144,9 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('루트 저장에 실패했습니다: $error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('로그 저장에 실패했습니다: $error')));
       }
     } finally {
       if (mounted) {
@@ -163,13 +170,20 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
 
   void _reorderPlaces(int oldIndex, int newIndex) {
     setState(() {
-      if (newIndex > oldIndex) {
-        newIndex -= 1;
-      }
-
       final item = _places.removeAt(oldIndex);
       _places.insert(newIndex, item);
     });
+  }
+
+  Future<bool> _confirmSwipeRemove() async {
+    if (_places.length > 1) {
+      return true;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(context.strings.routeNeedsOnePlace)));
+    return false;
   }
 
   Future<void> _showEditPlaceDialog(RoutePlace place) async {
@@ -228,7 +242,7 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                 children: [
                   const Icon(Icons.error_outline, size: 40),
                   const SizedBox(height: 12),
-                  const Text('루트를 불러오지 못했습니다.'),
+                  const Text('로그를 불러오지 못했습니다.'),
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: () {
@@ -260,6 +274,43 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: Colors.black54, height: 1.45),
                         ),
+                        if (widget.createNewCopy) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.privacy_tip_outlined,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimaryContainer,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    strings.routeImportPrivacyNotice,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimaryContainer,
+                                          height: 1.45,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 18),
                         TextField(
                           controller: _titleController,
@@ -278,7 +329,9 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                           minLines: 2,
                           maxLines: 4,
                         ),
-                        if (route.isCreatedByCurrentUser) ...[
+                        if (route.isCreatedByCurrentUser &&
+                            !route.isDownloadedCopy &&
+                            !widget.createNewCopy) ...[
                           const SizedBox(height: 12),
                           DropdownButtonFormField<RouteVisibility>(
                             initialValue: _visibility,
@@ -317,6 +370,12 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w900),
                         ),
+                        const SizedBox(height: 6),
+                        Text(
+                          strings.routeEditGestureHelp,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: Colors.black54),
+                        ),
                         const SizedBox(height: 10),
                         ReorderableListView.builder(
                           shrinkWrap: true,
@@ -324,19 +383,33 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                           physics: const NeverScrollableScrollPhysics(),
                           buildDefaultDragHandles: false,
                           itemCount: _places.length,
-                          onReorder: _reorderPlaces,
+                          onReorderItem: _reorderPlaces,
                           itemBuilder: (context, index) {
                             final place = _places[index];
 
-                            return Padding(
+                            return Dismissible(
                               key: ValueKey('download-place-${place.id}'),
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: RouteStopEditTile(
-                                index: index,
-                                title: place.name,
-                                subtitle: _placeSubtitle(context, place),
-                                onEdit: () => _showEditPlaceDialog(place),
-                                onRemove: () => _removePlace(place),
+                              direction: DismissDirection.horizontal,
+                              confirmDismiss: (_) => _confirmSwipeRemove(),
+                              onDismissed: (_) => _removePlace(place),
+                              background: const _SwipeDeleteBackground(
+                                alignment: Alignment.centerLeft,
+                              ),
+                              secondaryBackground: const _SwipeDeleteBackground(
+                                alignment: Alignment.centerRight,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: ReorderableDelayedDragStartListener(
+                                  index: index,
+                                  child: RouteStopEditTile(
+                                    index: index,
+                                    title: place.name,
+                                    subtitle: _placeSubtitle(context, place),
+                                    onEdit: () => _showEditPlaceDialog(place),
+                                    showDragHandle: false,
+                                  ),
+                                ),
                               ),
                             );
                           },
@@ -362,6 +435,45 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _SwipeDeleteBackground extends StatelessWidget {
+  const _SwipeDeleteBackground({required this.alignment});
+
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLeft = alignment == Alignment.centerLeft;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      alignment: alignment,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        textDirection: isLeft ? TextDirection.ltr : TextDirection.rtl,
+        children: [
+          Icon(
+            Icons.delete_outline,
+            color: Theme.of(context).colorScheme.onErrorContainer,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            context.strings.delete,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onErrorContainer,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -458,9 +570,9 @@ class _PlaceDialogState extends State<_PlaceDialog> {
 
   void _submit() {
     if (!_isEditing && _selectedCandidate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('검색 결과에서 장소를 선택해 주세요.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('검색 결과에서 장소를 선택해 주세요.')));
       return;
     }
 
@@ -469,6 +581,14 @@ class _PlaceDialogState extends State<_PlaceDialog> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(context.strings.enterPlaceName)));
+      return;
+    }
+
+    final address = _addressController.text.trim();
+    if (address.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('주소가 확인되는 장소를 선택해 주세요.')));
       return;
     }
 
@@ -487,13 +607,18 @@ class _PlaceDialogState extends State<_PlaceDialog> {
         id:
             initialPlace?.id ??
             'custom-${DateTime.now().microsecondsSinceEpoch}',
+        canonicalPlaceId: _selectedCandidate == null
+            ? initialPlace?.canonicalPlaceId
+            : null,
+        placeProvider:
+            _selectedCandidate?.source ?? initialPlace?.placeProvider,
+        externalPlaceId:
+            _selectedCandidate?.id ?? initialPlace?.externalPlaceId,
         name: name,
         category: _categoryController.text.trim().isEmpty
             ? '장소'
             : _categoryController.text.trim(),
-        address: _addressController.text.trim().isEmpty
-            ? null
-            : _addressController.text.trim(),
+        address: address,
         memo: _memoController.text.trim().isEmpty
             ? null
             : _memoController.text.trim(),
@@ -649,9 +774,7 @@ class _PlaceSearchResults extends StatelessWidget {
                   context,
                 ).colorScheme.primaryContainer.withValues(alpha: 0.45),
                 leading: Icon(
-                  selected
-                      ? Icons.check_circle
-                      : Icons.location_on_outlined,
+                  selected ? Icons.check_circle : Icons.location_on_outlined,
                   color: selected
                       ? Theme.of(context).colorScheme.primary
                       : Colors.black45,

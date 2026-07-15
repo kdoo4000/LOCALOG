@@ -20,24 +20,18 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen>
-    with SingleTickerProviderStateMixin {
+class _ProfileScreenState extends State<ProfileScreen> {
   final _repository = routeRepository;
   StreamSubscription<void>? _downloadedRoutesSubscription;
   late Future<List<TravelRoute>> _downloadedRoutesFuture;
   late Future<RouteProfileStats> _profileStatsFuture;
-  late final TabController _routeTabController;
 
   @override
   void initState() {
     super.initState();
-    _routeTabController = TabController(length: 2, vsync: this);
-    _routeTabController.addListener(_handleRouteTabChanged);
     _downloadedRoutesFuture = _repository.getDownloadedRoutes();
     _profileStatsFuture = _repository.getProfileStats();
-    _downloadedRoutesSubscription = _repository.routesChanged.listen((
-      _,
-    ) {
+    _downloadedRoutesSubscription = _repository.routesChanged.listen((_) {
       if (mounted) {
         _reloadDownloadedRoutes();
       }
@@ -47,16 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   void dispose() {
     _downloadedRoutesSubscription?.cancel();
-    _routeTabController
-      ..removeListener(_handleRouteTabChanged)
-      ..dispose();
     super.dispose();
-  }
-
-  void _handleRouteTabChanged() {
-    if (mounted && !_routeTabController.indexIsChanging) {
-      setState(() {});
-    }
   }
 
   Future<void> _openRoute(TravelRoute route) async {
@@ -101,9 +86,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       await _repository.deleteDownloadedRoute(route.id);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('루트를 삭제하지 못했습니다: $error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('로그를 삭제하지 못했습니다: $error')));
       }
       return;
     }
@@ -131,10 +116,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      RouteNames.login,
-      (route) => false,
-    );
+    Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil(RouteNames.login, (route) => false);
   }
 
   @override
@@ -142,6 +126,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     final strings = context.strings;
 
     return Scaffold(
+      appBar: AppBar(title: Text(strings.profileTitle)),
       body: SafeArea(
         child: FutureBuilder<List<TravelRoute>>(
           future: _downloadedRoutesFuture,
@@ -150,27 +135,14 @@ class _ProfileScreenState extends State<ProfileScreen>
             final uploadedRoutes = routes
                 .where((route) => !route.isDownloadedCopy)
                 .toList();
-            final downloadedRoutes = routes
-                .where((route) => route.isDownloadedCopy)
-                .toList();
-            final selectedRoutes = _routeTabController.index == 0
-                ? uploadedRoutes
-                : downloadedRoutes;
 
             return RefreshIndicator(
               onRefresh: () async {
                 await _reloadDownloadedRoutes();
               },
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(28, 34, 28, 28),
+                padding: const EdgeInsets.fromLTRB(28, 18, 28, 28),
                 children: [
-                  Text(
-                    strings.profileTitle,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                  ),
-                  const SizedBox(height: 20),
                   FutureBuilder<RouteProfileStats>(
                     future: _profileStatsFuture,
                     builder: (context, statsSnapshot) => _ProfileHeader(
@@ -178,7 +150,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                           ? supabaseClient.auth.currentUser
                           : null,
                       stats: statsSnapshot.data,
-                      onSignOut: isSupabaseConfigured &&
+                      onSignOut:
+                          isSupabaseConfigured &&
                               supabaseClient.auth.currentUser != null
                           ? _signOut
                           : null,
@@ -190,23 +163,15 @@ class _ProfileScreenState extends State<ProfileScreen>
                   Text(
                     strings.myRouteList,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                  ),
-                  const SizedBox(height: 12),
-                  TabBar(
-                    controller: _routeTabController,
-                    tabs: [
-                      Tab(text: strings.uploadedRoutes),
-                      Tab(text: strings.downloadedRoutes),
-                    ],
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   if (snapshot.hasError)
                     Center(
                       child: Column(
                         children: [
-                          const Text('내 루트를 불러오지 못했습니다.'),
+                          const Text('내 로그를 불러오지 못했습니다.'),
                           const SizedBox(height: 8),
                           OutlinedButton(
                             onPressed: _reloadDownloadedRoutes,
@@ -222,10 +187,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                         child: CircularProgressIndicator(),
                       ),
                     )
-                  else if (selectedRoutes.isEmpty)
+                  else if (uploadedRoutes.isEmpty)
                     const _EmptyDownloadedRoutes()
                   else
-                    for (final route in selectedRoutes) ...[
+                    for (final route in uploadedRoutes) ...[
                       _DownloadedRouteTile(
                         route: route,
                         onOpen: () => _openRoute(route),
@@ -289,16 +254,16 @@ class _ProfileHeader extends StatelessWidget {
                   Text(
                     displayName,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    user == null ? '공개 루트만 둘러보는 중' : user!.email ?? '',
+                    user == null ? '공개 로그만 둘러보는 중' : user!.email ?? '',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.gray500,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      color: AppColors.gray500,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
@@ -323,7 +288,7 @@ class _ProfileHeader extends StatelessWidget {
               ),
               Expanded(
                 child: _ProfileStat(
-                  label: '다운로드',
+                  label: '루트 참고',
                   value: '${stats?.downloads ?? 0}',
                 ),
               ),
@@ -349,16 +314,16 @@ class _ProfileStat extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: AppColors.gray500,
-                fontWeight: FontWeight.w800,
-              ),
+            color: AppColors.gray500,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         const SizedBox(height: 6),
         Text(
           value,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
         ),
       ],
     );
@@ -388,7 +353,10 @@ class _LanguageSelector extends StatelessWidget {
             showSelectedIcon: false,
             segments: [
               ButtonSegment(value: AppLanguage.ko, label: Text(strings.korean)),
-              ButtonSegment(value: AppLanguage.en, label: Text(strings.english)),
+              ButtonSegment(
+                value: AppLanguage.en,
+                label: Text(strings.english),
+              ),
             ],
             selected: {controller.language},
             onSelectionChanged: (selection) {
@@ -419,7 +387,7 @@ class _DownloadedRouteTile extends StatelessWidget {
     return Stack(
       children: [
         RouteCard(route: route, onTap: onOpen),
-        if (route.isCreatedByCurrentUser)
+        if (route.isCreatedByCurrentUser && !route.isDownloadedCopy)
           Positioned(
             top: 10,
             left: 10,
@@ -452,9 +420,9 @@ class _DownloadedRouteTile extends StatelessWidget {
             color: Colors.white,
             shape: const CircleBorder(),
             child: IconButton(
-                  tooltip: strings.delete,
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline),
+              tooltip: strings.delete,
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline),
             ),
           ),
         ),

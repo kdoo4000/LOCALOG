@@ -40,14 +40,14 @@ class OnboardingScreen extends StatelessWidget {
               ),
               const SizedBox(height: 28),
               Text(
-                '사진만 올리면 로컬 루트가 됩니다',
+                '사진만 올리면 로컬 로그가 됩니다',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w900,
                 ),
               ),
               const SizedBox(height: 10),
               Text(
-                '촬영 시간과 위치를 바탕으로 여행자의 하루를 정리하고, 다른 사람이 바로 다운로드할 수 있는 코스로 만듭니다.',
+                '촬영 시간과 위치를 바탕으로 하루의 루트와 기록을 정리하고, 다른 사람이 여행 계획에 참고할 수 있게 합니다.',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: Colors.black54,
                   height: 1.45,

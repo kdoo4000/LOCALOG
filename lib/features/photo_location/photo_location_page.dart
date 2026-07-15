@@ -18,10 +18,15 @@ import '../route_search/domain/route_place.dart';
 import '../route_search/domain/travel_route.dart';
 import '../route_search/presentation/widgets/route_stop_edit_tile.dart';
 import '../route_search/presentation/region_picker_screen.dart';
+import '../trip_planning/data/travel_plan_repository_provider.dart';
+import '../trip_planning/domain/travel_plan.dart';
 import 'naver_dynamic_map.dart';
 
 class PhotoLocationPage extends StatefulWidget {
-  const PhotoLocationPage({super.key});
+  const PhotoLocationPage({super.key, this.plannedRoute, this.planDay});
+
+  final PlannedRoute? plannedRoute;
+  final TravelPlanDay? planDay;
 
   @override
   State<PhotoLocationPage> createState() => _PhotoLocationPageState();
@@ -190,6 +195,13 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
         draft.entries,
       );
       final savedRoute = await _routeRepository.saveCreatedRoute(route);
+      final planDay = widget.planDay;
+      if (planDay != null) {
+        await travelPlanRepository.linkCompletedLog(
+          planDayId: planDay.id,
+          logId: savedRoute.id,
+        );
+      }
 
       if (!mounted) {
         return;
@@ -249,6 +261,8 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       isCreatedByCurrentUser: true,
       visibility: visibility,
       publishedAt: visibility == RouteVisibility.public ? DateTime.now() : null,
+      travelDate: widget.planDay?.date,
+      sourcePlannedRouteId: widget.plannedRoute?.id,
     );
   }
 
@@ -257,10 +271,11 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     final metadata = entry.metadata;
     final category = selectedPlace?.category;
     final photoPath = entry.photo.path;
-    final mapPoint = entry.mapPoint;
 
     return RoutePlace(
       id: 'photo-place-${DateTime.now().microsecondsSinceEpoch}-$index',
+      placeProvider: selectedPlace?.source,
+      externalPlaceId: selectedPlace?.id,
       name: selectedPlace?.displayName ?? context.strings.photoStop(index),
       category: category == null || category.isEmpty
           ? context.strings.photoSpot
@@ -269,8 +284,9 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       address: _nullIfEmpty(selectedPlace?.address),
       visitedAt: metadata.takenAt,
       memo: null,
-      latitude: mapPoint?.latitude,
-      longitude: mapPoint?.longitude,
+      // Photo GPS is the capture point, not the canonical place position.
+      latitude: selectedPlace?.latitude,
+      longitude: selectedPlace?.longitude,
       photoUrls: photoPath.isEmpty ? const [] : [photoPath],
     );
   }
@@ -343,6 +359,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
                 placeCandidateService: _placeCandidateService,
                 onPlaceSelected: _selectPlace,
                 onSaveDraft: _isSavingRoute ? null : _saveSelectedGroupAsRoute,
+                plannedRoute: widget.plannedRoute,
               ),
               const SizedBox(height: 16),
               if (selectedGroup != null) ...[
@@ -423,6 +440,7 @@ class _SaveRoutePanel extends StatelessWidget {
     required this.placeCandidateService,
     required this.onPlaceSelected,
     required this.onSaveDraft,
+    this.plannedRoute,
   });
 
   final _PhotoDateGroup? group;
@@ -430,6 +448,7 @@ class _SaveRoutePanel extends StatelessWidget {
   final PlaceCandidateService placeCandidateService;
   final void Function(String entryId, PlaceCandidate candidate) onPlaceSelected;
   final ValueChanged<_RouteDraftResult>? onSaveDraft;
+  final PlannedRoute? plannedRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -454,15 +473,14 @@ class _SaveRoutePanel extends StatelessWidget {
           const SizedBox(height: 14),
           _RouteDraftInlineEditor(
             key: ValueKey('route-draft-editor-${group.key}-$groupFingerprint'),
-            initialTitle: context.strings.photoRouteTitle(
-              _displayGroupLabel(context, group),
-            ),
+            initialTitle:
+                plannedRoute?.title ??
+                context.strings.photoRouteTitle(
+                  _displayGroupLabel(context, group),
+                ),
             initialDescription: '',
-            initialCity: '',
-            initialTags: [
-              context.strings.photoTag,
-              context.strings.localTag,
-            ],
+            initialCity: plannedRoute?.city ?? '',
+            initialTags: [context.strings.photoTag, context.strings.localTag],
             entries: group.photos,
             isSaving: isSaving,
             placeCandidateService: placeCandidateService,
@@ -636,11 +654,13 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
         city: city,
         tags: _tags,
         visibility: _visibility,
-        coverImagePath: _entries
-            .where((entry) => entry.id == _selectedCoverEntryId)
-            .firstOrNull
-            ?.photo
-            .path ?? '',
+        coverImagePath:
+            _entries
+                .where((entry) => entry.id == _selectedCoverEntryId)
+                .firstOrNull
+                ?.photo
+                .path ??
+            '',
         entries: _entries,
       ),
     );
@@ -674,9 +694,9 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
       return;
     }
     if (_tags.length >= 5) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('태그는 최대 5개까지 추가할 수 있어요.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('태그는 최대 5개까지 추가할 수 있어요.')));
       return;
     }
     setState(() {
@@ -688,9 +708,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
   Future<void> _selectRegion() async {
     final region = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (_) => RegionPickerScreen(
-          initialRegion: _cityController.text,
-        ),
+        builder: (_) => RegionPickerScreen(initialRegion: _cityController.text),
       ),
     );
     if (region != null && mounted) {
@@ -724,9 +742,9 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
       children: [
         Text(
           '대표 이미지',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w900,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 8),
         SizedBox(
@@ -1305,12 +1323,6 @@ class _PhotoDetailsSheetState extends State<_PhotoDetailsSheet> {
             _selectPlace(candidate);
           },
         ),
-        const SizedBox(height: 12),
-        TextButton.icon(
-          onPressed: _addManualPlace,
-          icon: const Icon(Icons.add),
-          label: Text(context.strings.addPlace),
-        ),
       ],
     );
   }
@@ -1340,25 +1352,6 @@ class _PhotoDetailsSheetState extends State<_PhotoDetailsSheet> {
       _selectedPlace = candidate;
     });
     widget.onPlaceSelected(widget.entry.id, candidate);
-  }
-
-  void _addManualPlace() {
-    final name = _searchController.text.trim();
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.strings.enterPlaceName)));
-      return;
-    }
-
-    _selectPlace(
-      PlaceCandidate(
-        id: 'manual-${DateTime.now().microsecondsSinceEpoch}',
-        name: name,
-        address: '',
-        source: 'manual',
-      ),
-    );
   }
 }
 

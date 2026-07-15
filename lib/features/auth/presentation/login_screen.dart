@@ -96,14 +96,15 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      RouteNames.main,
-      (route) => false,
-    );
+    Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil(RouteNames.main, (route) => false);
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -130,8 +131,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   _isSignUp ? 'LOCALOG 회원가입' : 'LOCALOG 로그인',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 Form(
@@ -234,16 +235,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       : () {
                           setState(() => _isSignUp = !_isSignUp);
                         },
-                  child: Text(
-                    _isSignUp
-                        ? '이미 계정이 있나요? 로그인'
-                        : '처음이신가요? 회원가입',
-                  ),
+                  child: Text(_isSignUp ? '이미 계정이 있나요? 로그인' : '처음이신가요? 회원가입'),
                 ),
                 const Divider(height: 32),
                 TextButton(
                   onPressed: _openMain,
-                  child: const Text('게스트로 공개 루트 둘러보기'),
+                  child: const Text('게스트로 공개 로그 둘러보기'),
                 ),
               ],
             ),

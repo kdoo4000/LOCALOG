@@ -4,6 +4,9 @@ class RoutePlace {
     required this.name,
     required this.category,
     required this.orderIndex,
+    this.canonicalPlaceId,
+    this.placeProvider,
+    this.externalPlaceId,
     this.address,
     this.visitedAt,
     this.memo,
@@ -16,6 +19,11 @@ class RoutePlace {
   });
 
   final String id;
+
+  /// Shared place identifier used by every route that references this place.
+  final String? canonicalPlaceId;
+  final String? placeProvider;
+  final String? externalPlaceId;
   final String name;
   final String category;
   final int orderIndex;
@@ -37,6 +45,9 @@ class RoutePlace {
 
   RoutePlace copyWith({
     String? id,
+    Object? canonicalPlaceId = _keepValue,
+    Object? placeProvider = _keepValue,
+    Object? externalPlaceId = _keepValue,
     String? name,
     String? category,
     int? orderIndex,
@@ -52,6 +63,15 @@ class RoutePlace {
   }) {
     return RoutePlace(
       id: id ?? this.id,
+      canonicalPlaceId: identical(canonicalPlaceId, _keepValue)
+          ? this.canonicalPlaceId
+          : canonicalPlaceId as String?,
+      placeProvider: identical(placeProvider, _keepValue)
+          ? this.placeProvider
+          : placeProvider as String?,
+      externalPlaceId: identical(externalPlaceId, _keepValue)
+          ? this.externalPlaceId
+          : externalPlaceId as String?,
       name: name ?? this.name,
       category: category ?? this.category,
       orderIndex: orderIndex ?? this.orderIndex,

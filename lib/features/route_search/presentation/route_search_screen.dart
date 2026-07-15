@@ -46,10 +46,7 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
   void _openRoute(TravelRoute route) {
     Navigator.of(context).pushNamed(
       RouteNames.routeDetail,
-      arguments: RouteDetailArguments(
-        routeId: route.id,
-        showSourceRoute: true,
-      ),
+      arguments: RouteDetailArguments(routeId: route.id, showSourceRoute: true),
     );
   }
 
@@ -69,7 +66,12 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
           route.title.toLowerCase().contains(term) ||
           route.city.toLowerCase().contains(term) ||
           route.description.toLowerCase().contains(term) ||
-          route.tags.any((tag) => tag.toLowerCase().contains(term)),
+          route.tags.any((tag) => tag.toLowerCase().contains(term)) ||
+          route.places.any(
+            (place) =>
+                place.name.toLowerCase().contains(term) ||
+                (place.address?.toLowerCase().contains(term) ?? false),
+          ),
     );
   }
 
@@ -123,9 +125,9 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                 Text(
                   strings.routeSearchTitle,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        height: 1.12,
-                      ),
+                    fontWeight: FontWeight.w900,
+                    height: 1.12,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 SearchBar(
@@ -141,8 +143,8 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                 Text(
                   '추천 키워드',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -163,8 +165,8 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                 Text(
                   '검색 결과',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 if (snapshot.hasError)

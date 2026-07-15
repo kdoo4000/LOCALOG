@@ -13,6 +13,7 @@ import '../data/route_repository_provider.dart';
 import '../domain/route_place.dart';
 import '../domain/travel_route.dart';
 import 'route_download_edit_screen.dart';
+import '../../trip_planning/presentation/plan_route_import_screen.dart';
 
 class RouteDetailScreen extends StatefulWidget {
   const RouteDetailScreen({
@@ -55,25 +56,15 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       return null;
     }
 
-    // Search always starts from the source route so each download can create a
-    // new independent copy. Profile routes continue to open their saved copy.
-    final savedRoute = widget.showSourceRoute
-        ? null
-        : route.sourceRouteId == null && !route.isDownloadedCopy
-        ? await _repository.getDownloadedRouteForSource(route.id)
-        : route;
-    return _RouteDetailData(route: route, savedRoute: savedRoute);
+    return _RouteDetailData(route: route);
   }
 
   Future<void> _openDownloadEdit(TravelRoute route) async {
-    final updated = await Navigator.of(
-      context,
-    ).pushNamed(
+    final updated = await Navigator.of(context).pushNamed(
       RouteNames.routeDownloadEdit,
       arguments: RouteDownloadEditArguments(
         routeId: route.id,
-        createNewCopy:
-            widget.showSourceRoute && !route.isCreatedByCurrentUser,
+        createNewCopy: widget.showSourceRoute && !route.isCreatedByCurrentUser,
       ),
     );
 
@@ -91,10 +82,24 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     }
   }
 
-  Future<void> _voteOnRoute(
-    _RouteDetailData detail,
-    bool isPositive,
-  ) async {
+  Future<void> _openPlanImport(TravelRoute route) async {
+    if (isSupabaseConfigured && !hasSupabaseSession) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('여행을 계획하려면 로그인해 주세요.')));
+      return;
+    }
+    final imported = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => PlanRouteImportScreen(logId: route.id)),
+    );
+    if (imported == true && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('루트를 여행 계획에 추가했습니다.')));
+    }
+  }
+
+  Future<void> _voteOnRoute(_RouteDetailData detail, bool isPositive) async {
     if (isSupabaseConfigured && !hasSupabaseSession) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.strings.voteLoginRequired)),
@@ -110,9 +115,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       if (!mounted) return;
       setState(() {
         _isVoting = false;
-        _detailFuture = Future.value(
-          _RouteDetailData(route: updated, savedRoute: detail.savedRoute),
-        );
+        _detailFuture = Future.value(_RouteDetailData(route: updated));
       });
     } catch (error) {
       if (!mounted) return;
@@ -136,7 +139,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('루트 정보를 불러오지 못했습니다.'),
+                  const Text('로그 정보를 불러오지 못했습니다.'),
                   const SizedBox(height: 10),
                   OutlinedButton(
                     onPressed: () {
@@ -161,9 +164,6 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
 
           final detail = snapshot.data!;
           final route = detail.route;
-          final routeToEdit = detail.savedRoute ?? route;
-          final hasSavedCopy =
-              detail.savedRoute != null || route.isCreatedByCurrentUser;
           final sortedPlaces = [...route.places]
             ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
           final coverHeight = MediaQuery.sizeOf(context).height;
@@ -182,10 +182,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           return Stack(
             fit: StackFit.expand,
             children: [
-              _DetailHero(
-                route: route,
-                height: coverHeight,
-              ),
+              _DetailHero(route: route, height: coverHeight),
               ListView(
                 controller: _scrollController,
                 padding: EdgeInsets.zero,
@@ -245,14 +242,16 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed: () => _openDownloadEdit(routeToEdit),
+                            onPressed: () => route.isCreatedByCurrentUser
+                                ? _openDownloadEdit(route)
+                                : _openPlanImport(route),
                             icon: Icon(
-                              hasSavedCopy
+                              route.isCreatedByCurrentUser
                                   ? Icons.edit_note_outlined
-                                  : Icons.download_outlined,
+                                  : Icons.route_outlined,
                             ),
                             label: Text(
-                              hasSavedCopy
+                              route.isCreatedByCurrentUser
                                   ? strings.editMyRoute
                                   : strings.downloadAndCustomize,
                             ),
@@ -297,10 +296,9 @@ class RouteDetailArguments {
 }
 
 class _RouteDetailData {
-  const _RouteDetailData({required this.route, required this.savedRoute});
+  const _RouteDetailData({required this.route});
 
   final TravelRoute route;
-  final TravelRoute? savedRoute;
 }
 
 class _RouteVotePanel extends StatelessWidget {
@@ -404,10 +402,7 @@ class _RouteVotePanel extends StatelessWidget {
 }
 
 class _DetailHero extends StatelessWidget {
-  const _DetailHero({
-    required this.route,
-    required this.height,
-  });
+  const _DetailHero({required this.route, required this.height});
 
   final TravelRoute route;
   final double height;
@@ -459,10 +454,7 @@ class _DetailHero extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _HeroPill(
-                      label: '추천 $upvote',
-                      color: AppColors.accentLime,
-                    ),
+                    _HeroPill(label: '추천 $upvote', color: AppColors.accentLime),
                     for (var index = 0; index < route.tags.length; index++)
                       _HeroPill(
                         label: route.tags[index].startsWith('#')
@@ -604,17 +596,17 @@ class _TimelinePlace extends StatelessWidget {
                     children: [
                       Text(
                         place.name,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w900),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         _placeMetaText(context, place),
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: AppColors.gray500,
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: AppColors.gray500,
+                              fontWeight: FontWeight.w800,
+                            ),
                       ),
                       if (place.memo != null) ...[
                         const SizedBox(height: 8),
@@ -622,10 +614,11 @@ class _TimelinePlace extends StatelessWidget {
                           place.memo!,
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.gray500,
-                            height: 1.35,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.gray500,
+                                height: 1.35,
+                              ),
                         ),
                       ],
                     ],
@@ -691,10 +684,8 @@ void _openPhotoViewer(
 ) {
   Navigator.of(context).push(
     MaterialPageRoute<void>(
-      builder: (_) => _RoutePhotoViewer(
-        photoPaths: photoPaths,
-        initialIndex: initialIndex,
-      ),
+      builder: (_) =>
+          _RoutePhotoViewer(photoPaths: photoPaths, initialIndex: initialIndex),
     ),
   );
 }
@@ -792,10 +783,8 @@ class _StoredRoutePhoto extends StatelessWidget {
             isLoading: true,
           );
         },
-        errorBuilder: (_, _, _) => _RoutePhotoPlaceholder(
-          width: width,
-          height: height,
-        ),
+        errorBuilder: (_, _, _) =>
+            _RoutePhotoPlaceholder(width: width, height: height),
       );
     }
 
@@ -803,10 +792,7 @@ class _StoredRoutePhoto extends StatelessWidget {
       future: _readRoutePhoto(path),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return _RoutePhotoPlaceholder(
-            width: width,
-            height: height,
-          );
+          return _RoutePhotoPlaceholder(width: width, height: height);
         }
         if (!snapshot.hasData) {
           return _RoutePhotoPlaceholder(

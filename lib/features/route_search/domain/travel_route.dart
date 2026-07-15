@@ -23,6 +23,8 @@ class TravelRoute {
     this.isCreatedByCurrentUser = false,
     this.visibility = RouteVisibility.public,
     this.publishedAt,
+    this.travelDate,
+    this.sourcePlannedRouteId,
   });
 
   final String id;
@@ -44,6 +46,8 @@ class TravelRoute {
   final bool isCreatedByCurrentUser;
   final RouteVisibility visibility;
   final DateTime? publishedAt;
+  final DateTime? travelDate;
+  final String? sourcePlannedRouteId;
 
   bool get isPublished => publishedAt != null;
   bool get isPublic => visibility == RouteVisibility.public;
@@ -70,6 +74,8 @@ class TravelRoute {
     bool? isCreatedByCurrentUser,
     RouteVisibility? visibility,
     Object? publishedAt = _keepValue,
+    Object? travelDate = _keepValue,
+    Object? sourcePlannedRouteId = _keepValue,
   }) {
     return TravelRoute(
       id: id ?? this.id,
@@ -103,6 +109,12 @@ class TravelRoute {
       publishedAt: identical(publishedAt, _keepValue)
           ? this.publishedAt
           : publishedAt as DateTime?,
+      travelDate: identical(travelDate, _keepValue)
+          ? this.travelDate
+          : travelDate as DateTime?,
+      sourcePlannedRouteId: identical(sourcePlannedRouteId, _keepValue)
+          ? this.sourcePlannedRouteId
+          : sourcePlannedRouteId as String?,
     );
   }
 }

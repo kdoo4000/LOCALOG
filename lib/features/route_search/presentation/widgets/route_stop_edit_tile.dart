@@ -9,11 +9,12 @@ class RouteStopEditTile extends StatelessWidget {
     required this.index,
     required this.title,
     required this.subtitle,
-    required this.onRemove,
+    this.onRemove,
     this.leading,
     this.onChoosePlace,
     this.onEdit,
     this.placeSelected = false,
+    this.showDragHandle = true,
   });
 
   final int index;
@@ -22,8 +23,9 @@ class RouteStopEditTile extends StatelessWidget {
   final Widget? leading;
   final VoidCallback? onChoosePlace;
   final VoidCallback? onEdit;
-  final VoidCallback onRemove;
+  final VoidCallback? onRemove;
   final bool placeSelected;
+  final bool showDragHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -103,22 +105,24 @@ class RouteStopEditTile extends StatelessWidget {
               color: Colors.black87,
               icon: const Icon(Icons.edit_outlined),
             ),
-          ReorderableDragStartListener(
-            index: index,
-            child: Tooltip(
-              message: context.strings.dragToReorder,
-              child: const Padding(
-                padding: EdgeInsets.all(8),
-                child: Icon(Icons.drag_handle, color: Colors.black54),
+          if (showDragHandle)
+            ReorderableDragStartListener(
+              index: index,
+              child: Tooltip(
+                message: context.strings.dragToReorder,
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(Icons.drag_handle, color: Colors.black54),
+                ),
               ),
             ),
-          ),
-          IconButton(
-            onPressed: onRemove,
-            tooltip: context.strings.delete,
-            color: Colors.black87,
-            icon: const Icon(Icons.delete_outline),
-          ),
+          if (onRemove != null)
+            IconButton(
+              onPressed: onRemove,
+              tooltip: context.strings.delete,
+              color: Colors.black87,
+              icon: const Icon(Icons.delete_outline),
+            ),
         ],
       ),
     );

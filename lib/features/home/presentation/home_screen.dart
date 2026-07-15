@@ -12,7 +12,16 @@ import '../../route_search/presentation/route_detail_screen.dart';
 import '../../route_search/presentation/widgets/route_card.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({
+    super.key,
+    this.isGuest = false,
+    this.onProfileTap,
+    this.onLoginTap,
+  });
+
+  final bool isGuest;
+  final VoidCallback? onProfileTap;
+  final VoidCallback? onLoginTap;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -45,10 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openRoute(TravelRoute route) {
     Navigator.of(context).pushNamed(
       RouteNames.routeDetail,
-      arguments: RouteDetailArguments(
-        routeId: route.id,
-        showSourceRoute: true,
-      ),
+      arguments: RouteDetailArguments(routeId: route.id, showSourceRoute: true),
     );
   }
 
@@ -62,6 +68,9 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(28, 18, 28, 28),
           children: [
             _HomeHeader(
+              isGuest: widget.isGuest,
+              onProfileTap: widget.onProfileTap,
+              onLoginTap: widget.onLoginTap,
               onDestinationTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(strings.destinationComing)),
@@ -79,9 +88,9 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 24),
             Text(
               strings.monthlyRecommend,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 12),
             FutureBuilder<List<TravelRoute>>(
@@ -107,11 +116,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: AppColors.sky,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Text('아직 공개된 루트가 없습니다.'),
+                    child: const Text('아직 공개된 로그가 없습니다.'),
                   );
                 }
                 final featured = routes.first;
-                return RouteCard(route: featured, onTap: () => _openRoute(featured));
+                return RouteCard(
+                  route: featured,
+                  onTap: () => _openRoute(featured),
+                );
               },
             ),
             const SizedBox(height: 28),
@@ -134,7 +146,7 @@ class _LoadError extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('추천 루트를 불러오지 못했습니다.'),
+          const Text('추천 로그를 불러오지 못했습니다.'),
           const SizedBox(height: 8),
           OutlinedButton(onPressed: onRetry, child: const Text('다시 시도')),
         ],
@@ -144,9 +156,17 @@ class _LoadError extends StatelessWidget {
 }
 
 class _HomeHeader extends StatelessWidget {
-  const _HomeHeader({required this.onDestinationTap});
+  const _HomeHeader({
+    required this.onDestinationTap,
+    required this.isGuest,
+    required this.onProfileTap,
+    required this.onLoginTap,
+  });
 
   final VoidCallback onDestinationTap;
+  final bool isGuest;
+  final VoidCallback? onProfileTap;
+  final VoidCallback? onLoginTap;
 
   @override
   Widget build(BuildContext context) {
@@ -168,17 +188,42 @@ class _HomeHeader extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            CircleAvatar(
-              radius: 21,
-              backgroundColor: AppColors.sky,
-              child: Text(
-                'P',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w900,
+            if (isGuest)
+              OutlinedButton(
+                onPressed: onLoginTap,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primaryBlue,
+                  side: const BorderSide(color: AppColors.primaryBlue),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                ),
+                child: const Text(
+                  '로그인',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              )
+            else
+              Semantics(
+                button: true,
+                label: '프로필 열기',
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onProfileTap,
+                  child: CircleAvatar(
+                    radius: 21,
+                    backgroundColor: AppColors.sky,
+                    child: Text(
+                      'P',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
+                  ),
+                ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 22),
@@ -197,7 +242,10 @@ class _HomeHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.accentLime,
                   borderRadius: BorderRadius.circular(999),
@@ -216,11 +264,11 @@ class _HomeHeader extends StatelessWidget {
               Text(
                 strings.homeHeroTitle,
                 style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      color: AppColors.white,
-                      fontSize: 30,
-                      fontWeight: FontWeight.w900,
-                      height: 1.08,
-                    ),
+                  color: AppColors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                  height: 1.08,
+                ),
               ),
             ],
           ),
@@ -239,22 +287,25 @@ class _HomeHeader extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               child: Row(
                 children: [
-                  const Icon(Icons.place_outlined, color: AppColors.primaryBlue),
+                  const Icon(
+                    Icons.place_outlined,
+                    color: AppColors.primaryBlue,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       strings.homeLocation,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   Text(
                     '변경',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: AppColors.primaryBlue,
-                          fontWeight: FontWeight.w900,
-                        ),
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ],
               ),
@@ -276,8 +327,16 @@ class _ShortcutGrid extends StatelessWidget {
     final strings = context.strings;
     final items = [
       (Icons.route_outlined, strings.shortcutRouteSearch, AppColors.sky),
-      (Icons.receipt_long_outlined, strings.shortcutScanReceipt, AppColors.yellow),
-      (Icons.add_photo_alternate_outlined, strings.shortcutUploadRoute, AppColors.mint),
+      (
+        Icons.receipt_long_outlined,
+        strings.shortcutScanReceipt,
+        AppColors.yellow,
+      ),
+      (
+        Icons.add_photo_alternate_outlined,
+        strings.shortcutUploadRoute,
+        AppColors.mint,
+      ),
       (Icons.map_outlined, strings.shortcutMapView, AppColors.sky),
     ];
 
@@ -309,9 +368,9 @@ class _ShortcutGrid extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: AppColors.ink,
-                            fontWeight: FontWeight.w900,
-                          ),
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ],
                 ),
@@ -341,9 +400,9 @@ class _PopularPlacesPanel extends StatelessWidget {
         children: [
           Text(
             '최근 인기 관광지',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 14),
           for (final place in places) ...[
@@ -355,16 +414,16 @@ class _PopularPlacesPanel extends StatelessWidget {
                     child: Text(
                       place.$1,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   Text(
                     place.$2,
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: AppColors.gray500,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      color: AppColors.gray500,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),

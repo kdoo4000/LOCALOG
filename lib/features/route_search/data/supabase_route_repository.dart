@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../services/supabase_initializer.dart';
 import '../domain/route_place.dart';
+import '../domain/route_download_template.dart';
 import '../domain/travel_route.dart';
 import 'route_repository.dart';
 
@@ -34,22 +35,27 @@ class SupabaseRouteRepository implements RouteRepository {
   Stream<void> get routesChanged => _changes.stream;
 
   static const _summarySelect = '''
-    id, owner_id, source_route_id, title, description, city, access_level,
+    id, owner_id, source_route_id, source_planned_route_id, travel_date,
+    title, description, city, access_level,
     cover_image_path, upvote_ratio, download_count,
     estimated_duration_minutes, published_at, is_download_copy,
     profiles!routes_owner_id_fkey(display_name),
-    route_tags(tag), route_places(id)
+    route_tags(tag),
+    route_places(
+      id, place_id, name, category, order_index, address, latitude, longitude
+    )
   ''';
 
   static const _detailSelect = '''
-    id, owner_id, source_route_id, title, description, city, access_level,
+    id, owner_id, source_route_id, source_planned_route_id, travel_date,
+    title, description, city, access_level,
     cover_image_path, upvote_ratio, download_count,
     estimated_duration_minutes, published_at, is_download_copy,
     profiles!routes_owner_id_fkey(display_name), route_tags(tag),
     route_likes(user_id, is_positive),
     route_photos(storage_path, place_id, order_index, captured_at),
     route_places(
-      id, name, category, order_index, address, visited_at, memo,
+      id, place_id, name, category, order_index, address, visited_at, memo,
       latitude, longitude, estimated_cost_won,
       route_place_purchases(name, amount_won, order_index)
     )
@@ -157,12 +163,12 @@ class SupabaseRouteRepository implements RouteRepository {
   @override
   Future<TravelRoute> setRouteVote(String routeId, bool? isPositive) async {
     _user;
-    await _client.rpc('set_route_vote', params: {
-      'p_route_id': routeId,
-      'p_is_positive': isPositive,
-    });
+    await _client.rpc(
+      'set_route_vote',
+      params: {'p_route_id': routeId, 'p_is_positive': isPositive},
+    );
     final updated = await _fetchRoute(routeId);
-    if (updated == null) throw StateError('투표한 루트를 다시 불러오지 못했습니다.');
+    if (updated == null) throw StateError('투표한 로그를 다시 불러오지 못했습니다.');
     _changes.add(null);
     return updated;
   }
@@ -175,9 +181,9 @@ class SupabaseRouteRepository implements RouteRepository {
   Future<TravelRoute> downloadRoute(String routeId) async {
     final source = await _fetchRoute(routeId);
     if (source == null || !source.isPublic) {
-      throw StateError('공개된 원본 루트를 찾을 수 없습니다.');
+      throw StateError('공개된 원본 로그를 찾을 수 없습니다.');
     }
-    final draft = source.copyWith(
+    final draft = withoutCreatorMediaAndPersonalData(source).copyWith(
       id: '',
       visibility: RouteVisibility.private,
       publishedAt: null,
@@ -193,12 +199,14 @@ class SupabaseRouteRepository implements RouteRepository {
       final saved = await _saveRevision(
         draft.copyWith(id: copyId),
         routeId: copyId,
-        copyRemotePhotos: true,
       );
-      await _client.from('route_downloads').upsert({
-        'route_id': source.id,
-        'user_id': _user.id,
-      }, onConflict: 'route_id,user_id', ignoreDuplicates: true);
+      await _client
+          .from('route_downloads')
+          .upsert(
+            {'route_id': source.id, 'user_id': _user.id},
+            onConflict: 'route_id,user_id',
+            ignoreDuplicates: true,
+          );
       _changes.add(null);
       return saved;
     } catch (_) {
@@ -211,12 +219,17 @@ class SupabaseRouteRepository implements RouteRepository {
     TravelRoute route, {
     required bool isDownloadCopy,
   }) async {
-    final isPublic = route.visibility == RouteVisibility.public;
+    final isPublic =
+        !isDownloadCopy && route.visibility == RouteVisibility.public;
     final row = await _client
         .from('routes')
         .insert({
           'owner_id': _user.id,
           'source_route_id': route.sourceRouteId,
+          'source_planned_route_id': route.sourcePlannedRouteId,
+          'travel_date': route.travelDate == null
+              ? null
+              : _dateValue(route.travelDate!),
           'title': route.title.trim(),
           'description': route.description.trim(),
           'city': route.city.trim(),
@@ -235,7 +248,6 @@ class SupabaseRouteRepository implements RouteRepository {
   Future<TravelRoute> _saveRevision(
     TravelRoute route, {
     required String routeId,
-    bool copyRemotePhotos = false,
   }) async {
     final uploadedPaths = <String>[];
     var revisionCommitted = false;
@@ -243,31 +255,35 @@ class SupabaseRouteRepository implements RouteRepository {
       final prepared = await _preparePhotos(
         route,
         routeId: routeId,
-        copyRemotePhotos: copyRemotePhotos,
         uploadedPaths: uploadedPaths,
       );
-      final isPublic = route.visibility == RouteVisibility.public;
-      final result = await _client.rpc('save_route_revision', params: {
-        'p_route_id': routeId,
-        'p_title': route.title.trim(),
-        'p_description': route.description.trim(),
-        'p_city': route.city.trim(),
-        'p_access_level': isPublic ? 'public' : 'private',
-        'p_estimated_duration_minutes': route.estimatedDurationMinutes,
-        'p_tags': route.tags,
-        'p_places': prepared.places,
-        'p_photos': prepared.photos,
-        'p_cover_image_path': prepared.coverPath,
-      });
+      final isPublic =
+          !route.isDownloadedCopy && route.visibility == RouteVisibility.public;
+      final result = await _client.rpc(
+        'save_route_revision',
+        params: {
+          'p_route_id': routeId,
+          'p_title': route.title.trim(),
+          'p_description': route.description.trim(),
+          'p_city': route.city.trim(),
+          'p_access_level': isPublic ? 'public' : 'private',
+          'p_estimated_duration_minutes': route.estimatedDurationMinutes,
+          'p_tags': route.tags,
+          'p_places': prepared.places,
+          'p_photos': prepared.photos,
+          'p_cover_image_path': prepared.coverPath,
+        },
+      );
       final response = _asMap(result);
       revisionCommitted = true;
-      final removedPaths = (response['removed_storage_paths'] as List? ?? const [])
-          .whereType<String>()
-          .toList();
+      final removedPaths =
+          (response['removed_storage_paths'] as List? ?? const [])
+              .whereType<String>()
+              .toList();
       await _removeStorageBestEffort(removedPaths);
       _changes.add(null);
       final saved = await _fetchRoute(routeId);
-      if (saved == null) throw StateError('저장한 루트를 다시 불러오지 못했습니다.');
+      if (saved == null) throw StateError('저장한 로그를 다시 불러오지 못했습니다.');
       return saved;
     } catch (_) {
       if (!revisionCommitted) {
@@ -280,13 +296,11 @@ class SupabaseRouteRepository implements RouteRepository {
   Future<_PreparedPhotos> _preparePhotos(
     TravelRoute route, {
     required String routeId,
-    required bool copyRemotePhotos,
     required List<String> uploadedPaths,
   }) async {
     final placePayloads = <Map<String, dynamic>>[];
     final photoPayloads = <Map<String, dynamic>>[];
     final urlToPath = <String, String>{};
-    final oldPathToNewPath = <String, String>{};
     var photoOrder = 0;
 
     for (var placeIndex = 0; placeIndex < route.places.length; placeIndex++) {
@@ -295,6 +309,9 @@ class SupabaseRouteRepository implements RouteRepository {
       placePayloads.add({
         'client_key': clientKey,
         'id': _isUuid(place.id) ? place.id : null,
+        'canonical_place_id': place.canonicalPlaceId,
+        'place_provider': place.placeProvider,
+        'external_place_id': place.externalPlaceId,
         'name': place.name.trim(),
         'category': place.category.trim(),
         'order_index': placeIndex,
@@ -318,16 +335,8 @@ class SupabaseRouteRepository implements RouteRepository {
             ? place.photoStoragePaths[photoIndex]
             : null;
         String path;
-        if (oldPath != null && oldPath.isNotEmpty && !copyRemotePhotos) {
+        if (oldPath != null && oldPath.isNotEmpty) {
           path = oldPath;
-        } else if (oldPath != null && oldPath.isNotEmpty) {
-          path = oldPathToNewPath[oldPath] ??
-              await _copyStoragePhoto(
-                oldPath,
-                routeId: routeId,
-                uploadedPaths: uploadedPaths,
-              );
-          oldPathToNewPath[oldPath] = path;
         } else if (url != null && url.isNotEmpty) {
           path = await _uploadLocalPhoto(
             url,
@@ -350,9 +359,7 @@ class SupabaseRouteRepository implements RouteRepository {
     String? coverPath;
     final oldCoverPath = route.coverImageStoragePath;
     if (oldCoverPath != null && oldCoverPath.isNotEmpty) {
-      coverPath = copyRemotePhotos
-          ? oldPathToNewPath[oldCoverPath]
-          : oldCoverPath;
+      coverPath = oldCoverPath;
     }
     coverPath ??= route.coverImageUrl == null
         ? null
@@ -384,20 +391,6 @@ class SupabaseRouteRepository implements RouteRepository {
     );
   }
 
-  Future<String> _copyStoragePhoto(
-    String sourcePath, {
-    required String routeId,
-    required List<String> uploadedPaths,
-  }) async {
-    final bytes = await _client.storage.from(_bucket).download(sourcePath);
-    return _uploadBytes(
-      bytes,
-      originalName: sourcePath.split('/').last,
-      routeId: routeId,
-      uploadedPaths: uploadedPaths,
-    );
-  }
-
   Future<String> _uploadBytes(
     Uint8List bytes, {
     required String originalName,
@@ -409,9 +402,12 @@ class SupabaseRouteRepository implements RouteRepository {
       throw StateError('사진은 한 장당 15MB 이하여야 합니다.');
     }
     final safeName = originalName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-    final path = '${_user.id}/$routeId/'
+    final path =
+        '${_user.id}/$routeId/'
         '${DateTime.now().microsecondsSinceEpoch}_$safeName';
-    await _client.storage.from(_bucket).uploadBinary(
+    await _client.storage
+        .from(_bucket)
+        .uploadBinary(
           path,
           bytes,
           fileOptions: FileOptions(
@@ -441,14 +437,25 @@ class SupabaseRouteRepository implements RouteRepository {
 
     final places = <RoutePlace>[];
     if (summary) {
-      final placeCount = (row['route_places'] as List? ?? const []).length;
-      for (var index = 0; index < placeCount; index++) {
+      final rawPlaces =
+          (row['route_places'] as List? ?? const <dynamic>[])
+              .map(_asMap)
+              .toList()
+            ..sort(
+              (a, b) =>
+                  _asInt(a['order_index']).compareTo(_asInt(b['order_index'])),
+            );
+      for (final place in rawPlaces) {
         places.add(
           RoutePlace(
-            id: 'summary-$index',
-            name: '',
-            category: '',
-            orderIndex: index,
+            id: place['id'] as String,
+            canonicalPlaceId: place['place_id'] as String?,
+            name: place['name'] as String? ?? '',
+            category: place['category'] as String? ?? '',
+            orderIndex: _asInt(place['order_index']),
+            address: place['address'] as String?,
+            latitude: _asDoubleOrNull(place['latitude']),
+            longitude: _asDoubleOrNull(place['longitude']),
           ),
         );
       }
@@ -461,24 +468,30 @@ class SupabaseRouteRepository implements RouteRepository {
           (photosByPlace[placeId] ??= []).add(photo);
         }
       }
-      final rawPlaces = (row['route_places'] as List? ?? const <dynamic>[])
-          .map(_asMap)
-          .toList()
-        ..sort((a, b) => _asInt(a['order_index']).compareTo(
-              _asInt(b['order_index']),
-            ));
+      final rawPlaces =
+          (row['route_places'] as List? ?? const <dynamic>[])
+              .map(_asMap)
+              .toList()
+            ..sort(
+              (a, b) =>
+                  _asInt(a['order_index']).compareTo(_asInt(b['order_index'])),
+            );
       for (final place in rawPlaces) {
         final id = place['id'] as String;
         final photos = photosByPlace[id] ?? <Map<String, dynamic>>[];
-        photos.sort((a, b) => _asInt(a['order_index']).compareTo(
-              _asInt(b['order_index']),
-            ));
-        final purchases = (place['route_place_purchases'] as List? ?? const [])
-            .map(_asMap)
-            .toList()
-          ..sort((a, b) => _asInt(a['order_index']).compareTo(
-                _asInt(b['order_index']),
-              ));
+        photos.sort(
+          (a, b) =>
+              _asInt(a['order_index']).compareTo(_asInt(b['order_index'])),
+        );
+        final purchases =
+            (place['route_place_purchases'] as List? ?? const [])
+                .map(_asMap)
+                .toList()
+              ..sort(
+                (a, b) => _asInt(
+                  a['order_index'],
+                ).compareTo(_asInt(b['order_index'])),
+              );
         final photoPaths = photos
             .map((photo) => photo['storage_path'])
             .whereType<String>()
@@ -486,6 +499,7 @@ class SupabaseRouteRepository implements RouteRepository {
         places.add(
           RoutePlace(
             id: id,
+            canonicalPlaceId: place['place_id'] as String?,
             name: place['name'] as String? ?? '',
             category: place['category'] as String? ?? '',
             orderIndex: _asInt(place['order_index']),
@@ -510,9 +524,7 @@ class SupabaseRouteRepository implements RouteRepository {
     }
 
     final profile = row['profiles'];
-    final author = profile is Map
-        ? profile['display_name'] as String?
-        : null;
+    final author = profile is Map ? profile['display_name'] as String? : null;
     final tags = (row['route_tags'] as List? ?? const [])
         .map(_asMap)
         .map((tag) => tag['tag'])
@@ -551,22 +563,26 @@ class SupabaseRouteRepository implements RouteRepository {
           ? RouteVisibility.private
           : RouteVisibility.public,
       publishedAt: _asDate(row['published_at']),
+      travelDate: _asDateOnly(row['travel_date']),
+      sourcePlannedRouteId: row['source_planned_route_id'] as String?,
     );
   }
 
   Future<Map<String, String>> _signedUrls(Iterable<String> paths) async {
     final unique = paths.toSet();
-    final entries = await Future.wait(unique.map((path) async {
-      try {
-        final url = await _client.storage
-            .from(_bucket)
-            .createSignedUrl(path, _signedUrlLifetime);
-        return MapEntry(path, url);
-      } catch (error) {
-        debugPrint('Failed to sign route photo $path: $error');
-        return null;
-      }
-    }));
+    final entries = await Future.wait(
+      unique.map((path) async {
+        try {
+          final url = await _client.storage
+              .from(_bucket)
+              .createSignedUrl(path, _signedUrlLifetime);
+          return MapEntry(path, url);
+        } catch (error) {
+          debugPrint('Failed to sign route photo $path: $error');
+          return null;
+        }
+      }),
+    );
     return Map.fromEntries(entries.whereType<MapEntry<String, String>>());
   }
 
@@ -581,7 +597,11 @@ class SupabaseRouteRepository implements RouteRepository {
         .map((photo) => photo['storage_path'])
         .whereType<String>()
         .toList();
-    await _client.from('routes').delete().eq('id', routeId).eq('owner_id', _user.id);
+    await _client
+        .from('routes')
+        .delete()
+        .eq('id', routeId)
+        .eq('owner_id', _user.id);
     await _removeStorageBestEffort(paths);
     _changes.add(null);
   }
@@ -598,9 +618,8 @@ class SupabaseRouteRepository implements RouteRepository {
   static Map<String, dynamic> _asMap(dynamic value) =>
       Map<String, dynamic>.from(value as Map);
 
-  static int _asInt(dynamic value) => value is num
-      ? value.toInt()
-      : int.tryParse(value?.toString() ?? '') ?? 0;
+  static int _asInt(dynamic value) =>
+      value is num ? value.toInt() : int.tryParse(value?.toString() ?? '') ?? 0;
 
   static int? _asIntOrNull(dynamic value) =>
       value == null ? null : _asInt(value);
@@ -612,13 +631,25 @@ class SupabaseRouteRepository implements RouteRepository {
   static double? _asDoubleOrNull(dynamic value) =>
       value == null ? null : _asDouble(value);
 
-  static DateTime? _asDate(dynamic value) => value == null
-      ? null
-      : DateTime.tryParse(value.toString())?.toLocal();
+  static DateTime? _asDate(dynamic value) =>
+      value == null ? null : DateTime.tryParse(value.toString())?.toLocal();
+
+  static DateTime? _asDateOnly(dynamic value) {
+    if (value == null) return null;
+    final parsed = DateTime.tryParse(value.toString());
+    return parsed == null
+        ? null
+        : DateTime(parsed.year, parsed.month, parsed.day);
+  }
+
+  static String _dateValue(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
 
   static bool _isUuid(String value) => RegExp(
-        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
-      ).hasMatch(value);
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+  ).hasMatch(value);
 
   static String _mimeTypeFor(String name) {
     final lower = name.toLowerCase();
