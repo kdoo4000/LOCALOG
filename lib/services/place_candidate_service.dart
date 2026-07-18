@@ -130,6 +130,11 @@ class PlaceCandidateService {
         'Place suggestion response did not include candidates.',
       );
     }
+    if (decoded['hasLocalSearch'] == false) {
+      return const PlaceCandidateResult.failure(
+        '네이버 장소 검색 API가 서버에 설정되지 않았습니다.',
+      );
+    }
 
     final candidates = candidatesJson
         .whereType<Map<String, dynamic>>()

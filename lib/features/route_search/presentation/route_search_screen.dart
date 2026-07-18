@@ -3,15 +3,22 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_language.dart';
-import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../trip_planning/domain/travel_plan.dart';
 import '../data/route_repository_provider.dart';
 import '../domain/travel_route.dart';
 import 'route_detail_screen.dart';
 import 'widgets/route_card.dart';
 
 class RouteSearchScreen extends StatefulWidget {
-  const RouteSearchScreen({super.key});
+  const RouteSearchScreen({
+    super.key,
+    this.targetPlanDayId,
+    this.initialKeyword = '',
+  });
+
+  final String? targetPlanDayId;
+  final String initialKeyword;
 
   @override
   State<RouteSearchScreen> createState() => _RouteSearchScreenState();
@@ -21,17 +28,20 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
   final _repository = routeRepository;
   late Future<List<TravelRoute>> _routesFuture;
   StreamSubscription<void>? _routesSubscription;
-  String _keyword = '';
+  late final TextEditingController _searchController;
+  late String _keyword;
   final Set<String> _selectedTagKeys = {};
 
   @override
   void initState() {
     super.initState();
-    _routesFuture = _repository.getRecommendedRoutes();
+    _keyword = widget.initialKeyword.trim();
+    _searchController = TextEditingController(text: _keyword);
+    _routesFuture = _loadRoutes();
     _routesSubscription = _repository.routesChanged.listen((_) {
       if (mounted) {
         setState(() {
-          _routesFuture = _repository.getRecommendedRoutes();
+          _routesFuture = _loadRoutes();
         });
       }
     });
@@ -40,14 +50,37 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
   @override
   void dispose() {
     _routesSubscription?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
-  void _openRoute(TravelRoute route) {
-    Navigator.of(context).pushNamed(
-      RouteNames.routeDetail,
-      arguments: RouteDetailArguments(routeId: route.id, showSourceRoute: true),
+  Future<void> _openRoute(TravelRoute route) async {
+    final imported = await Navigator.of(context).push<TravelPlan>(
+      MaterialPageRoute<TravelPlan>(
+        builder: (_) => RouteDetailScreen(
+          routeId: route.id,
+          showSourceRoute: true,
+          targetPlanDayId: widget.targetPlanDayId,
+        ),
+      ),
     );
+    if (imported != null && mounted && widget.targetPlanDayId != null) {
+      Navigator.of(context).pop(imported);
+    }
+  }
+
+  Future<List<TravelRoute>> _loadRoutes() async {
+    final recommended = await _repository.getRecommendedRoutes();
+    if (widget.targetPlanDayId == null) return recommended;
+
+    final mine = await _repository.getDownloadedRoutes();
+    final routesById = <String, TravelRoute>{
+      for (final route in mine)
+        if (route.isCreatedByCurrentUser && !route.isDownloadedCopy)
+          route.id: route,
+      for (final route in recommended) route.id: route,
+    };
+    return routesById.values.toList();
   }
 
   String _tagKey(AppStrings strings, String tag) {
@@ -64,7 +97,9 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
     return aliases.any(
       (term) =>
           route.title.toLowerCase().contains(term) ||
-          route.city.toLowerCase().contains(term) ||
+          route.effectiveRegions.any(
+            (region) => region.toLowerCase().contains(term),
+          ) ||
           route.description.toLowerCase().contains(term) ||
           route.tags.any((tag) => tag.toLowerCase().contains(term)) ||
           route.places.any(
@@ -101,7 +136,7 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
   }
 
   void _reloadRoutes() {
-    setState(() => _routesFuture = _repository.getRecommendedRoutes());
+    setState(() => _routesFuture = _loadRoutes());
   }
 
   @override
@@ -123,7 +158,9 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
               padding: const EdgeInsets.fromLTRB(28, 34, 28, 28),
               children: [
                 Text(
-                  strings.routeSearchTitle,
+                  widget.targetPlanDayId == null
+                      ? strings.routeSearchTitle
+                      : '로그에서 루트 찾기',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w900,
                     height: 1.12,
@@ -131,6 +168,7 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                 ),
                 const SizedBox(height: 20),
                 SearchBar(
+                  controller: _searchController,
                   hintText: strings.routeSearchHint,
                   leading: const Icon(Icons.search),
                   onChanged: (value) {

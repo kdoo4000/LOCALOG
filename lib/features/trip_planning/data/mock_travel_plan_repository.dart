@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../../route_search/data/mock_route_repository.dart';
 import '../../route_search/domain/route_download_template.dart';
+import '../../route_search/domain/route_place.dart';
 import '../domain/travel_plan.dart';
 import 'travel_plan_repository.dart';
 
@@ -10,7 +11,7 @@ class MockTravelPlanRepository implements TravelPlanRepository {
 
   static final instance = MockTravelPlanRepository._();
   static final _plans = <String, TravelPlan>{};
-  static final _changes = StreamController<void>.broadcast();
+  static final _changes = StreamController<void>.broadcast(sync: true);
   static int _sequence = 0;
 
   @override
@@ -29,16 +30,18 @@ class MockTravelPlanRepository implements TravelPlanRepository {
   @override
   Future<TravelPlan> createPlan({
     required String title,
-    required String regionName,
+    required List<String> regions,
     required DateTime startDate,
     required DateTime endDate,
   }) async {
     final id = 'mock-plan-${++_sequence}';
+    if (regions.isEmpty) throw ArgumentError('하나 이상의 지역이 필요합니다.');
     final dayCount = endDate.difference(startDate).inDays + 1;
     final plan = TravelPlan(
       id: id,
       title: title.trim(),
-      regionName: regionName.trim(),
+      regionName: regions.first.trim(),
+      regions: [...regions],
       startDate: _dateOnly(startDate),
       endDate: _dateOnly(endDate),
       days: [
@@ -53,6 +56,54 @@ class MockTravelPlanRepository implements TravelPlanRepository {
     _plans[id] = plan;
     _notify();
     return plan;
+  }
+
+  @override
+  Future<TravelPlan> updatePlan({
+    required String planId,
+    required String title,
+    required List<String> regions,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final current = _plans[planId];
+    if (current == null) throw StateError('여행 계획을 찾을 수 없습니다.');
+    final normalizedRegions = regions
+        .map((region) => region.trim())
+        .where((region) => region.isNotEmpty)
+        .toSet()
+        .toList();
+    if (normalizedRegions.isEmpty) {
+      throw ArgumentError('하나 이상의 지역이 필요합니다.');
+    }
+    final normalizedStart = _dateOnly(startDate);
+    final normalizedEnd = _dateOnly(endDate);
+    final dayCount = normalizedEnd.difference(normalizedStart).inDays + 1;
+    final days = <TravelPlanDay>[
+      for (var index = 0; index < dayCount; index++)
+        if (index < current.days.length)
+          current.days[index].copyWith(
+            date: normalizedStart.add(Duration(days: index)),
+            dayIndex: index,
+          )
+        else
+          TravelPlanDay(
+            id: '$planId-day-${++_sequence}',
+            date: normalizedStart.add(Duration(days: index)),
+            dayIndex: index,
+          ),
+    ];
+    final updated = current.copyWith(
+      title: title.trim(),
+      regionName: normalizedRegions.first,
+      regions: normalizedRegions,
+      startDate: normalizedStart,
+      endDate: normalizedEnd,
+      days: days,
+    );
+    _plans[planId] = updated;
+    _notify();
+    return updated;
   }
 
   @override
@@ -94,6 +145,39 @@ class MockTravelPlanRepository implements TravelPlanRepository {
   }
 
   @override
+  Future<PlannedRoute> createPlannedRoute({
+    required String planDayId,
+    required String title,
+    required String city,
+    required int estimatedDurationMinutes,
+    required List<RoutePlace> places,
+  }) async {
+    final entry = _planAndDay(planDayId);
+    final plannedRoute = PlannedRoute(
+      id: 'mock-planned-route-${++_sequence}',
+      title: title.trim(),
+      city: city.trim(),
+      estimatedDurationMinutes: estimatedDurationMinutes,
+      places: [
+        for (var index = 0; index < places.length; index++)
+          places[index].copyWith(
+            id: 'mock-planned-place-${_sequence}_$index',
+            orderIndex: index,
+          ),
+      ],
+    );
+    final updatedDay = entry.day.copyWith(plannedRoute: plannedRoute);
+    _plans[entry.plan.id] = entry.plan.copyWith(
+      days: [
+        for (final day in entry.plan.days)
+          if (day.id == planDayId) updatedDay else day,
+      ],
+    );
+    _notify();
+    return plannedRoute;
+  }
+
+  @override
   Future<PlannedRoute> updatePlannedRoute(PlannedRoute route) async {
     for (final plan in _plans.values) {
       final dayIndex = plan.days.indexWhere(
@@ -131,7 +215,7 @@ class MockTravelPlanRepository implements TravelPlanRepository {
   }
 
   @override
-  Future<void> linkCompletedLog({
+  Future<TravelPlan> linkCompletedLog({
     required String planDayId,
     required String logId,
   }) async {
@@ -139,8 +223,10 @@ class MockTravelPlanRepository implements TravelPlanRepository {
     final days = [...entry.plan.days];
     final index = days.indexWhere((day) => day.id == planDayId);
     days[index] = days[index].copyWith(completedLogId: logId);
-    _plans[entry.plan.id] = entry.plan.copyWith(days: days);
+    final updated = entry.plan.copyWith(days: days);
+    _plans[entry.plan.id] = updated;
     _notify();
+    return updated;
   }
 
   @override

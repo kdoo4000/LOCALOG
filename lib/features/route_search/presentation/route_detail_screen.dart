@@ -6,9 +6,12 @@ import '../../../core/l10n/app_language.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/region_chip_wrap.dart';
 import '../../../services/naver_static_map_service.dart';
 import '../../../services/supabase_initializer.dart';
 import '../../photo_location/naver_dynamic_map.dart';
+import '../../trip_planning/data/travel_plan_repository_provider.dart';
+import '../../trip_planning/domain/travel_plan.dart';
 import '../data/route_repository_provider.dart';
 import '../domain/route_place.dart';
 import '../domain/travel_route.dart';
@@ -20,10 +23,12 @@ class RouteDetailScreen extends StatefulWidget {
     super.key,
     required this.routeId,
     this.showSourceRoute = false,
+    this.targetPlanDayId,
   });
 
   final String routeId;
   final bool showSourceRoute;
+  final String? targetPlanDayId;
 
   @override
   State<RouteDetailScreen> createState() => _RouteDetailScreenState();
@@ -35,6 +40,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   late Future<_RouteDetailData?> _detailFuture;
   bool _didSetInitialScrollPosition = false;
   bool _isVoting = false;
+  bool _isImporting = false;
 
   @override
   void initState() {
@@ -89,10 +95,30 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       ).showSnackBar(const SnackBar(content: Text('여행을 계획하려면 로그인해 주세요.')));
       return;
     }
-    final imported = await Navigator.of(context).push<bool>(
+
+    final targetPlanDayId = widget.targetPlanDayId;
+    if (targetPlanDayId != null) {
+      setState(() => _isImporting = true);
+      try {
+        final updatedPlan = await travelPlanRepository.copyLogRouteToDay(
+          logId: route.id,
+          planDayId: targetPlanDayId,
+        );
+        if (mounted) Navigator.of(context).pop(updatedPlan);
+      } catch (error) {
+        if (!mounted) return;
+        setState(() => _isImporting = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('루트를 가져오지 못했습니다: $error')));
+      }
+      return;
+    }
+
+    final imported = await Navigator.of(context).push<TravelPlan>(
       MaterialPageRoute(builder: (_) => PlanRouteImportScreen(logId: route.id)),
     );
-    if (imported == true && mounted) {
+    if (imported != null && mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('루트를 여행 계획에 추가했습니다.')));
@@ -242,16 +268,27 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed: () => route.isCreatedByCurrentUser
-                                ? _openDownloadEdit(route)
-                                : _openPlanImport(route),
+                            onPressed: _isImporting
+                                ? null
+                                : () =>
+                                      route.isCreatedByCurrentUser &&
+                                          widget.targetPlanDayId == null
+                                      ? _openDownloadEdit(route)
+                                      : _openPlanImport(route),
                             icon: Icon(
-                              route.isCreatedByCurrentUser
+                              _isImporting
+                                  ? Icons.hourglass_top
+                                  : route.isCreatedByCurrentUser &&
+                                        widget.targetPlanDayId == null
                                   ? Icons.edit_note_outlined
                                   : Icons.route_outlined,
                             ),
                             label: Text(
-                              route.isCreatedByCurrentUser
+                              _isImporting
+                                  ? '루트를 가져오는 중...'
+                                  : widget.targetPlanDayId != null
+                                  ? '이 루트 가져오기'
+                                  : route.isCreatedByCurrentUser
                                   ? strings.editMyRoute
                                   : strings.downloadAndCustomize,
                             ),
@@ -289,10 +326,12 @@ class RouteDetailArguments {
   const RouteDetailArguments({
     required this.routeId,
     this.showSourceRoute = false,
+    this.targetPlanDayId,
   });
 
   final String routeId;
   final bool showSourceRoute;
+  final String? targetPlanDayId;
 }
 
 class _RouteDetailData {
@@ -504,26 +543,12 @@ class _DetailHero extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 7),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on_outlined,
-                      size: 17,
-                      color: AppColors.white,
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Text(
-                        route.city,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
+                RegionChipWrap(
+                  regions: route.effectiveRegions,
+                  foregroundColor: AppColors.white,
+                  backgroundColor: AppColors.ink.withValues(alpha: 0.28),
+                  borderColor: AppColors.white.withValues(alpha: 0.35),
+                  compact: true,
                 ),
               ],
             ),

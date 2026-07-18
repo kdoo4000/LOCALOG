@@ -5,10 +5,22 @@ import '../../core/theme/app_colors.dart';
 import '../../services/naver_static_map_service.dart';
 
 class NaverDynamicMap extends StatefulWidget {
-  const NaverDynamicMap({super.key, required this.points, this.height = 320});
+  const NaverDynamicMap({
+    super.key,
+    required this.points,
+    this.height = 320,
+    this.connectPoints = true,
+    this.selectedIndex,
+    this.onPointTap,
+    this.onCameraIdle,
+  });
 
   final List<MapPoint> points;
   final double height;
+  final bool connectPoints;
+  final int? selectedIndex;
+  final ValueChanged<int>? onPointTap;
+  final ValueChanged<MapPoint>? onCameraIdle;
 
   @override
   State<NaverDynamicMap> createState() => _NaverDynamicMapState();

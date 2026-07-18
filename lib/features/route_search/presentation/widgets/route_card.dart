@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/l10n/app_language.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/region_chip_wrap.dart';
 import '../../domain/travel_route.dart';
 
 class RouteCard extends StatelessWidget {
@@ -27,9 +28,9 @@ class RouteCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Container(
-            width: 52,
-            height: 52,
-            alignment: Alignment.center,
+              width: 52,
+              height: 52,
+              alignment: Alignment.center,
               color: AppColors.accentLime,
               child: _RouteCoverImage(
                 path: route.coverImageUrl,
@@ -62,6 +63,8 @@ class RouteCard extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+                const SizedBox(height: 8),
+                RegionChipWrap(regions: route.effectiveRegions, compact: true),
                 if (route.tags.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
@@ -83,10 +86,7 @@ class RouteCard extends StatelessWidget {
 }
 
 class _RouteCoverImage extends StatelessWidget {
-  const _RouteCoverImage({
-    required this.path,
-    required this.fallbackInitial,
-  });
+  const _RouteCoverImage({required this.path, required this.fallbackInitial});
 
   final String? path;
   final String fallbackInitial;

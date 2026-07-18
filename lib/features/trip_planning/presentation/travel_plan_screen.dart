@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/region_chip_wrap.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
 import 'travel_plan_create_screen.dart';
@@ -18,15 +19,18 @@ class TravelPlanScreen extends StatefulWidget {
 
 class _TravelPlanScreenState extends State<TravelPlanScreen> {
   final _repository = travelPlanRepository;
-  late Future<List<TravelPlan>> _plansFuture;
   StreamSubscription<void>? _subscription;
+  List<TravelPlan> _plans = const [];
+  Object? _loadError;
+  bool _loading = true;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _plansFuture = _repository.getPlans();
+    unawaited(_refreshPlans());
     _subscription = _repository.plansChanged.listen((_) {
-      if (mounted) _reload();
+      unawaited(_refreshPlans());
     });
   }
 
@@ -36,19 +40,52 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
     super.dispose();
   }
 
-  void _reload() => setState(() => _plansFuture = _repository.getPlans());
+  Future<void> _refreshPlans() async {
+    final generation = ++_loadGeneration;
+    try {
+      final plans = await _repository.getPlans();
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _plans = plans;
+        _loadError = null;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _loadError = error;
+        _loading = false;
+      });
+    }
+  }
+
+  void _showPlanImmediately(TravelPlan plan) {
+    _loadGeneration += 1;
+    final plans = [
+      plan,
+      for (final existing in _plans)
+        if (existing.id != plan.id) existing,
+    ]..sort((a, b) => a.startDate.compareTo(b.startDate));
+    setState(() {
+      _plans = plans;
+      _loadError = null;
+      _loading = false;
+    });
+  }
 
   Future<void> _createPlan() async {
     final plan = await Navigator.of(context).push<TravelPlan>(
       MaterialPageRoute(builder: (_) => const TravelPlanCreateScreen()),
     );
     if (plan == null || !mounted) return;
+    _showPlanImmediately(plan);
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => TravelPlanDetailScreen(planId: plan.id),
+        builder: (_) =>
+            TravelPlanDetailScreen(planId: plan.id, initialPlan: plan),
       ),
     );
-    if (mounted) _reload();
+    if (mounted) await _refreshPlans();
   }
 
   @override
@@ -57,8 +94,7 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
-            _reload();
-            await _plansFuture;
+            await _refreshPlans();
           },
           child: ListView(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
@@ -91,51 +127,45 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              FutureBuilder<List<TravelPlan>>(
-                future: _plansFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return _PlanMessage(
-                      message: '여행 계획을 불러오지 못했습니다.',
-                      actionLabel: '다시 시도',
-                      onAction: _reload,
-                    );
-                  }
-                  if (!snapshot.hasData) {
-                    return const Padding(
-                      padding: EdgeInsets.all(36),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  final plans = snapshot.data!;
-                  if (plans.isEmpty) {
-                    return _PlanMessage(
-                      message: '아직 여행 계획이 없어요.\n지역과 날짜부터 정해볼까요?',
-                      actionLabel: '첫 여행 계획 만들기',
-                      onAction: _createPlan,
-                    );
-                  }
-                  return Column(
-                    children: [
-                      for (final plan in plans) ...[
-                        _TravelPlanCard(
-                          plan: plan,
-                          onTap: () async {
-                            await Navigator.of(context).push<void>(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    TravelPlanDetailScreen(planId: plan.id),
+              if (_loading && _plans.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(36),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_loadError != null && _plans.isEmpty)
+                _PlanMessage(
+                  message: '여행 계획을 불러오지 못했습니다.',
+                  actionLabel: '다시 시도',
+                  onAction: () => unawaited(_refreshPlans()),
+                )
+              else if (_plans.isEmpty)
+                _PlanMessage(
+                  message: '아직 여행 계획이 없어요.\n지역과 날짜부터 정해볼까요?',
+                  actionLabel: '첫 여행 계획 만들기',
+                  onAction: _createPlan,
+                )
+              else
+                Column(
+                  children: [
+                    for (final plan in _plans) ...[
+                      _TravelPlanCard(
+                        plan: plan,
+                        onTap: () async {
+                          await Navigator.of(context).push<void>(
+                            MaterialPageRoute(
+                              builder: (_) => TravelPlanDetailScreen(
+                                planId: plan.id,
+                                initialPlan: plan,
                               ),
-                            );
-                            if (mounted) _reload();
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                      ],
+                            ),
+                          );
+                          if (mounted) await _refreshPlans();
+                        },
+                      ),
+                      const SizedBox(height: 12),
                     ],
-                  );
-                },
-              ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -181,13 +211,8 @@ class _TravelPlanCard extends StatelessWidget {
               context,
             ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 5),
-          Text(
-            plan.regionName,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.gray500),
-          ),
+          const SizedBox(height: 9),
+          RegionChipWrap(regions: plan.effectiveRegions, compact: true),
           const SizedBox(height: 14),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),

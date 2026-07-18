@@ -12,10 +12,13 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
 
   static final instance = SupabaseTravelPlanRepository._();
   final SupabaseClient _client = supabaseClient;
-  final StreamController<void> _changes = StreamController<void>.broadcast();
+  final StreamController<void> _changes = StreamController<void>.broadcast(
+    sync: true,
+  );
 
   static const _planSelect = '''
     id, title, region_name, start_date, end_date,
+    travel_plan_regions(region_name, order_index),
     travel_plan_days(
       id, travel_date, day_index, completed_log_id,
       planned_routes(
@@ -66,17 +69,25 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
   @override
   Future<TravelPlan> createPlan({
     required String title,
-    required String regionName,
+    required List<String> regions,
     required DateTime startDate,
     required DateTime endDate,
   }) async {
+    final normalizedRegions = regions
+        .map((region) => region.trim())
+        .where((region) => region.isNotEmpty)
+        .toSet()
+        .toList();
+    if (normalizedRegions.isEmpty) {
+      throw ArgumentError('하나 이상의 지역이 필요합니다.');
+    }
     final owner = _user;
     final row = await _client
         .from('travel_plans')
         .insert({
           'owner_id': owner.id,
           'title': title.trim(),
-          'region_name': regionName.trim(),
+          'region_name': normalizedRegions.first,
           'start_date': _dateValue(startDate),
           'end_date': _dateValue(endDate),
         })
@@ -84,6 +95,14 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
         .single();
     final planId = row['id'] as String;
     try {
+      await _client.from('travel_plan_regions').insert([
+        for (var index = 0; index < normalizedRegions.length; index++)
+          {
+            'plan_id': planId,
+            'region_name': normalizedRegions[index],
+            'order_index': index,
+          },
+      ]);
       final dayCount =
           _dateOnly(endDate).difference(_dateOnly(startDate)).inDays + 1;
       await _client.from('travel_plan_days').insert([
@@ -105,6 +124,31 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
   }
 
   @override
+  Future<TravelPlan> updatePlan({
+    required String planId,
+    required String title,
+    required List<String> regions,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    _user;
+    await _client.rpc(
+      'update_travel_plan',
+      params: {
+        'p_plan_id': planId,
+        'p_title': title.trim(),
+        'p_regions': regions,
+        'p_start_date': _dateValue(startDate),
+        'p_end_date': _dateValue(endDate),
+      },
+    );
+    final saved = await getPlanById(planId);
+    if (saved == null) throw StateError('여행 계획을 다시 불러오지 못했습니다.');
+    _changes.add(null);
+    return saved;
+  }
+
+  @override
   Future<TravelPlan> copyLogRouteToDay({
     required String logId,
     required String planDayId,
@@ -123,6 +167,64 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
     if (plan == null) throw StateError('여행 계획을 다시 불러오지 못했습니다.');
     _changes.add(null);
     return plan;
+  }
+
+  @override
+  Future<PlannedRoute> createPlannedRoute({
+    required String planDayId,
+    required String title,
+    required String city,
+    required int estimatedDurationMinutes,
+    required List<RoutePlace> places,
+  }) async {
+    _user;
+    if (title.trim().isEmpty || city.trim().isEmpty || places.isEmpty) {
+      throw ArgumentError('루트 이름, 지역, 한 곳 이상의 장소가 필요합니다.');
+    }
+
+    final row = await _client
+        .from('planned_routes')
+        .insert({
+          'plan_day_id': planDayId,
+          'title': title.trim(),
+          'city': city.trim(),
+          'estimated_duration_minutes': estimatedDurationMinutes,
+        })
+        .select('id')
+        .single();
+    final routeId = row['id'] as String;
+    try {
+      await _client.from('planned_route_places').insert([
+        for (var index = 0; index < places.length; index++)
+          {
+            'planned_route_id': routeId,
+            'place_id': _uuidOrNull(places[index].canonicalPlaceId),
+            'name': places[index].name.trim(),
+            'category': places[index].category.trim(),
+            'order_index': index,
+            'address': places[index].address,
+            'latitude': places[index].latitude,
+            'longitude': places[index].longitude,
+          },
+      ]);
+      final saved = await _client
+          .from('planned_routes')
+          .select('''
+            id, source_log_id, source_log_title, source_author_name,
+            title, city, estimated_duration_minutes,
+            planned_route_places(
+              id, place_id, name, category, order_index, address,
+              latitude, longitude
+            )
+          ''')
+          .eq('id', routeId)
+          .single();
+      _changes.add(null);
+      return _mapPlannedRoute(_asMap(saved));
+    } catch (_) {
+      await _client.from('planned_routes').delete().eq('id', routeId);
+      rethrow;
+    }
   }
 
   @override
@@ -173,7 +275,7 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
   }
 
   @override
-  Future<void> linkCompletedLog({
+  Future<TravelPlan> linkCompletedLog({
     required String planDayId,
     required String logId,
   }) async {
@@ -182,7 +284,15 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
         .from('travel_plan_days')
         .update({'completed_log_id': logId})
         .eq('id', planDayId);
+    final day = await _client
+        .from('travel_plan_days')
+        .select('plan_id')
+        .eq('id', planDayId)
+        .single();
+    final plan = await getPlanById(day['plan_id'] as String);
+    if (plan == null) throw StateError('여행 계획을 다시 불러오지 못했습니다.');
     _changes.add(null);
+    return plan;
   }
 
   @override
@@ -197,6 +307,12 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
   }
 
   TravelPlan _mapPlan(Map<String, dynamic> row) {
+    final regionRows =
+        (row['travel_plan_regions'] as List? ?? const []).map(_asMap).toList()
+          ..sort(
+            (a, b) =>
+                _asInt(a['order_index']).compareTo(_asInt(b['order_index'])),
+          );
     final dayRows =
         (row['travel_plan_days'] as List? ?? const []).map(_asMap).toList()
           ..sort(
@@ -206,6 +322,10 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
       id: row['id'] as String,
       title: row['title'] as String? ?? '',
       regionName: row['region_name'] as String? ?? '',
+      regions: regionRows
+          .map((region) => region['region_name'])
+          .whereType<String>()
+          .toList(),
       startDate: _parseDate(row['start_date']),
       endDate: _parseDate(row['end_date']),
       days: [
@@ -284,4 +404,14 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
       : value is num
       ? value.toDouble()
       : double.tryParse(value.toString());
+
+  static String? _uuidOrNull(String? value) {
+    if (value == null) return null;
+    final normalized = value.trim();
+    return RegExp(
+          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+        ).hasMatch(normalized)
+        ? normalized
+        : null;
+  }
 }

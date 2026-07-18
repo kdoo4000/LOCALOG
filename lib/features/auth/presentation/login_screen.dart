@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../services/supabase_initializer.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -123,6 +124,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: 156,
                     height: 156,
                     fit: BoxFit.contain,
+                    colorFilter: const ColorFilter.mode(
+                      AppColors.primaryBlue,
+                      BlendMode.srcIn,
+                    ),
                     semanticsLabel: 'LOCALOG',
                   ),
                 ),

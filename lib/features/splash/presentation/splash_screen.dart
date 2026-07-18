@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../services/supabase_initializer.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -21,7 +22,9 @@ class _SplashScreenState extends State<SplashScreen> {
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pushReplacementNamed(RouteNames.onboarding);
+      Navigator.of(context).pushReplacementNamed(
+        hasSupabaseSession ? RouteNames.main : RouteNames.onboarding,
+      );
     });
   }
 

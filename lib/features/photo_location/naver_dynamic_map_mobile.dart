@@ -6,12 +6,25 @@ import '../../core/l10n/app_language.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/naver_dynamic_map_initializer.dart';
 import '../../services/naver_static_map_service.dart';
+import 'route_marker_style.dart';
 
 class NaverDynamicMap extends StatefulWidget {
-  const NaverDynamicMap({super.key, required this.points, this.height = 320});
+  const NaverDynamicMap({
+    super.key,
+    required this.points,
+    this.height = 320,
+    this.connectPoints = true,
+    this.selectedIndex,
+    this.onPointTap,
+    this.onCameraIdle,
+  });
 
   final List<MapPoint> points;
   final double height;
+  final bool connectPoints;
+  final int? selectedIndex;
+  final ValueChanged<int>? onPointTap;
+  final ValueChanged<MapPoint>? onCameraIdle;
 
   @override
   State<NaverDynamicMap> createState() => _NaverDynamicMapState();
@@ -19,11 +32,14 @@ class NaverDynamicMap extends StatefulWidget {
 
 class _NaverDynamicMapState extends State<NaverDynamicMap> {
   NaverMapController? _controller;
+  int _renderGeneration = 0;
 
   @override
   void didUpdateWidget(covariant NaverDynamicMap oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_samePoints(oldWidget.points, widget.points)) {
+    if (!_samePoints(oldWidget.points, widget.points) ||
+        oldWidget.selectedIndex != widget.selectedIndex ||
+        oldWidget.connectPoints != widget.connectPoints) {
       _renderRoute();
     }
   }
@@ -70,6 +86,19 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
             _controller = controller;
             _renderRoute();
           },
+          onCameraIdle: () async {
+            final controller = _controller;
+            if (controller == null || widget.onCameraIdle == null) return;
+            final target = (await controller.getCameraPosition()).target;
+            if (mounted) {
+              widget.onCameraIdle!(
+                MapPoint(
+                  latitude: target.latitude,
+                  longitude: target.longitude,
+                ),
+              );
+            }
+          },
         ),
       ),
     );
@@ -81,10 +110,15 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
       return;
     }
 
+    final generation = ++_renderGeneration;
+
     await controller.clearOverlays();
+    if (!mounted || generation != _renderGeneration) {
+      return;
+    }
 
     final latLngs = widget.points.map(_toLatLng).toList();
-    if (latLngs.length > 1) {
+    if (widget.connectPoints && latLngs.length > 1) {
       await controller.addOverlay(
         NPolylineOverlay(
           id: 'route_line',
@@ -96,20 +130,32 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
     }
 
     for (var index = 0; index < latLngs.length; index += 1) {
-      await controller.addOverlay(
-        NMarker(
-          id: 'route_marker_$index',
-          position: latLngs[index],
-          caption: NOverlayCaption(
-            text: '${index + 1}',
-            textSize: 13,
-            color: AppColors.ink,
-            haloColor: AppColors.white,
-          ),
-          iconTintColor: AppColors.primaryBlue,
-          isForceShowCaption: true,
+      if (!mounted || generation != _renderGeneration) {
+        return;
+      }
+      final selected = widget.selectedIndex == index;
+      final icon = await NOverlayImage.fromWidget(
+        widget: _NumberedRouteMarker(
+          number: index + 1,
+          color: selected ? AppColors.primaryBlueDark : routeMarkerColor(index),
+          selected: selected,
         ),
+        size: Size.square(selected ? 42 : 36),
+        context: context,
       );
+      if (!mounted || generation != _renderGeneration) {
+        return;
+      }
+      final marker = NMarker(
+        id: 'route_marker_$index',
+        position: latLngs[index],
+        icon: icon,
+        size: Size.square(selected ? 42 : 36),
+        anchor: const NPoint(0.5, 0.5),
+        isForceShowIcon: true,
+      );
+      marker.setOnTapListener((_) => widget.onPointTap?.call(index));
+      await controller.addOverlay(marker);
     }
 
     if (latLngs.length == 1) {
@@ -144,6 +190,53 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
     }
 
     return true;
+  }
+}
+
+class _NumberedRouteMarker extends StatelessWidget {
+  const _NumberedRouteMarker({
+    required this.number,
+    required this.color,
+    required this.selected,
+  });
+
+  final int number;
+  final Color color;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: selected ? 42 : 36,
+      height: selected ? 42 : 36,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+        border: Border.all(
+          color: selected ? AppColors.accentLime : AppColors.white,
+          width: selected ? 3 : 2.5,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x42000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Text(
+        '$number',
+        maxLines: 1,
+        style: TextStyle(
+          color: AppColors.white,
+          fontFamily: 'Pretendard',
+          fontSize: number > 99 ? 10 : 12,
+          fontWeight: FontWeight.w700,
+          height: 1,
+        ),
+      ),
+    );
   }
 }
 

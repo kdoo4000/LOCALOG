@@ -3,20 +3,36 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../route_search/presentation/region_picker_screen.dart';
 import '../data/travel_plan_repository_provider.dart';
+import '../domain/travel_plan.dart';
 
 class TravelPlanCreateScreen extends StatefulWidget {
-  const TravelPlanCreateScreen({super.key});
+  const TravelPlanCreateScreen({super.key, this.plan});
+
+  final TravelPlan? plan;
 
   @override
   State<TravelPlanCreateScreen> createState() => _TravelPlanCreateScreenState();
 }
 
 class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
-  final _titleController = TextEditingController();
+  late final TextEditingController _titleController;
   final _repository = travelPlanRepository;
   DateTimeRange? _dateRange;
-  String? _region;
+  List<String> _regions = const [];
   bool _saving = false;
+
+  bool get _isEditing => widget.plan != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final plan = widget.plan;
+    _titleController = TextEditingController(text: plan?.title);
+    _regions = plan?.effectiveRegions ?? const [];
+    if (plan != null) {
+      _dateRange = DateTimeRange(start: plan.startDate, end: plan.endDate);
+    }
+  }
 
   @override
   void dispose() {
@@ -25,20 +41,31 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
   }
 
   Future<void> _selectRegion() async {
-    final selected = await Navigator.of(context).push<String>(
+    final selected = await Navigator.of(context).push<List<String>>(
       MaterialPageRoute(
-        builder: (_) => RegionPickerScreen(initialRegion: _region),
+        builder: (_) => RegionPickerScreen(initialRegions: _regions),
       ),
     );
-    if (selected != null && mounted) setState(() => _region = selected);
+    if (selected != null && mounted) setState(() => _regions = selected);
   }
 
   Future<void> _selectDates() async {
     final now = DateTime.now();
+    final existingRange = _dateRange;
+    final defaultFirstDate = DateTime(now.year - 1);
+    final defaultLastDate = DateTime(now.year + 3);
+    final firstDate =
+        existingRange != null && existingRange.start.isBefore(defaultFirstDate)
+        ? existingRange.start
+        : defaultFirstDate;
+    final lastDate =
+        existingRange != null && existingRange.end.isAfter(defaultLastDate)
+        ? existingRange.end
+        : defaultLastDate;
     final selected = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 3),
+      firstDate: firstDate,
+      lastDate: lastDate,
       initialDateRange: _dateRange,
       helpText: '여행 날짜 선택',
       saveText: '선택',
@@ -54,32 +81,45 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
   }
 
   Future<void> _save() async {
-    final region = _region;
     final range = _dateRange;
-    if (region == null || range == null) {
+    if (_regions.isEmpty || range == null) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('여행 지역과 날짜를 모두 선택해 주세요.')));
       return;
     }
+    final primaryProvince = _regions.first.split(' > ').first;
     final title = _titleController.text.trim().isEmpty
-        ? '${region.split(' > ').first} 여행'
+        ? _regions.length == 1
+              ? '$primaryProvince 여행'
+              : '$primaryProvince 외 ${_regions.length - 1}곳 여행'
         : _titleController.text.trim();
     setState(() => _saving = true);
     try {
-      final plan = await _repository.createPlan(
-        title: title,
-        regionName: region,
-        startDate: range.start,
-        endDate: range.end,
-      );
+      final existingPlan = widget.plan;
+      final plan = existingPlan == null
+          ? await _repository.createPlan(
+              title: title,
+              regions: _regions,
+              startDate: range.start,
+              endDate: range.end,
+            )
+          : await _repository.updatePlan(
+              planId: existingPlan.id,
+              title: title,
+              regions: _regions,
+              startDate: range.start,
+              endDate: range.end,
+            );
       if (mounted) Navigator.of(context).pop(plan);
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('여행 계획을 만들지 못했습니다: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('여행 계획을 ${_isEditing ? '수정' : '만들'}지 못했습니다: $error'),
+        ),
+      );
     }
   }
 
@@ -88,20 +128,22 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
     final range = _dateRange;
     final dayCount = range == null ? null : range.duration.inDays + 1;
     return Scaffold(
-      appBar: AppBar(title: const Text('새 여행 계획')),
+      appBar: AppBar(title: Text(_isEditing ? '여행 계획 수정' : '새 여행 계획')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
             Text(
-              '어디에서 며칠을 보낼까요?',
+              _isEditing ? '여행 계획을 다듬어볼까요?' : '어디에서 며칠을 보낼까요?',
               style: Theme.of(
                 context,
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
             Text(
-              '선택한 날짜마다 하루치 루트를 하나씩 계획할 수 있어요.',
+              _isEditing
+                  ? '기간을 줄이면 범위 밖 일정과 루트는 삭제돼요.'
+                  : '선택한 날짜마다 하루치 루트를 하나씩 계획할 수 있어요.',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: AppColors.gray500),
@@ -116,17 +158,12 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
               ),
             ),
             const SizedBox(height: 14),
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-              shape: RoundedRectangleBorder(
-                side: const BorderSide(color: AppColors.gray200),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              leading: const Icon(Icons.location_on_outlined),
-              title: Text(_region ?? '지역 선택'),
-              subtitle: _region == null ? const Text('시·도와 시·군·구') : null,
-              trailing: const Icon(Icons.chevron_right),
+            RegionSelectionField(
+              regions: _regions,
               onTap: _selectRegion,
+              helperText: _regions.isEmpty
+                  ? '여러 시·도와 시·군·구를 선택할 수 있어요.'
+                  : '${_regions.length}개 지역 선택됨',
             ),
             const SizedBox(height: 14),
             ListTile(
@@ -156,7 +193,7 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.add_rounded),
-              label: const Text('여행 계획 만들기'),
+              label: Text(_isEditing ? '변경사항 저장' : '여행 계획 만들기'),
             ),
           ],
         ),

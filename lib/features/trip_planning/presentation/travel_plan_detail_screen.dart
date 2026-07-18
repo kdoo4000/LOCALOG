@@ -5,17 +5,28 @@ import 'package:flutter/material.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
-import '../../photo_location/photo_location_page.dart';
+import '../../../core/widgets/region_chip_wrap.dart';
+import '../../../services/naver_static_map_service.dart';
+import '../../photo_location/naver_dynamic_map.dart';
 import '../../route_search/presentation/route_detail_screen.dart';
 import '../../route_search/presentation/route_search_screen.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
 import 'planned_route_edit_screen.dart';
+import 'planned_route_log_create_screen.dart';
+import 'travel_plan_create_screen.dart';
 
 class TravelPlanDetailScreen extends StatefulWidget {
-  const TravelPlanDetailScreen({super.key, required this.planId});
+  const TravelPlanDetailScreen({
+    super.key,
+    required this.planId,
+    this.initialPlan,
+    this.initialDayIndex = 0,
+  });
 
   final String planId;
+  final TravelPlan? initialPlan;
+  final int initialDayIndex;
 
   @override
   State<TravelPlanDetailScreen> createState() => _TravelPlanDetailScreenState();
@@ -23,17 +34,24 @@ class TravelPlanDetailScreen extends StatefulWidget {
 
 class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
   final _repository = travelPlanRepository;
-  late Future<TravelPlan?> _planFuture;
   StreamSubscription<void>? _subscription;
-  int _selectedDayIndex = 0;
+  TravelPlan? _plan;
+  Object? _loadError;
+  bool _loading = false;
+  bool _deletingPlan = false;
+  int _loadGeneration = 0;
+  late int _selectedDayIndex;
 
   @override
   void initState() {
     super.initState();
-    _planFuture = _repository.getPlanById(widget.planId);
-    _subscription = _repository.plansChanged.listen((_) {
-      if (mounted) _reload();
-    });
+    _selectedDayIndex = widget.initialDayIndex;
+    _plan = widget.initialPlan;
+    _loading = _plan == null;
+    if (_plan == null) {
+      unawaited(_refreshPlan());
+    }
+    _listenForPlanChanges();
   }
 
   @override
@@ -42,10 +60,57 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
     super.dispose();
   }
 
-  void _reload() =>
-      setState(() => _planFuture = _repository.getPlanById(widget.planId));
+  Future<void> _refreshPlan() async {
+    final generation = ++_loadGeneration;
+    try {
+      final plan = await _repository.getPlanById(widget.planId);
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _plan = plan;
+        _loadError = null;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _loadError = error;
+        _loading = false;
+      });
+    }
+  }
+
+  void _showPlan(TravelPlan plan) {
+    if (!mounted) return;
+    _loadGeneration += 1;
+    setState(() {
+      _plan = plan;
+      _loadError = null;
+      _loading = false;
+    });
+  }
+
+  void _listenForPlanChanges() {
+    _subscription ??= _repository.plansChanged.listen((_) {
+      if (!_deletingPlan) unawaited(_refreshPlan());
+    });
+  }
+
+  TravelPlan _replaceDayRoute(
+    TravelPlan plan,
+    String dayId,
+    PlannedRoute? route,
+  ) {
+    return plan.copyWith(
+      days: [
+        for (final day in plan.days)
+          if (day.id == dayId) day.copyWith(plannedRoute: route) else day,
+      ],
+    );
+  }
 
   Future<void> _deletePlan(TravelPlan plan) async {
+    if (_deletingPlan) return;
+    final detailRoute = ModalRoute.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -64,18 +129,58 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
       ),
     );
     if (confirmed != true) return;
-    await _repository.deletePlan(plan.id);
-    if (mounted) Navigator.of(context).pop();
+    setState(() => _deletingPlan = true);
+    final subscription = _subscription;
+    _subscription = null;
+    if (subscription != null) unawaited(subscription.cancel());
+    try {
+      await _repository.deletePlan(plan.id);
+      if (!mounted) return;
+      final navigator = Navigator.of(context);
+      if (detailRoute != null && !detailRoute.isFirst) {
+        navigator.removeRoute(detailRoute, true);
+      } else {
+        setState(() {
+          _plan = null;
+          _loading = false;
+          _loadError = null;
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _deletingPlan = false);
+      _listenForPlanChanges();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('여행 계획을 삭제하지 못했습니다: $error')));
+    }
   }
 
-  Future<void> _editRoute(PlannedRoute route) async {
-    await Navigator.of(context).push<PlannedRoute>(
+  Future<void> _editPlan(TravelPlan plan) async {
+    final updated = await Navigator.of(context).push<TravelPlan>(
+      MaterialPageRoute(builder: (_) => TravelPlanCreateScreen(plan: plan)),
+    );
+    if (updated != null) _showPlan(updated);
+  }
+
+  Future<void> _editRoute(
+    TravelPlan plan,
+    TravelPlanDay day,
+    PlannedRoute route,
+  ) async {
+    final updated = await Navigator.of(context).push<PlannedRoute>(
       MaterialPageRoute(builder: (_) => PlannedRouteEditScreen(route: route)),
     );
-    if (mounted) _reload();
+    if (updated != null) {
+      _showPlan(_replaceDayRoute(plan, day.id, updated));
+    }
   }
 
-  Future<void> _removeRoute(PlannedRoute route) async {
+  Future<void> _removeRoute(
+    TravelPlan plan,
+    TravelPlanDay day,
+    PlannedRoute route,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -95,33 +200,50 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
     );
     if (confirmed != true) return;
     await _repository.removePlannedRoute(route.id);
+    _showPlan(_replaceDayRoute(plan, day.id, null));
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<TravelPlan?>(
-      future: _planFuture,
-      builder: (context, snapshot) {
-        final plan = snapshot.data;
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(plan?.title ?? '여행 계획'),
-            actions: [
-              if (plan != null)
-                IconButton(
-                  tooltip: '계획 삭제',
-                  onPressed: () => _deletePlan(plan),
-                  icon: const Icon(Icons.delete_outline),
-                ),
-            ],
-          ),
-          body: !snapshot.hasData
-              ? snapshot.connectionState == ConnectionState.done
-                    ? const Center(child: Text('여행 계획을 찾을 수 없습니다.'))
-                    : const Center(child: CircularProgressIndicator())
-              : _buildPlan(context, plan!),
-        );
-      },
+    final plan = _plan;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(plan?.title ?? '여행 계획'),
+        actions: [
+          if (plan != null)
+            IconButton(
+              tooltip: '계획 수정',
+              onPressed: _deletingPlan ? null : () => _editPlan(plan),
+              icon: const Icon(Icons.edit_outlined),
+            ),
+          if (plan != null)
+            IconButton(
+              tooltip: '계획 삭제',
+              onPressed: _deletingPlan ? null : () => _deletePlan(plan),
+              icon: _deletingPlan
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.delete_outline),
+            ),
+        ],
+      ),
+      body: plan != null
+          ? _buildPlan(context, plan)
+          : _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _loadError != null
+          ? Center(
+              child: OutlinedButton(
+                onPressed: () {
+                  setState(() => _loading = true);
+                  unawaited(_refreshPlan());
+                },
+                child: const Text('여행 계획 다시 불러오기'),
+              ),
+            )
+          : const Center(child: Text('여행 계획을 찾을 수 없습니다.')),
     );
   }
 
@@ -133,12 +255,14 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
         children: [
           Text(
-            '${plan.regionName} · ${plan.nightCount}박 ${plan.dayCount}일',
+            '${plan.nightCount}박 ${plan.dayCount}일',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.gray500,
               fontWeight: FontWeight.w700,
             ),
           ),
+          const SizedBox(height: 9),
+          RegionChipWrap(regions: plan.effectiveRegions),
           const SizedBox(height: 18),
           SizedBox(
             height: 48,
@@ -169,18 +293,35 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
           if (day.plannedRoute == null)
             _EmptyDay(
               onFindLog: () async {
-                await Navigator.of(context).push<void>(
-                  MaterialPageRoute(builder: (_) => const RouteSearchScreen()),
+                final updatedPlan = await Navigator.of(context)
+                    .push<TravelPlan>(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            RouteSearchScreen(targetPlanDayId: day.id),
+                      ),
+                    );
+                if (updatedPlan != null) _showPlan(updatedPlan);
+              },
+              onCreateRoute: () async {
+                final created = await Navigator.of(context).push<PlannedRoute>(
+                  MaterialPageRoute(
+                    builder: (_) => PlannedRouteEditScreen.create(
+                      planDayId: day.id,
+                      initialCity: plan.effectiveRegions.first,
+                    ),
+                  ),
                 );
-                if (mounted) _reload();
+                if (created != null) {
+                  _showPlan(_replaceDayRoute(plan, day.id, created));
+                }
               },
             )
           else
             _PlannedRouteCard(
               day: day,
               route: day.plannedRoute!,
-              onEdit: () => _editRoute(day.plannedRoute!),
-              onRemove: () => _removeRoute(day.plannedRoute!),
+              onEdit: () => _editRoute(plan, day, day.plannedRoute!),
+              onRemove: () => _removeRoute(plan, day, day.plannedRoute!),
               onOpenSource: day.plannedRoute!.sourceLogId == null
                   ? null
                   : () => Navigator.of(context).pushNamed(
@@ -191,15 +332,17 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
                       ),
                     ),
               onCreateLog: () async {
-                await Navigator.of(context).push<void>(
-                  MaterialPageRoute(
-                    builder: (_) => PhotoLocationPage(
-                      plannedRoute: day.plannedRoute,
-                      planDay: day,
-                    ),
-                  ),
-                );
-                if (mounted) _reload();
+                final updatedPlan = await Navigator.of(context)
+                    .push<TravelPlan>(
+                      MaterialPageRoute(
+                        builder: (_) => PlannedRouteLogCreateScreen(
+                          route: day.plannedRoute!,
+                          day: day,
+                          regions: plan.effectiveRegions,
+                        ),
+                      ),
+                    );
+                if (updatedPlan != null) _showPlan(updatedPlan);
               },
               onOpenCompletedLog: day.completedLogId == null
                   ? null
@@ -215,9 +358,10 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
 }
 
 class _EmptyDay extends StatelessWidget {
-  const _EmptyDay({required this.onFindLog});
+  const _EmptyDay({required this.onFindLog, required this.onCreateRoute});
 
   final VoidCallback onFindLog;
+  final VoidCallback onCreateRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -233,7 +377,7 @@ class _EmptyDay extends StatelessWidget {
           const Text('아직 이 날의 루트가 없어요.'),
           const SizedBox(height: 6),
           Text(
-            '공개 로그에서 마음에 드는 루트를 찾아 계획에 가져오세요.',
+            '다른 로그의 루트를 참고하거나 방문할 장소를 직접 구성할 수 있어요.',
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
@@ -244,6 +388,15 @@ class _EmptyDay extends StatelessWidget {
             onPressed: onFindLog,
             icon: const Icon(Icons.search),
             label: const Text('로그에서 루트 찾기'),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onCreateRoute,
+              icon: const Icon(Icons.edit_road_outlined),
+              label: const Text('직접 루트 만들기'),
+            ),
           ),
         ],
       ),
@@ -272,6 +425,14 @@ class _PlannedRouteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sortedPlaces = [...route.places]
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    final mapPoints = [
+      for (final place in sortedPlaces)
+        if (place.latitude != null && place.longitude != null)
+          MapPoint(latitude: place.latitude!, longitude: place.longitude!),
+    ];
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -299,11 +460,15 @@ class _PlannedRouteCard extends StatelessWidget {
             ],
           ),
           Text(
-            '${route.city} · ${route.places.length}곳',
+            '${compactRegionLabel(route.city)} · ${sortedPlaces.length}곳',
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: AppColors.gray500),
           ),
+          if (mapPoints.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            NaverDynamicMap(points: mapPoints, height: 260),
+          ],
           if (route.sourceAuthorName != null) ...[
             const SizedBox(height: 12),
             InkWell(
@@ -331,7 +496,7 @@ class _PlannedRouteCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 18),
-          for (var index = 0; index < route.places.length; index++) ...[
+          for (var index = 0; index < sortedPlaces.length; index++) ...[
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -353,12 +518,12 @@ class _PlannedRouteCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        route.places[index].name,
+                        sortedPlaces[index].name,
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
-                      if (route.places[index].address != null)
+                      if (sortedPlaces[index].address != null)
                         Text(
-                          route.places[index].address!,
+                          sortedPlaces[index].address!,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: AppColors.gray500),
                         ),
@@ -367,7 +532,7 @@ class _PlannedRouteCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (index != route.places.length - 1) const SizedBox(height: 12),
+            if (index != sortedPlaces.length - 1) const SizedBox(height: 12),
           ],
           const SizedBox(height: 20),
           SizedBox(

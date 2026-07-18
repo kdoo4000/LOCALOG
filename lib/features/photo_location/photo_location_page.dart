@@ -188,7 +188,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       final route = _buildRouteFromPhotos(
         draft.title,
         draft.description,
-        draft.city,
+        draft.regions,
         draft.tags,
         draft.visibility,
         draft.coverImagePath,
@@ -233,7 +233,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
   TravelRoute _buildRouteFromPhotos(
     String title,
     String description,
-    String city,
+    List<String> regions,
     List<String> tags,
     RouteVisibility visibility,
     String coverImagePath,
@@ -249,7 +249,8 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       id: routeId,
       title: title,
       description: description,
-      city: city,
+      city: regions.first,
+      regions: regions,
       authorName: context.strings.me,
       places: places,
       tags: tags,
@@ -479,7 +480,9 @@ class _SaveRoutePanel extends StatelessWidget {
                   _displayGroupLabel(context, group),
                 ),
             initialDescription: '',
-            initialCity: plannedRoute?.city ?? '',
+            initialRegions: plannedRoute?.city.isNotEmpty == true
+                ? [plannedRoute!.city]
+                : const [],
             initialTags: [context.strings.photoTag, context.strings.localTag],
             entries: group.photos,
             isSaving: isSaving,
@@ -497,7 +500,7 @@ class _RouteDraftResult {
   const _RouteDraftResult({
     required this.title,
     required this.description,
-    required this.city,
+    required this.regions,
     required this.tags,
     required this.visibility,
     required this.coverImagePath,
@@ -506,7 +509,7 @@ class _RouteDraftResult {
 
   final String title;
   final String description;
-  final String city;
+  final List<String> regions;
   final List<String> tags;
   final RouteVisibility visibility;
   final String coverImagePath;
@@ -518,7 +521,7 @@ class _RouteDraftInlineEditor extends StatefulWidget {
     super.key,
     required this.initialTitle,
     required this.initialDescription,
-    required this.initialCity,
+    required this.initialRegions,
     required this.initialTags,
     required this.entries,
     required this.isSaving,
@@ -529,7 +532,7 @@ class _RouteDraftInlineEditor extends StatefulWidget {
 
   final String initialTitle;
   final String initialDescription;
-  final String initialCity;
+  final List<String> initialRegions;
   final List<String> initialTags;
   final List<_PhotoEntry> entries;
   final bool isSaving;
@@ -545,10 +548,10 @@ class _RouteDraftInlineEditor extends StatefulWidget {
 class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _cityController;
   late final TextEditingController _tagsController;
   late List<_PhotoEntry> _entries;
   late List<String> _tags;
+  late List<String> _regions;
   RouteVisibility _visibility = RouteVisibility.public;
   bool _regionSelectedManually = false;
   String? _selectedCoverEntryId;
@@ -561,9 +564,9 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
     _descriptionController = TextEditingController(
       text: widget.initialDescription,
     );
-    _cityController = TextEditingController(text: widget.initialCity);
     _tagsController = TextEditingController();
     _tags = [...widget.initialTags];
+    _regions = [...widget.initialRegions];
     _entries = [...widget.entries];
     _selectedCoverEntryId = _entries.firstOrNull?.id;
     _applySuggestedRegion();
@@ -573,7 +576,6 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _cityController.dispose();
     _tagsController.dispose();
     super.dispose();
   }
@@ -643,15 +645,18 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
     final description = _descriptionController.text.trim().isEmpty
         ? widget.initialDescription
         : _descriptionController.text.trim();
-    final city = _cityController.text.trim().isEmpty
-        ? context.strings.myTrip
-        : _cityController.text.trim();
+    if (_regions.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('지역을 하나 이상 선택해 주세요.')));
+      return;
+    }
     _addTag();
     onSave(
       _RouteDraftResult(
         title: title,
         description: description,
-        city: city,
+        regions: _regions,
         tags: _tags,
         visibility: _visibility,
         coverImagePath:
@@ -706,28 +711,28 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
   }
 
   Future<void> _selectRegion() async {
-    final region = await Navigator.of(context).push<String>(
+    final regions = await Navigator.of(context).push<List<String>>(
       MaterialPageRoute(
-        builder: (_) => RegionPickerScreen(initialRegion: _cityController.text),
+        builder: (_) => RegionPickerScreen(initialRegions: _regions),
       ),
     );
-    if (region != null && mounted) {
+    if (regions != null && mounted) {
       setState(() {
         _regionSelectedManually = true;
-        _cityController.text = region;
+        _regions = regions;
       });
     }
   }
 
   void _applySuggestedRegion() {
     if (_regionSelectedManually) return;
-    final region = inferMostFrequentRegion(
+    final regions = inferRegionsFromAddresses(
       _entries
           .map((entry) => entry.selectedPlace?.address ?? '')
           .where((address) => address.isNotEmpty),
     );
-    if (region != null) {
-      _cityController.text = region;
+    if (regions.isNotEmpty) {
+      _regions = regions;
     }
   }
 
@@ -817,17 +822,11 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
           maxLines: 4,
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: _cityController,
-          readOnly: true,
+        RegionSelectionField(
+          regions: _regions,
           onTap: _selectRegion,
-          decoration: const InputDecoration(
-            labelText: '지역',
-            hintText: '시·도와 시·군·구 선택',
-            helperText: '사진에서 가장 많이 확인된 지역을 자동 추천해요.',
-            suffixIcon: Icon(Icons.chevron_right),
-            border: OutlineInputBorder(),
-          ),
+          emptyText: '시·도와 시·군·구 선택',
+          helperText: '사진 속 장소가 속한 모든 지역을 자동 선택해요.',
         ),
         const SizedBox(height: 12),
         Row(

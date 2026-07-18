@@ -2,16 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../models/place_candidate.dart';
-import '../../../services/place_candidate_service.dart';
 import '../../route_search/domain/route_place.dart';
 import '../../route_search/presentation/widgets/route_stop_edit_tile.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
+import 'place_search_map_screen.dart';
 
 class PlannedRouteEditScreen extends StatefulWidget {
-  const PlannedRouteEditScreen({super.key, required this.route});
+  const PlannedRouteEditScreen({super.key, required this.route})
+    : planDayId = null,
+      initialCity = null;
 
-  final PlannedRoute route;
+  const PlannedRouteEditScreen.create({
+    super.key,
+    required this.planDayId,
+    required this.initialCity,
+  }) : route = null;
+
+  final PlannedRoute? route;
+  final String? planDayId;
+  final String? initialCity;
 
   @override
   State<PlannedRouteEditScreen> createState() => _PlannedRouteEditScreenState();
@@ -20,13 +30,16 @@ class PlannedRouteEditScreen extends StatefulWidget {
 class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
   final _repository = travelPlanRepository;
   late final TextEditingController _titleController;
-  late final List<RoutePlace> _places = [...widget.route.places];
+  late final List<RoutePlace> _places;
   bool _saving = false;
+
+  bool get _isCreating => widget.route == null;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.route.title);
+    _titleController = TextEditingController(text: widget.route?.title ?? '');
+    _places = [...?widget.route?.places];
   }
 
   @override
@@ -51,15 +64,26 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
     }
     setState(() => _saving = true);
     try {
-      final saved = await _repository.updatePlannedRoute(
-        widget.route.copyWith(
-          title: _titleController.text.trim(),
-          places: [
-            for (var index = 0; index < _places.length; index++)
-              _places[index].copyWith(orderIndex: index),
-          ],
-        ),
-      );
+      final normalizedPlaces = [
+        for (var index = 0; index < _places.length; index++)
+          _places[index].copyWith(orderIndex: index),
+      ];
+      final saved = _isCreating
+          ? await _repository.createPlannedRoute(
+              planDayId: widget.planDayId!,
+              title: _titleController.text.trim(),
+              city: widget.initialCity?.trim().isNotEmpty == true
+                  ? widget.initialCity!.trim()
+                  : _places.first.address ?? '여행 지역',
+              estimatedDurationMinutes: _places.length * 45,
+              places: normalizedPlaces,
+            )
+          : await _repository.updatePlannedRoute(
+              widget.route!.copyWith(
+                title: _titleController.text.trim(),
+                places: normalizedPlaces,
+              ),
+            );
       if (mounted) Navigator.of(context).pop(saved);
     } catch (error) {
       if (!mounted) return;
@@ -71,9 +95,8 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
   }
 
   Future<void> _addPlace() async {
-    final candidate = await showDialog<PlaceCandidate>(
-      context: context,
-      builder: (_) => const _PlannedPlaceSearchDialog(),
+    final candidate = await Navigator.of(context).push<PlaceCandidate>(
+      MaterialPageRoute(builder: (_) => const PlaceSearchMapScreen()),
     );
     if (candidate == null || !mounted) return;
     setState(() {
@@ -99,7 +122,7 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('계획 루트 수정'),
+        title: Text(_isCreating ? '직접 루트 만들기' : '계획 루트 수정'),
         actions: [
           IconButton(
             tooltip: '장소 추가',
@@ -125,7 +148,7 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
                 ),
               ),
             ),
-            if (widget.route.hasSourceLog)
+            if (widget.route?.hasSourceLog == true)
               Container(
                 width: double.infinity,
                 margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
@@ -135,148 +158,76 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '@${widget.route.sourceAuthorName ?? 'LOCALOG 여행자'}의 원본 로그를 참고한 루트예요.',
+                  '@${widget.route?.sourceAuthorName ?? 'LOCALOG 여행자'}의 원본 로그를 참고한 루트예요.',
                 ),
               ),
-            Expanded(
-              child: ReorderableListView.builder(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-                buildDefaultDragHandles: false,
-                itemCount: _places.length,
-                onReorderItem: _reorder,
-                itemBuilder: (context, index) {
-                  final place = _places[index];
-                  return Dismissible(
-                    key: ValueKey(place.id),
-                    direction: _places.length <= 1
-                        ? DismissDirection.none
-                        : DismissDirection.endToStart,
-                    background: Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.only(right: 20),
-                      alignment: Alignment.centerRight,
-                      color: Theme.of(context).colorScheme.error,
-                      child: const Icon(
-                        Icons.delete_outline,
-                        color: Colors.white,
-                      ),
+            if (_places.isEmpty)
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.add_location_alt_outlined,
+                          size: 48,
+                          color: AppColors.primaryBlue,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text('방문할 장소를 순서대로 추가해 주세요.'),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _addPlace,
+                          icon: const Icon(Icons.search),
+                          label: const Text('첫 장소 검색'),
+                        ),
+                      ],
                     ),
-                    onDismissed: (_) => setState(() => _places.removeAt(index)),
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: RouteStopEditTile(
-                        index: index,
-                        title: place.name,
-                        subtitle: place.address ?? place.category,
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: ReorderableListView.builder(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                  buildDefaultDragHandles: false,
+                  itemCount: _places.length,
+                  onReorderItem: _reorder,
+                  itemBuilder: (context, index) {
+                    final place = _places[index];
+                    return Dismissible(
+                      key: ValueKey(place.id),
+                      direction: _places.length <= 1
+                          ? DismissDirection.none
+                          : DismissDirection.endToStart,
+                      background: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.only(right: 20),
+                        alignment: Alignment.centerRight,
+                        color: Theme.of(context).colorScheme.error,
+                        child: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                      onDismissed: (_) =>
+                          setState(() => _places.removeAt(index)),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: RouteStopEditTile(
+                          index: index,
+                          title: place.name,
+                          subtitle: place.address ?? place.category,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _PlannedPlaceSearchDialog extends StatefulWidget {
-  const _PlannedPlaceSearchDialog();
-
-  @override
-  State<_PlannedPlaceSearchDialog> createState() =>
-      _PlannedPlaceSearchDialogState();
-}
-
-class _PlannedPlaceSearchDialogState extends State<_PlannedPlaceSearchDialog> {
-  final _controller = TextEditingController();
-  final _service = const PlaceCandidateService();
-  Future<PlaceCandidateResult>? _result;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _search() {
-    final query = _controller.text.trim();
-    if (query.length < 2) return;
-    setState(() => _result = _service.searchByKeyword(query));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('장소 검색'),
-      content: SizedBox(
-        width: 420,
-        height: 420,
-        child: Column(
-          children: [
-            TextField(
-              controller: _controller,
-              autofocus: true,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _search(),
-              decoration: InputDecoration(
-                hintText: '장소 이름을 입력하세요',
-                suffixIcon: IconButton(
-                  onPressed: _search,
-                  icon: const Icon(Icons.search),
-                ),
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: _result == null
-                  ? const Center(child: Text('검색할 장소를 입력해 주세요.'))
-                  : FutureBuilder<PlaceCandidateResult>(
-                      future: _result,
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        }
-                        final result = snapshot.data!;
-                        if (!result.isSuccess) {
-                          return Center(
-                            child: Text(
-                              result.errorMessage ?? '장소를 검색하지 못했습니다.',
-                              textAlign: TextAlign.center,
-                            ),
-                          );
-                        }
-                        if (result.candidates.isEmpty) {
-                          return const Center(child: Text('검색 결과가 없습니다.'));
-                        }
-                        return ListView.separated(
-                          itemCount: result.candidates.length,
-                          separatorBuilder: (_, _) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final candidate = result.candidates[index];
-                            return ListTile(
-                              title: Text(candidate.displayName),
-                              subtitle: Text(candidate.displayDetail),
-                              onTap: () => Navigator.of(context).pop(candidate),
-                            );
-                          },
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('취소'),
-        ),
-      ],
     );
   }
 }

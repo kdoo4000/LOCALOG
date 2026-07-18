@@ -8,12 +8,25 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 
 import '../../services/naver_static_map_service.dart';
+import 'route_marker_style.dart';
 
 class NaverDynamicMap extends StatefulWidget {
-  const NaverDynamicMap({super.key, required this.points, this.height = 320});
+  const NaverDynamicMap({
+    super.key,
+    required this.points,
+    this.height = 320,
+    this.connectPoints = true,
+    this.selectedIndex,
+    this.onPointTap,
+    this.onCameraIdle,
+  });
 
   final List<MapPoint> points;
   final double height;
+  final bool connectPoints;
+  final int? selectedIndex;
+  final ValueChanged<int>? onPointTap;
+  final ValueChanged<MapPoint>? onCameraIdle;
 
   @override
   State<NaverDynamicMap> createState() => _NaverDynamicMapState();
@@ -58,7 +71,9 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
   @override
   void didUpdateWidget(covariant NaverDynamicMap oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_samePoints(oldWidget.points, widget.points)) {
+    if (!_samePoints(oldWidget.points, widget.points) ||
+        oldWidget.selectedIndex != widget.selectedIndex ||
+        oldWidget.connectPoints != widget.connectPoints) {
       _scheduleRenderMap();
     }
   }
@@ -116,6 +131,26 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
       _map = js_util.callConstructor(js_util.getProperty(maps, 'Map'), [
         _container,
         mapOptions,
+      ]);
+
+      final event = js_util.getProperty(maps, 'Event');
+      js_util.callMethod(event, 'addListener', [
+        _map,
+        'idle',
+        js_util.allowInterop(() {
+          final callback = widget.onCameraIdle;
+          final map = _map;
+          if (callback == null || map == null || !mounted) return;
+          final center = js_util.callMethod(map, 'getCenter', const []);
+          callback(
+            MapPoint(
+              latitude: (js_util.callMethod(center, 'lat', const []) as num)
+                  .toDouble(),
+              longitude: (js_util.callMethod(center, 'lng', const []) as num)
+                  .toDouble(),
+            ),
+          );
+        }),
       ]);
 
       _drawMarkers(maps);
@@ -262,41 +297,67 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
       js_util.setProperty(options, 'map', _map);
       js_util.setProperty(options, 'title', _sequenceLabel(index));
       js_util.setProperty(options, 'icon', _markerIcon(maps, index));
-      js_util.callConstructor(js_util.getProperty(maps, 'Marker'), [options]);
+      final marker = js_util.callConstructor(
+        js_util.getProperty(maps, 'Marker'),
+        [options],
+      );
+      final event = js_util.getProperty(maps, 'Event');
+      js_util.callMethod(event, 'addListener', [
+        marker,
+        'click',
+        js_util.allowInterop(() => widget.onPointTap?.call(index)),
+      ]);
     }
   }
 
   Object _markerIcon(Object maps, int index) {
+    final selected = widget.selectedIndex == index;
+    final dimension = selected ? 42 : 36;
     final options = js_util.newObject();
-    js_util.setProperty(options, 'content', _markerHtml(_sequenceLabel(index)));
+    js_util.setProperty(
+      options,
+      'content',
+      _markerHtml(
+        _sequenceLabel(index),
+        selected ? '#173BB7' : routeMarkerCssColor(index),
+        selected,
+      ),
+    );
     js_util.setProperty(
       options,
       'anchor',
-      js_util.callConstructor(js_util.getProperty(maps, 'Point'), [14, 14]),
+      js_util.callConstructor(js_util.getProperty(maps, 'Point'), [
+        dimension / 2,
+        dimension / 2,
+      ]),
     );
     return options;
   }
 
-  String _markerHtml(String label) {
+  String _markerHtml(String label, String color, bool selected) {
+    final dimension = selected ? 42 : 36;
+    final borderColor = selected ? '#C8FF3D' : '#FFFFFF';
+    final borderWidth = selected ? 3 : 2.5;
     return '''
 <div style="
-  width: 28px;
-  height: 28px;
+  width: ${dimension}px;
+  height: ${dimension}px;
+  box-sizing: border-box;
   border-radius: 50%;
-  background: #208A8A;
+  background: $color;
   color: #fff;
-  border: 2px solid #fff;
+  border: ${borderWidth}px solid $borderColor;
   box-shadow: 0 2px 8px rgba(0,0,0,.28);
   display: flex;
   align-items: center;
   justify-content: center;
-  font: 700 12px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font: 700 12px Pretendard, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 ">$label</div>
 ''';
   }
 
   void _drawPath(Object maps) {
-    if (widget.points.length < 2) {
+    if (!widget.connectPoints || widget.points.length < 2) {
       return;
     }
 
@@ -304,7 +365,7 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
     final options = js_util.newObject();
     js_util.setProperty(options, 'map', _map);
     js_util.setProperty(options, 'path', js_util.jsify(path));
-    js_util.setProperty(options, 'strokeColor', '#208A8A');
+    js_util.setProperty(options, 'strokeColor', '#2457F5');
     js_util.setProperty(options, 'strokeOpacity', 0.92);
     js_util.setProperty(options, 'strokeWeight', 5);
     js_util.callConstructor(js_util.getProperty(maps, 'Polyline'), [options]);
@@ -324,7 +385,6 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
 
     return true;
   }
-
 }
 
 class _MapMessage extends StatelessWidget {

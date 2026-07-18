@@ -5,6 +5,7 @@ class TravelPlan {
     required this.id,
     required this.title,
     required this.regionName,
+    this.regions = const [],
     required this.startDate,
     required this.endDate,
     required this.days,
@@ -13,17 +14,21 @@ class TravelPlan {
   final String id;
   final String title;
   final String regionName;
+  final List<String> regions;
   final DateTime startDate;
   final DateTime endDate;
   final List<TravelPlanDay> days;
 
   int get dayCount => endDate.difference(startDate).inDays + 1;
   int get nightCount => dayCount - 1;
+  List<String> get effectiveRegions => regions.isEmpty ? [regionName] : regions;
+  String get regionLabel => effectiveRegions.join(' · ');
 
   TravelPlan copyWith({
     String? id,
     String? title,
     String? regionName,
+    List<String>? regions,
     DateTime? startDate,
     DateTime? endDate,
     List<TravelPlanDay>? days,
@@ -32,6 +37,7 @@ class TravelPlan {
       id: id ?? this.id,
       title: title ?? this.title,
       regionName: regionName ?? this.regionName,
+      regions: regions ?? this.regions,
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
       days: days ?? this.days,

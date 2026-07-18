@@ -14,6 +14,7 @@ class TravelRoute {
     required this.upvoteRatio,
     required this.downloadCount,
     required this.estimatedDurationMinutes,
+    this.regions = const [],
     this.coverImageUrl,
     this.coverImageStoragePath,
     this.sourceRouteId,
@@ -37,6 +38,7 @@ class TravelRoute {
   final double upvoteRatio;
   final int downloadCount;
   final int estimatedDurationMinutes;
+  final List<String> regions;
   final String? coverImageUrl;
   final String? coverImageStoragePath;
   final String? sourceRouteId;
@@ -53,6 +55,8 @@ class TravelRoute {
   bool get isPublic => visibility == RouteVisibility.public;
 
   bool get isDownloadedCopy => downloadedCopy;
+  List<String> get effectiveRegions => regions.isEmpty ? [city] : regions;
+  String get regionLabel => effectiveRegions.join(' · ');
 
   TravelRoute copyWith({
     String? id,
@@ -65,6 +69,7 @@ class TravelRoute {
     double? upvoteRatio,
     int? downloadCount,
     int? estimatedDurationMinutes,
+    List<String>? regions,
     Object? coverImageUrl = _keepValue,
     Object? coverImageStoragePath = _keepValue,
     Object? sourceRouteId = _keepValue,
@@ -89,6 +94,7 @@ class TravelRoute {
       downloadCount: downloadCount ?? this.downloadCount,
       estimatedDurationMinutes:
           estimatedDurationMinutes ?? this.estimatedDurationMinutes,
+      regions: regions ?? this.regions,
       coverImageUrl: identical(coverImageUrl, _keepValue)
           ? this.coverImageUrl
           : coverImageUrl as String?,

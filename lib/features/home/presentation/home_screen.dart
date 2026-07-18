@@ -6,22 +6,33 @@ import '../../../core/l10n/app_language.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/region_chip_wrap.dart';
 import '../../route_search/data/route_repository_provider.dart';
 import '../../route_search/domain/travel_route.dart';
 import '../../route_search/presentation/route_detail_screen.dart';
 import '../../route_search/presentation/widgets/route_card.dart';
+import '../../trip_planning/data/travel_plan_repository_provider.dart';
+import '../../trip_planning/domain/travel_plan.dart';
+import '../../trip_planning/presentation/travel_plan_create_screen.dart';
+import '../../trip_planning/presentation/travel_plan_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     this.isGuest = false,
+    this.user,
     this.onProfileTap,
     this.onLoginTap,
+    this.onSearchTap,
+    this.onUploadTap,
   });
 
   final bool isGuest;
+  final HomeUserSummary? user;
   final VoidCallback? onProfileTap;
   final VoidCallback? onLoginTap;
+  final ValueChanged<String?>? onSearchTap;
+  final VoidCallback? onUploadTap;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -29,8 +40,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _repository = routeRepository;
+  final _planRepository = travelPlanRepository;
   late Future<List<TravelRoute>> _routesFuture;
   StreamSubscription<void>? _routesSubscription;
+  StreamSubscription<void>? _plansSubscription;
+  TravelPlan? _nextPlan;
+  bool _loadingPlan = true;
+  int _planLoadGeneration = 0;
 
   @override
   void initState() {
@@ -39,11 +55,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _routesSubscription = _repository.routesChanged.listen((_) {
       if (mounted) _reloadRoutes();
     });
+    unawaited(_reloadNextPlan());
+    _plansSubscription = _planRepository.plansChanged.listen((_) {
+      unawaited(_reloadNextPlan());
+    });
   }
 
   @override
   void dispose() {
     _routesSubscription?.cancel();
+    _plansSubscription?.cancel();
     super.dispose();
   }
 
@@ -58,6 +79,62 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showUnavailable(String label) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.strings.shortcutComing(label))),
+    );
+  }
+
+  Future<void> _reloadNextPlan() async {
+    final generation = ++_planLoadGeneration;
+    try {
+      final plans = await _planRepository.getPlans();
+      if (!mounted || generation != _planLoadGeneration) return;
+      final nextPlan = nearestActiveTravelPlan(plans, DateTime.now());
+      setState(() {
+        _nextPlan = nextPlan;
+        _loadingPlan = false;
+      });
+    } catch (_) {
+      if (!mounted || generation != _planLoadGeneration) return;
+      setState(() {
+        _nextPlan = null;
+        _loadingPlan = false;
+      });
+    }
+  }
+
+  Future<void> _openNextPlan() async {
+    final plan = _nextPlan;
+    if (plan == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => TravelPlanDetailScreen(
+          planId: plan.id,
+          initialPlan: plan,
+          initialDayIndex: currentTravelPlanDayIndex(plan, DateTime.now()),
+        ),
+      ),
+    );
+    if (mounted) await _reloadNextPlan();
+  }
+
+  Future<void> _createPlan() async {
+    if (widget.isGuest) {
+      widget.onLoginTap?.call();
+      return;
+    }
+    final plan = await Navigator.of(context).push<TravelPlan>(
+      MaterialPageRoute(builder: (_) => const TravelPlanCreateScreen()),
+    );
+    if (plan == null || !mounted) return;
+    _planLoadGeneration += 1;
+    setState(() {
+      _nextPlan = nearestActiveTravelPlan([plan, ?_nextPlan], DateTime.now());
+      _loadingPlan = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
@@ -69,21 +146,19 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             _HomeHeader(
               isGuest: widget.isGuest,
+              user: widget.user,
+              nextPlan: _nextPlan,
+              loadingPlan: _loadingPlan,
+              onOpenPlan: _openNextPlan,
+              onCreatePlan: _createPlan,
               onProfileTap: widget.onProfileTap,
               onLoginTap: widget.onLoginTap,
-              onDestinationTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(strings.destinationComing)),
-                );
-              },
             ),
             const SizedBox(height: 26),
             _ShortcutGrid(
-              onShortcutTap: (label) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(strings.shortcutComing(label))),
-                );
-              },
+              onRouteSearchTap: () => widget.onSearchTap?.call(null),
+              onUploadTap: widget.onUploadTap,
+              onUnavailableTap: _showUnavailable,
             ),
             const SizedBox(height: 24),
             Text(
@@ -127,7 +202,9 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
             const SizedBox(height: 28),
-            const _PopularPlacesPanel(),
+            _PopularPlacesPanel(
+              onPlaceTap: (place) => widget.onSearchTap?.call(place),
+            ),
           ],
         ),
       ),
@@ -157,21 +234,27 @@ class _LoadError extends StatelessWidget {
 
 class _HomeHeader extends StatelessWidget {
   const _HomeHeader({
-    required this.onDestinationTap,
     required this.isGuest,
+    required this.user,
     required this.onProfileTap,
     required this.onLoginTap,
+    required this.nextPlan,
+    required this.loadingPlan,
+    required this.onOpenPlan,
+    required this.onCreatePlan,
   });
 
-  final VoidCallback onDestinationTap;
   final bool isGuest;
+  final HomeUserSummary? user;
   final VoidCallback? onProfileTap;
   final VoidCallback? onLoginTap;
+  final TravelPlan? nextPlan;
+  final bool loadingPlan;
+  final VoidCallback onOpenPlan;
+  final VoidCallback onCreatePlan;
 
   @override
   Widget build(BuildContext context) {
-    final strings = context.strings;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -190,8 +273,10 @@ class _HomeHeader extends StatelessWidget {
             const Spacer(),
             if (isGuest)
               OutlinedButton(
+                key: const ValueKey('home-login-button'),
                 onPressed: onLoginTap,
                 style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 40),
                   foregroundColor: AppColors.primaryBlue,
                   side: const BorderSide(color: AppColors.primaryBlue),
                   padding: const EdgeInsets.symmetric(
@@ -209,13 +294,21 @@ class _HomeHeader extends StatelessWidget {
                 button: true,
                 label: '프로필 열기',
                 child: InkWell(
+                  key: const ValueKey('home-profile-button'),
                   customBorder: const CircleBorder(),
                   onTap: onProfileTap,
                   child: CircleAvatar(
+                    key: const ValueKey('home-profile-avatar'),
                     radius: 21,
                     backgroundColor: AppColors.sky,
+                    foregroundImage: user?.avatarUrl == null
+                        ? null
+                        : NetworkImage(user!.avatarUrl!),
+                    onForegroundImageError: user?.avatarUrl == null
+                        ? null
+                        : (_, _) {},
                     child: Text(
-                      'P',
+                      user?.initial ?? 'L',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: AppColors.primaryBlue,
                         fontWeight: FontWeight.w900,
@@ -238,78 +331,11 @@ class _HomeHeader extends StatelessWidget {
             ),
             borderRadius: BorderRadius.circular(24),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.accentLime,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Text(
-                  'LOCAL CURATION',
-                  style: TextStyle(
-                    color: AppColors.ink,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: .4,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                strings.homeHeroTitle,
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  color: AppColors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w900,
-                  height: 1.08,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        Material(
-          color: AppColors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: const BorderSide(color: AppColors.gray200),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: onDestinationTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.place_outlined,
-                    color: AppColors.primaryBlue,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      strings.homeLocation,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '변경',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          child: _NextTravelContent(
+            plan: nextPlan,
+            loading: loadingPlan,
+            onOpenPlan: onOpenPlan,
+            onCreatePlan: onCreatePlan,
           ),
         ),
       ],
@@ -317,28 +343,243 @@ class _HomeHeader extends StatelessWidget {
   }
 }
 
-class _ShortcutGrid extends StatelessWidget {
-  const _ShortcutGrid({required this.onShortcutTap});
+class _NextTravelContent extends StatelessWidget {
+  const _NextTravelContent({
+    required this.plan,
+    required this.loading,
+    required this.onOpenPlan,
+    required this.onCreatePlan,
+  });
 
-  final ValueChanged<String> onShortcutTap;
+  final TravelPlan? plan;
+  final bool loading;
+  final VoidCallback onOpenPlan;
+  final VoidCallback onCreatePlan;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const SizedBox(
+        height: 150,
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.accentLime),
+        ),
+      );
+    }
+
+    final plan = this.plan;
+    if (plan == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _TravelBadge(label: 'NEXT JOURNEY'),
+          const SizedBox(height: 16),
+          Text(
+            '여행을 떠나볼까요?',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              color: AppColors.white,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '날짜와 지역을 정하고 하루치 루트를 계획해 보세요.',
+            style: TextStyle(color: AppColors.white, height: 1.4),
+          ),
+          const SizedBox(height: 20),
+          _HeroActionButton(
+            key: const ValueKey('home-create-plan-button'),
+            label: '여행 계획 만들기',
+            icon: Icons.add_rounded,
+            onPressed: onCreatePlan,
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _TravelBadge(label: travelPlanDdayLabel(plan, DateTime.now())),
+        const SizedBox(height: 16),
+        Text(
+          plan.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            color: AppColors.white,
+            fontWeight: FontWeight.w900,
+            height: 1.12,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${_compactDate(plan.startDate)} ~ ${_compactDate(plan.endDate)}',
+          style: const TextStyle(color: AppColors.white, height: 1.4),
+        ),
+        const SizedBox(height: 10),
+        RegionChipWrap(
+          regions: plan.effectiveRegions,
+          foregroundColor: AppColors.white,
+          backgroundColor: AppColors.white.withValues(alpha: 0.14),
+          borderColor: AppColors.white.withValues(alpha: 0.3),
+          compact: true,
+        ),
+        const SizedBox(height: 20),
+        _HeroActionButton(
+          key: const ValueKey('home-open-plan-button'),
+          label: '오늘의 일정 보기',
+          icon: Icons.arrow_forward_rounded,
+          onPressed: onOpenPlan,
+        ),
+      ],
+    );
+  }
+}
+
+class _TravelBadge extends StatelessWidget {
+  const _TravelBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.accentLime,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: AppColors.ink,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          letterSpacing: .3,
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroActionButton extends StatelessWidget {
+  const _HeroActionButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.white,
+        foregroundColor: AppColors.primaryBlue,
+      ),
+      icon: Icon(icon),
+      label: Text(label),
+    );
+  }
+}
+
+TravelPlan? nearestActiveTravelPlan(Iterable<TravelPlan> plans, DateTime now) {
+  final today = _dateOnly(now);
+  final active =
+      plans.where((plan) => !_dateOnly(plan.endDate).isBefore(today)).toList()
+        ..sort((a, b) => a.startDate.compareTo(b.startDate));
+  return active.firstOrNull;
+}
+
+String travelPlanDdayLabel(TravelPlan plan, DateTime now) {
+  final days = _dateOnly(plan.startDate).difference(_dateOnly(now)).inDays;
+  if (days > 0) return 'D-$days';
+  return '여행 ${days.abs() + 1}일차';
+}
+
+int currentTravelPlanDayIndex(TravelPlan plan, DateTime now) {
+  final index = _dateOnly(now).difference(_dateOnly(plan.startDate)).inDays;
+  if (index <= 0) return 0;
+  final lastIndex = plan.dayCount - 1;
+  return index > lastIndex ? lastIndex : index;
+}
+
+DateTime _dateOnly(DateTime value) =>
+    DateTime(value.year, value.month, value.day);
+
+String _compactDate(DateTime value) => '${value.month}.${value.day}';
+
+class HomeUserSummary {
+  const HomeUserSummary({required this.displayName, this.avatarUrl});
+
+  final String displayName;
+  final String? avatarUrl;
+
+  String get initial {
+    final name = displayName.trim();
+    return name.isEmpty ? 'L' : name.characters.first.toUpperCase();
+  }
+}
+
+class _ShortcutGrid extends StatelessWidget {
+  const _ShortcutGrid({
+    required this.onRouteSearchTap,
+    required this.onUploadTap,
+    required this.onUnavailableTap,
+  });
+
+  final VoidCallback? onRouteSearchTap;
+  final VoidCallback? onUploadTap;
+  final ValueChanged<String> onUnavailableTap;
 
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
-    final items = [
-      (Icons.route_outlined, strings.shortcutRouteSearch, AppColors.sky),
-      (
-        Icons.receipt_long_outlined,
-        strings.shortcutScanReceipt,
-        AppColors.yellow,
-      ),
-      (
-        Icons.add_photo_alternate_outlined,
-        strings.shortcutUploadRoute,
-        AppColors.mint,
-      ),
-      (Icons.map_outlined, strings.shortcutMapView, AppColors.sky),
-    ];
+    final items =
+        <
+          ({
+            IconData icon,
+            String label,
+            Color color,
+            VoidCallback? action,
+            String key,
+          })
+        >[
+          (
+            icon: Icons.route_outlined,
+            label: strings.shortcutRouteSearch,
+            color: AppColors.sky,
+            action: onRouteSearchTap,
+            key: 'home-shortcut-search',
+          ),
+          (
+            icon: Icons.receipt_long_outlined,
+            label: strings.shortcutScanReceipt,
+            color: AppColors.yellow,
+            action: null,
+            key: 'home-shortcut-receipt',
+          ),
+          (
+            icon: Icons.add_photo_alternate_outlined,
+            label: strings.shortcutUploadRoute,
+            color: AppColors.mint,
+            action: onUploadTap,
+            key: 'home-shortcut-upload',
+          ),
+          (
+            icon: Icons.map_outlined,
+            label: strings.shortcutMapView,
+            color: AppColors.sky,
+            action: null,
+            key: 'home-shortcut-map',
+          ),
+        ];
 
     return GridView.count(
       crossAxisCount: 4,
@@ -350,20 +591,21 @@ class _ShortcutGrid extends StatelessWidget {
       children: [
         for (final item in items)
           Material(
-            color: item.$3,
+            color: item.color,
             borderRadius: BorderRadius.circular(18),
             child: InkWell(
+              key: ValueKey(item.key),
               borderRadius: BorderRadius.circular(18),
-              onTap: () => onShortcutTap(item.$2),
+              onTap: item.action ?? () => onUnavailableTap(item.label),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(item.$1, color: AppColors.primaryBlue, size: 26),
+                    Icon(item.icon, color: AppColors.primaryBlue, size: 26),
                     const SizedBox(height: 8),
                     Text(
-                      item.$2,
+                      item.label,
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -383,7 +625,9 @@ class _ShortcutGrid extends StatelessWidget {
 }
 
 class _PopularPlacesPanel extends StatelessWidget {
-  const _PopularPlacesPanel();
+  const _PopularPlacesPanel({required this.onPlaceTap});
+
+  final ValueChanged<String> onPlaceTap;
 
   @override
   Widget build(BuildContext context) {
@@ -407,6 +651,7 @@ class _PopularPlacesPanel extends StatelessWidget {
           const SizedBox(height: 14),
           for (final place in places) ...[
             AppCard(
+              onTap: () => onPlaceTap(place.$1),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               child: Row(
                 children: [

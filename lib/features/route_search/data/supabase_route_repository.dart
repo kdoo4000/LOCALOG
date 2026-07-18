@@ -41,6 +41,7 @@ class SupabaseRouteRepository implements RouteRepository {
     estimated_duration_minutes, published_at, is_download_copy,
     profiles!routes_owner_id_fkey(display_name),
     route_tags(tag),
+    route_regions(region_name, order_index),
     route_places(
       id, place_id, name, category, order_index, address, latitude, longitude
     )
@@ -52,6 +53,7 @@ class SupabaseRouteRepository implements RouteRepository {
     cover_image_path, upvote_ratio, download_count,
     estimated_duration_minutes, published_at, is_download_copy,
     profiles!routes_owner_id_fkey(display_name), route_tags(tag),
+    route_regions(region_name, order_index),
     route_likes(user_id, is_positive),
     route_photos(storage_path, place_id, order_index, captured_at),
     route_places(
@@ -276,6 +278,7 @@ class SupabaseRouteRepository implements RouteRepository {
       );
       final response = _asMap(result);
       revisionCommitted = true;
+      await _replaceRouteRegions(routeId, route.effectiveRegions);
       final removedPaths =
           (response['removed_storage_paths'] as List? ?? const [])
               .whereType<String>()
@@ -291,6 +294,28 @@ class SupabaseRouteRepository implements RouteRepository {
       }
       rethrow;
     }
+  }
+
+  Future<void> _replaceRouteRegions(
+    String routeId,
+    Iterable<String> regions,
+  ) async {
+    final normalized = regions
+        .map((region) => region.trim())
+        .where((region) => region.isNotEmpty)
+        .toSet()
+        .toList();
+    if (normalized.isEmpty) throw StateError('로그에는 하나 이상의 지역이 필요합니다.');
+
+    await _client.from('route_regions').delete().eq('route_id', routeId);
+    await _client.from('route_regions').insert([
+      for (var index = 0; index < normalized.length; index++)
+        {
+          'route_id': routeId,
+          'region_name': normalized[index],
+          'order_index': index,
+        },
+    ]);
   }
 
   Future<_PreparedPhotos> _preparePhotos(
@@ -530,6 +555,16 @@ class SupabaseRouteRepository implements RouteRepository {
         .map((tag) => tag['tag'])
         .whereType<String>()
         .toList();
+    final regionRows =
+        (row['route_regions'] as List? ?? const []).map(_asMap).toList()
+          ..sort(
+            (a, b) =>
+                _asInt(a['order_index']).compareTo(_asInt(b['order_index'])),
+          );
+    final regions = regionRows
+        .map((region) => region['region_name'])
+        .whereType<String>()
+        .toList();
     final ownerId = row['owner_id'] as String;
     final isDownloadCopy = row['is_download_copy'] == true;
     final currentUserId = _client.auth.currentUser?.id;
@@ -546,6 +581,7 @@ class SupabaseRouteRepository implements RouteRepository {
       title: row['title'] as String? ?? '',
       description: row['description'] as String? ?? '',
       city: row['city'] as String? ?? '',
+      regions: regions,
       authorName: author ?? 'LOCALOG 여행자',
       places: places,
       tags: tags,
