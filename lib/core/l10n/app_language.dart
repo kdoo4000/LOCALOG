@@ -133,7 +133,7 @@ class AppStrings {
   }
 
   String get photoTitle =>
-      isKo ? '사진을 업로드하면 로그가 자동 생성돼요' : 'Upload photos to build a log';
+      isKo ? '여행 사진으로\n로그를 만들어 보세요' : 'Create a log from your travel photos';
   String get photoSubtitle => isKo
       ? '사진 메타데이터를 읽어 방문 장소와 순서를 분석합니다.'
       : 'Read photo metadata, sort stops by time, and review places on a map.';

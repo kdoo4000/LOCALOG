@@ -90,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final plans = await _planRepository.getPlans();
       if (!mounted || generation != _planLoadGeneration) return;
-      final nextPlan = nearestActiveTravelPlan(plans, DateTime.now());
+      final nextPlan = featuredTravelPlan(plans, DateTime.now());
       setState(() {
         _nextPlan = nextPlan;
         _loadingPlan = false;
@@ -130,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (plan == null || !mounted) return;
     _planLoadGeneration += 1;
     setState(() {
-      _nextPlan = nearestActiveTravelPlan([plan, ?_nextPlan], DateTime.now());
+      _nextPlan = featuredTravelPlan([plan, ?_nextPlan], DateTime.now());
       _loadingPlan = false;
     });
   }
@@ -389,7 +389,7 @@ class _NextTravelContent extends StatelessWidget {
           const SizedBox(height: 20),
           _HeroActionButton(
             key: const ValueKey('home-create-plan-button'),
-            label: '여행 계획 만들기',
+            label: '새 여행 계획 만들기',
             icon: Icons.add_rounded,
             onPressed: onCreatePlan,
           ),
@@ -428,7 +428,7 @@ class _NextTravelContent extends StatelessWidget {
         const SizedBox(height: 20),
         _HeroActionButton(
           key: const ValueKey('home-open-plan-button'),
-          label: '오늘의 일정 보기',
+          label: travelPlanHomeActionLabel(plan, DateTime.now()),
           icon: Icons.arrow_forward_rounded,
           onPressed: onOpenPlan,
         ),
@@ -497,10 +497,63 @@ TravelPlan? nearestActiveTravelPlan(Iterable<TravelPlan> plans, DateTime now) {
   return active.firstOrNull;
 }
 
+enum TravelPlanHomeStatus { upcoming, ongoing, completed }
+
+TravelPlanHomeStatus travelPlanHomeStatus(TravelPlan plan, DateTime now) {
+  final today = _dateOnly(now);
+  if (_dateOnly(plan.startDate).isAfter(today)) {
+    return TravelPlanHomeStatus.upcoming;
+  }
+  if (_dateOnly(plan.endDate).isBefore(today)) {
+    return TravelPlanHomeStatus.completed;
+  }
+  return TravelPlanHomeStatus.ongoing;
+}
+
+TravelPlan? featuredTravelPlan(Iterable<TravelPlan> plans, DateTime now) {
+  final allPlans = plans.toList();
+  if (allPlans.isEmpty) return null;
+
+  final ongoing = allPlans
+      .where(
+        (plan) => travelPlanHomeStatus(plan, now) == TravelPlanHomeStatus.ongoing,
+      )
+      .toList()
+    ..sort((a, b) => b.startDate.compareTo(a.startDate));
+  if (ongoing.isNotEmpty) return ongoing.first;
+
+  final upcoming = allPlans
+      .where(
+        (plan) => travelPlanHomeStatus(plan, now) == TravelPlanHomeStatus.upcoming,
+      )
+      .toList()
+    ..sort((a, b) => a.startDate.compareTo(b.startDate));
+  if (upcoming.isNotEmpty) return upcoming.first;
+
+  final completed = allPlans
+      .where(
+        (plan) =>
+            travelPlanHomeStatus(plan, now) == TravelPlanHomeStatus.completed,
+      )
+      .toList()
+    ..sort((a, b) => b.endDate.compareTo(a.endDate));
+  return completed.first;
+}
+
 String travelPlanDdayLabel(TravelPlan plan, DateTime now) {
+  final status = travelPlanHomeStatus(plan, now);
+  if (status == TravelPlanHomeStatus.completed) return '여행 완료';
   final days = _dateOnly(plan.startDate).difference(_dateOnly(now)).inDays;
   if (days > 0) return 'D-$days';
   return '여행 ${days.abs() + 1}일차';
+}
+
+String travelPlanHomeActionLabel(TravelPlan plan, DateTime now) {
+  return switch (travelPlanHomeStatus(plan, now)) {
+    TravelPlanHomeStatus.upcoming => '여행 계획 보기',
+    TravelPlanHomeStatus.ongoing => '오늘의 일정 보기',
+    TravelPlanHomeStatus.completed => '여행 기록 완성하기',
+  };
 }
 
 int currentTravelPlanDayIndex(TravelPlan plan, DateTime now) {

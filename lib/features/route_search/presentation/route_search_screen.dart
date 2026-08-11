@@ -10,6 +10,29 @@ import '../domain/travel_route.dart';
 import 'route_detail_screen.dart';
 import 'widgets/route_card.dart';
 
+bool routeMatchesRegionSearch(TravelRoute route, String query) {
+  final normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.isEmpty) return true;
+
+  final queryParts = normalizedQuery
+      .split(RegExp(r'\s*>\s*'))
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (queryParts.length != 2 || queryParts.last != '전체') {
+    return route.effectiveRegions.any(
+      (region) => region.toLowerCase().contains(normalizedQuery),
+    );
+  }
+
+  final province = queryParts.first;
+  return route.effectiveRegions.any((region) {
+    final normalizedRegion = region.trim().toLowerCase();
+    return normalizedRegion == province ||
+        normalizedRegion.startsWith('$province >');
+  });
+}
+
 class RouteSearchScreen extends StatefulWidget {
   const RouteSearchScreen({
     super.key,
@@ -97,9 +120,7 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
     return aliases.any(
       (term) =>
           route.title.toLowerCase().contains(term) ||
-          route.effectiveRegions.any(
-            (region) => region.toLowerCase().contains(term),
-          ) ||
+          routeMatchesRegionSearch(route, term) ||
           route.description.toLowerCase().contains(term) ||
           route.tags.any((tag) => tag.toLowerCase().contains(term)) ||
           route.places.any(
@@ -155,7 +176,7 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
             }).toList();
 
             return ListView(
-              padding: const EdgeInsets.fromLTRB(28, 34, 28, 28),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
               children: [
                 Text(
                   widget.targetPlanDayId == null
@@ -163,7 +184,6 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                       : '로그에서 루트 찾기',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w900,
-                    height: 1.12,
                   ),
                 ),
                 const SizedBox(height: 20),

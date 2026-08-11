@@ -20,6 +20,7 @@ import '../route_search/presentation/widgets/route_stop_edit_tile.dart';
 import '../route_search/presentation/region_picker_screen.dart';
 import '../trip_planning/data/travel_plan_repository_provider.dart';
 import '../trip_planning/domain/travel_plan.dart';
+import 'consecutive_grouping.dart';
 import 'naver_dynamic_map.dart';
 
 class PhotoLocationPage extends StatefulWidget {
@@ -240,9 +241,10 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     List<_PhotoEntry> routeEntries,
   ) {
     final routeId = 'photo-route-${DateTime.now().microsecondsSinceEpoch}';
+    final entryGroups = _groupConsecutiveEntriesByPlace(routeEntries);
     final places = <RoutePlace>[
-      for (var index = 0; index < routeEntries.length; index += 1)
-        _buildPlaceFromPhoto(routeEntries[index], index),
+      for (var index = 0; index < entryGroups.length; index += 1)
+        _buildPlaceFromPhotos(entryGroups[index], index),
     ];
 
     return TravelRoute(
@@ -256,7 +258,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       tags: tags,
       upvoteRatio: 0,
       downloadCount: 0,
-      estimatedDurationMinutes: routeEntries.length * 45,
+      estimatedDurationMinutes: entryGroups.length * 45,
       coverImageUrl: coverImagePath.isEmpty ? null : coverImagePath,
       isDownloaded: true,
       isCreatedByCurrentUser: true,
@@ -267,11 +269,15 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     );
   }
 
-  RoutePlace _buildPlaceFromPhoto(_PhotoEntry entry, int index) {
+  RoutePlace _buildPlaceFromPhotos(List<_PhotoEntry> entries, int index) {
+    final entry = entries.first;
     final selectedPlace = entry.selectedPlace;
     final metadata = entry.metadata;
     final category = selectedPlace?.category;
-    final photoPath = entry.photo.path;
+    final photoPaths = entries
+        .map((entry) => entry.photo.path)
+        .where((path) => path.isNotEmpty)
+        .toList(growable: false);
 
     return RoutePlace(
       id: 'photo-place-${DateTime.now().microsecondsSinceEpoch}-$index',
@@ -288,7 +294,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       // Photo GPS is the capture point, not the canonical place position.
       latitude: selectedPlace?.latitude,
       longitude: selectedPlace?.longitude,
-      photoUrls: photoPath.isEmpty ? const [] : [photoPath],
+      photoUrls: photoPaths,
     );
   }
 
@@ -298,28 +304,15 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     final selectedGroup = _selectedGroup;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'LOCALOG',
-          style: TextStyle(
-            color: AppColors.primaryBlue,
-            fontFamily: 'Pretendard',
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.7,
-          ),
-        ),
-        centerTitle: false,
-      ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
           children: [
             Text(
               strings.photoTitle,
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -1659,6 +1652,19 @@ class _PhotoEntry {
 
     return '${_two(takenAt.hour)}:${_two(takenAt.minute)}';
   }
+}
+
+List<List<_PhotoEntry>> _groupConsecutiveEntriesByPlace(
+  List<_PhotoEntry> entries,
+) {
+  return groupConsecutiveByKey(entries, (entry) {
+    final place = entry.selectedPlace;
+    if (place == null) return null;
+
+    final id = place.id.trim();
+    if (id.isNotEmpty) return '${place.source}\u0000$id';
+    return '${place.displayName.trim()}\u0000${place.address.trim()}';
+  });
 }
 
 class _PhotoDateGroup {

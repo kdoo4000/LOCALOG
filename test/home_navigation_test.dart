@@ -59,6 +59,7 @@ void main() {
 
     expect(find.text('Seoul, Korea'), findsNothing);
     expect(find.text('여행을 떠나볼까요?'), findsOneWidget);
+    expect(find.text('새 여행 계획 만들기'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('home-create-plan-button')));
     await tester.pumpAndSettle();
 
@@ -104,6 +105,7 @@ void main() {
 
     expect(selected?.title, '가까운 여행');
     expect(travelPlanDdayLabel(selected!, today), 'D-3');
+    expect(travelPlanHomeActionLabel(selected, today), '여행 계획 보기');
   });
 
   test('진행 중인 여행은 일차와 오늘의 일정 인덱스를 계산한다', () {
@@ -119,6 +121,31 @@ void main() {
     expect(travelPlanDdayLabel(plan, DateTime(2026, 7, 20)), '여행 1일차');
     expect(travelPlanDdayLabel(plan, DateTime(2026, 7, 21)), '여행 2일차');
     expect(currentTravelPlanDayIndex(plan, DateTime(2026, 7, 21)), 1);
+    expect(
+      travelPlanHomeActionLabel(plan, DateTime(2026, 7, 21)),
+      '오늘의 일정 보기',
+    );
+  });
+
+  test('홈은 진행 중, 예정, 최근 종료 여행 순서로 대표 여행을 선택한다', () {
+    final today = DateTime(2026, 7, 20);
+    TravelPlan plan(String id, DateTime start, DateTime end) => TravelPlan(
+      id: id,
+      title: id,
+      regionName: '서울',
+      startDate: start,
+      endDate: end,
+      days: const [],
+    );
+    final past = plan('최근 종료', DateTime(2026, 7, 17), DateTime(2026, 7, 19));
+    final future = plan('다음 여행', DateTime(2026, 7, 22), DateTime(2026, 7, 23));
+    final ongoing = plan('현재 여행', DateTime(2026, 7, 20), DateTime(2026, 7, 21));
+
+    expect(featuredTravelPlan([past], today)?.title, '최근 종료');
+    expect(featuredTravelPlan([past, future], today)?.title, '다음 여행');
+    expect(featuredTravelPlan([past, future, ongoing], today)?.title, '현재 여행');
+    expect(travelPlanDdayLabel(past, today), '여행 완료');
+    expect(travelPlanHomeActionLabel(past, today), '여행 기록 완성하기');
   });
 
   testWidgets('home hero shows the nearest plan and opens its details', (
@@ -146,7 +173,7 @@ void main() {
 
     expect(find.text(plan.title), findsOneWidget);
     expect(find.text('D-2'), findsOneWidget);
-    expect(find.text('오늘의 일정 보기'), findsOneWidget);
+    expect(find.text('여행 계획 보기'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('home-open-plan-button')));
     await tester.pumpAndSettle();
 

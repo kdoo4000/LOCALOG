@@ -38,6 +38,65 @@ void main() {
     expect(find.widgetWithText(FilledButton, '다음'), findsOneWidget);
   });
 
+  testWidgets('offers an all option for each province', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: RegionPickerScreen()),
+    );
+
+    expect(find.text('전체'), findsOneWidget);
+  });
+
+  testWidgets('selecting all replaces districts in the same province', (
+    tester,
+  ) async {
+    List<String>? selectedRegions;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              selectedRegions = await Navigator.of(context).push<List<String>>(
+                MaterialPageRoute(
+                  builder: (_) => const RegionPickerScreen(
+                    initialRegions: ['서울특별시 > 중구'],
+                  ),
+                ),
+              );
+            },
+            child: const Text('지역 선택 열기'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('지역 선택 열기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('전체'));
+    await tester.tap(find.widgetWithText(FilledButton, '다음'));
+    await tester.pumpAndSettle();
+
+    expect(selectedRegions, ['서울특별시']);
+  });
+
+  testWidgets('lists all first and districts in Korean alphabetical order', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: RegionPickerScreen()),
+    );
+
+    final visibleTiles = tester
+        .widgetList<ListTile>(find.byType(ListTile))
+        .map((tile) => (tile.title! as Text).data!)
+        .toList();
+
+    expect(visibleTiles.first, '전체');
+    expect(
+      visibleTiles.skip(1),
+      orderedEquals([...visibleTiles.skip(1)]..sort()),
+    );
+  });
+
   test('selects the region appearing in the most photo addresses', () {
     final region = inferMostFrequentRegion([
       '서울특별시 중구 세종대로 110',

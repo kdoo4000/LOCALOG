@@ -139,6 +139,8 @@ class RegionSelectionField extends StatelessWidget {
 }
 
 class _RegionPickerScreenState extends State<RegionPickerScreen> {
+  static const _allDistricts = '전체';
+
   String? _selectedProvince;
   late final Set<String> _selectedRegions;
 
@@ -159,9 +161,25 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
   }
 
   void _toggleRegion(String district) {
-    final region = '$_selectedProvince > $district';
+    final province = _selectedProvince!;
+    final region = district == _allDistricts
+        ? province
+        : '$province > $district';
+    final provincePrefix = '$_selectedProvince > ';
     setState(() {
-      if (!_selectedRegions.remove(region)) {
+      if (_selectedRegions.remove(region)) return;
+
+      if (district == _allDistricts) {
+        _selectedRegions.remove(province);
+        _selectedRegions.removeWhere(
+          (selectedRegion) => selectedRegion.startsWith(provincePrefix),
+        );
+      } else {
+        _selectedRegions
+          ..remove(province)
+          ..remove('$province > $_allDistricts');
+      }
+      if (!_selectedRegions.contains(region)) {
         _selectedRegions.add(region);
       }
     });
@@ -172,7 +190,9 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
   }
 
   int _selectedCountForProvince(String province) => _selectedRegions
-      .where((region) => region.startsWith('$province > '))
+      .where(
+        (region) => region == province || region.startsWith('$province > '),
+      )
       .length;
 
   void _complete() {
@@ -181,9 +201,10 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final districts = _selectedProvince == null
-        ? const <String>[]
-        : _regions[_selectedProvince!]!;
+    final sortedDistricts = _selectedProvince == null
+        ? <String>[]
+        : ([..._regions[_selectedProvince!]!]..sort());
+    final districts = <String>[_allDistricts, ...sortedDistricts];
 
     return Scaffold(
       backgroundColor: AppColors.white,
@@ -315,7 +336,9 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
                             ),
                             itemBuilder: (context, index) {
                               final district = districts[index];
-                              final region = '$_selectedProvince > $district';
+                              final region = district == _allDistricts
+                                  ? _selectedProvince!
+                                  : '$_selectedProvince > $district';
                               final selected = _selectedRegions.contains(
                                 region,
                               );

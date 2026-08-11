@@ -237,15 +237,6 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (route.isPublic &&
-                            !route.isCreatedByCurrentUser) ...[
-                          _RouteVotePanel(
-                            route: route,
-                            isVoting: _isVoting,
-                            onVote: (value) => _voteOnRoute(detail, value),
-                          ),
-                          const SizedBox(height: 24),
-                        ],
                         if (route.description.trim().isNotEmpty) ...[
                           Text(
                             route.description,
@@ -296,6 +287,15 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                         ),
                         const SizedBox(height: 24),
                         _RouteMapPanel(places: sortedPlaces),
+                        if (route.isPublic &&
+                            !route.isCreatedByCurrentUser) ...[
+                          const SizedBox(height: 24),
+                          _RouteVotePanel(
+                            route: route,
+                            isVoting: _isVoting,
+                            onVote: (value) => _voteOnRoute(detail, value),
+                          ),
+                        ],
                       ],
                     ),
                   ),

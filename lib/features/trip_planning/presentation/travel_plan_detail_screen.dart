@@ -297,7 +297,10 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
                     .push<TravelPlan>(
                       MaterialPageRoute(
                         builder: (_) =>
-                            RouteSearchScreen(targetPlanDayId: day.id),
+                            RouteSearchScreen(
+                              targetPlanDayId: day.id,
+                              initialKeyword: plan.effectiveRegions.first,
+                            ),
                       ),
                     );
                 if (updatedPlan != null) _showPlan(updatedPlan);
