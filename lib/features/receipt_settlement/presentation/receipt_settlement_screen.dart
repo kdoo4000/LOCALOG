@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/premium_ui.dart';
 import '../receipt_ocr_service.dart';
 import '../receipt_scan_result.dart';
 
@@ -252,6 +253,16 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
     final gutter = MediaQuery.sizeOf(context).width < 360 ? 16.0 : 24.0;
     return Scaffold(
       appBar: AppBar(title: const Text('영수증 정산')),
+      bottomNavigationBar: AppStickyActionBar(
+        child: FilledButton(
+          onPressed: _items.isEmpty
+              ? null
+              : () => ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('정산 결과를 확인했어요.'))),
+          child: const Text('정산 결과 확인'),
+        ),
+      ),
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
@@ -260,14 +271,45 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
             child: ListView(
               padding: EdgeInsets.fromLTRB(gutter, 24, gutter, 32),
               children: [
-                Text(
-                  widget.travelTitle,
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '영수증은 기기에서만 읽고 서버에 저장하지 않아요.',
-                  style: TextStyle(color: AppColors.textSecondary, height: 1.4),
+                AppHeroCard(
+                  padding: const EdgeInsets.all(22),
+                  visual: AppHeroVisual.settlement,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'TRIP SETTLEMENT',
+                        style: TextStyle(
+                          color: AppColors.accentLime,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: .8,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        widget.travelTitle,
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(color: AppColors.white),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '영수증은 기기에서만 읽고 서버에 저장하지 않아요.',
+                        style: TextStyle(
+                          color: AppColors.white.withValues(alpha: .76),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      AppMetricStrip(
+                        items: [
+                          (label: '총액', value: _won(_receiptTotal ?? _itemSum)),
+                          (label: '참여자', value: '${_people.length}명'),
+                          (label: '품목', value: '${_items.length}개'),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 28),
                 const _SectionHeader(
@@ -377,14 +419,6 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
                   rows: _settlementRows(),
                 ),
                 const SizedBox(height: 18),
-                FilledButton(
-                  onPressed: _items.isEmpty
-                      ? null
-                      : () => ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('정산 결과를 확인했어요.')),
-                        ),
-                  child: const Text('정산 결과 확인'),
-                ),
               ],
             ),
           ),

@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 abstract final class AppColors {
   static const primaryBlue = Color(0xFF2457F5);
   static const primaryBlueDark = Color(0xFF173BB7);
+  static const primaryBlueSoft = Color(0xFFDCE5FF);
   static const accentLime = Color(0xFFC8FF3D);
-  static const sky = Color(0xFFE9EFFF);
-  static const mint = Color(0xFFEAFBF2);
-  static const yellow = Color(0xFFFFF4C7);
+  static const sky = primaryBlueSoft;
+  static const mint = Color(0xFFE9F5EF);
+  static const yellow = Color(0xFFF7F0D7);
   static const secondaryLavender = sky;
   static const accentYellow = accentLime;
   static const ink = Color(0xFF101828);
@@ -20,10 +21,12 @@ abstract final class AppColors {
 
   // Semantic aliases. Screens should prefer these over raw palette names.
   static const surface = white;
+  static const surfaceElevated = Color(0xFFFFFEFB);
   static const surfaceMuted = Color(0xFFF0EFEA);
   static const textPrimary = ink;
   static const textSecondary = gray500;
   static const borderSubtle = Color(0xFFE6E5E0);
+  static const borderStrong = Color(0xFFD4D2CA);
   static const interactivePrimary = primaryBlue;
   static const disabledSurface = Color(0xFFEDECE7);
   static const disabledContent = Color(0xFF858B96);

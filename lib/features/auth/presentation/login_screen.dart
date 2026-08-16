@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../services/supabase_initializer.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -111,141 +112,175 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
-              children: [
-                Center(
-                  child: SvgPicture.asset(
-                    'assets/localog_text_vertical.svg',
-                    width: 156,
-                    height: 156,
-                    fit: BoxFit.contain,
-                    colorFilter: const ColorFilter.mode(
-                      AppColors.primaryBlue,
-                      BlendMode.srcIn,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.warmBackground, AppColors.primaryBlueSoft],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(24, 36, 24, 24),
+                children: [
+                  Center(
+                    child: SvgPicture.asset(
+                      'assets/localog_text_vertical.svg',
+                      width: 128,
+                      height: 128,
+                      fit: BoxFit.contain,
+                      colorFilter: const ColorFilter.mode(
+                        AppColors.primaryBlue,
+                        BlendMode.srcIn,
+                      ),
+                      semanticsLabel: 'LOCALOG',
                     ),
-                    semanticsLabel: 'LOCALOG',
                   ),
-                ),
-                const SizedBox(height: 32),
-                Text(
-                  _isSignUp ? 'LOCALOG 회원가입' : 'LOCALOG 로그인',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 24),
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      if (_isSignUp) ...[
-                        TextFormField(
-                          controller: _displayNameController,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: '닉네임',
-                            prefixIcon: Icon(Icons.person_outline),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return '닉네임을 입력해 주세요.';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        autofillHints: const [AutofillHints.email],
-                        decoration: const InputDecoration(
-                          labelText: '이메일',
-                          prefixIcon: Icon(Icons.mail_outline),
-                        ),
-                        validator: (value) {
-                          final email = value?.trim() ?? '';
-                          if (!email.contains('@') || !email.contains('.')) {
-                            return '올바른 이메일 주소를 입력해 주세요.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        textInputAction: TextInputAction.done,
-                        autofillHints: const [AutofillHints.password],
-                        onFieldSubmitted: (_) => _submit(),
-                        decoration: InputDecoration(
-                          labelText: '비밀번호',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          suffixIcon: IconButton(
-                            onPressed: () {
-                              setState(
-                                () => _obscurePassword = !_obscurePassword,
-                              );
-                            },
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
+                  const SizedBox(height: 24),
+                  Text(
+                    _isSignUp ? 'LOCALOG 회원가입' : 'LOCALOG 로그인',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _isSignUp
+                        ? '여행의 순간을 나만의 로컬 로그로 남겨보세요.'
+                        : '저장한 장소와 여행 계획을 이어서 확인하세요.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceElevated.withValues(alpha: .94),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: AppColors.borderSubtle),
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: AnimatedSize(
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : AppMotion.standard,
+                        curve: AppMotion.curve,
+                        child: Column(
+                          children: [
+                          if (_isSignUp) ...[
+                            TextFormField(
+                              controller: _displayNameController,
+                              textInputAction: TextInputAction.next,
+                              decoration: const InputDecoration(
+                                labelText: '닉네임',
+                                prefixIcon: Icon(Icons.person_outline),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return '닉네임을 입력해 주세요.';
+                                }
+                                return null;
+                              },
                             ),
+                            const SizedBox(height: 12),
+                          ],
+                          TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            autofillHints: const [AutofillHints.email],
+                            decoration: const InputDecoration(
+                              labelText: '이메일',
+                              prefixIcon: Icon(Icons.mail_outline),
+                            ),
+                            validator: (value) {
+                              final email = value?.trim() ?? '';
+                              if (!email.contains('@') ||
+                                  !email.contains('.')) {
+                                return '올바른 이메일 주소를 입력해 주세요.';
+                              }
+                              return null;
+                            },
                           ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.done,
+                            autofillHints: const [AutofillHints.password],
+                            onFieldSubmitted: (_) => _submit(),
+                            decoration: InputDecoration(
+                              labelText: '비밀번호',
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                onPressed: () {
+                                  setState(
+                                    () => _obscurePassword = !_obscurePassword,
+                                  );
+                                },
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                ),
+                              ),
+                            ),
+                            validator: (value) {
+                              if ((value ?? '').length < 6) {
+                                return '비밀번호는 6자 이상이어야 합니다.';
+                              }
+                              return null;
+                            },
+                          ),
+                          ],
                         ),
-                        validator: (value) {
-                          if ((value ?? '').length < 6) {
-                            return '비밀번호는 6자 이상이어야 합니다.';
-                          }
-                          return null;
-                        },
                       ),
-                    ],
+                    ),
                   ),
-                ),
-                if (_isSignUp) ...[
-                  const SizedBox(height: 12),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _agreed,
-                    onChanged: (value) {
-                      setState(() => _agreed = value ?? false);
-                    },
-                    title: const Text('개인정보 수집 및 이용에 동의합니다.'),
-                    controlAffinity: ListTileControlAffinity.leading,
+                  if (_isSignUp) ...[
+                    const SizedBox(height: 12),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _agreed,
+                      onChanged: (value) {
+                        setState(() => _agreed = value ?? false);
+                      },
+                      title: const Text('개인정보 수집 및 이용에 동의합니다.'),
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: _isSubmitting ? null : _submit,
+                    child: _isSubmitting
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(_isSignUp ? '가입하기' : '로그인'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _isSubmitting
+                        ? null
+                        : () {
+                            setState(() => _isSignUp = !_isSignUp);
+                          },
+                    child: Text(_isSignUp ? '이미 계정이 있나요? 로그인' : '처음이신가요? 회원가입'),
+                  ),
+                  const Divider(height: 32),
+                  TextButton(
+                    onPressed: _openMain,
+                    child: const Text('게스트로 공개 로그 둘러보기'),
                   ),
                 ],
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: _isSubmitting ? null : _submit,
-                  child: _isSubmitting
-                      ? const SizedBox.square(
-                          dimension: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(_isSignUp ? '가입하기' : '로그인'),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: _isSubmitting
-                      ? null
-                      : () {
-                          setState(() => _isSignUp = !_isSignUp);
-                        },
-                  child: Text(_isSignUp ? '이미 계정이 있나요? 로그인' : '처음이신가요? 회원가입'),
-                ),
-                const Divider(height: 32),
-                TextButton(
-                  onPressed: _openMain,
-                  child: const Text('게스트로 공개 로그 둘러보기'),
-                ),
-              ],
+              ),
             ),
           ),
         ),

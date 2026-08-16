@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/premium_ui.dart';
 import '../../../core/widgets/region_chip_wrap.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
@@ -143,6 +144,16 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
+                  if (_plans.isNotEmpty) ...[
+                    AppMetricStrip(
+                      items: [
+                        (label: '여행 중', value: '${ongoing.length}'),
+                        (label: '예정', value: '${upcoming.length}'),
+                        (label: '완료', value: '${completed.length}'),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                   if (_loading && _plans.isEmpty)
                     const _PlanSkeleton()
                   else if (_loadError != null && _plans.isEmpty)

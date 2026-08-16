@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_language.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/premium_ui.dart';
 import '../../../models/place_candidate.dart';
 import '../../../services/place_candidate_service.dart';
 import '../data/route_repository_provider.dart';
@@ -236,6 +237,20 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(strings.editRouteTitle)),
+      bottomNavigationBar: route == null || _loadError != null
+          ? null
+          : AppStickyActionBar(
+              child: FilledButton.icon(
+                onPressed: _isSaving ? null : _save,
+                icon: _isSaving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(_isSaving ? strings.saving : strings.saveRoute),
+              ),
+            ),
       body: _loadError != null
           ? Center(
               child: Column(
@@ -416,21 +431,6 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                           },
                         ),
                       ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                    child: FilledButton.icon(
-                      onPressed: _isSaving ? null : _save,
-                      icon: _isSaving
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.save_outlined),
-                      label: Text(
-                        _isSaving ? strings.saving : strings.saveRoute,
-                      ),
                     ),
                   ),
                 ],

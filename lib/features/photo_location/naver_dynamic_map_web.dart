@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_web_libraries_in_flutter, uri_does_not_exist
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use, uri_does_not_exist
 
 import 'dart:async';
 import 'dart:html' as html;

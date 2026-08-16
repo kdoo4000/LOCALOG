@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:typed_data';
 
@@ -8,12 +9,14 @@ import '../../core/l10n/app_language.dart';
 import '../../core/router/route_names.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/premium_ui.dart';
 import '../../models/place_candidate.dart';
 import '../../models/photo_metadata.dart';
 import '../../services/exif_metadata_reader.dart';
 import '../../services/naver_static_map_service.dart';
 import '../../services/original_media_picker.dart';
 import '../../services/place_candidate_service.dart';
+import '../../services/photo_log_draft_store.dart';
 import '../route_search/data/route_repository_provider.dart';
 import '../route_search/domain/route_place.dart';
 import '../route_search/domain/travel_route.dart';
@@ -40,12 +43,35 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
   final _metadataReader = ExifMetadataReader();
   final _placeCandidateService = const PlaceCandidateService();
   final _routeRepository = routeRepository;
+  final _draftStore = const PhotoLogDraftStore();
 
   List<_PhotoEntry> _entries = const [];
   String? _selectedDateKey;
   bool _isReading = false;
   bool _isSavingRoute = false;
   String? _errorMessage;
+  _RouteDraftResult? _savedDraft;
+  bool _editingSavedDraft = false;
+  GlobalKey<_RouteDraftInlineEditorState> _editorKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_restoreSavedDraft());
+  }
+
+  Future<void> _restoreSavedDraft() async {
+    Map<String, dynamic>? json;
+    try {
+      json = await _draftStore.load();
+    } catch (_) {
+      return;
+    }
+    if (!mounted || json == null) return;
+    final draft = _routeDraftFromJson(json);
+    if (draft == null || draft.entries.isEmpty) return;
+    setState(() => _savedDraft = draft);
+  }
 
   List<_PhotoDateGroup> get _dateGroups {
     final groupsByKey = <String, List<_PhotoEntry>>{};
@@ -85,7 +111,33 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     return groups.first;
   }
 
-  Future<void> _pickPhotos() async {
+  Future<void> _pickPhotos({bool append = false}) async {
+    final replacesSavedDraft =
+        !append && _savedDraft != null && !_editingSavedDraft;
+    if (replacesSavedDraft) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('새 로그를 만들까요?'),
+          content: const Text(
+            '한 번에 하나의 로그만 작성할 수 있어요. '
+            '새 로그를 만들면 임시 저장된 로그가 삭제됩니다.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('새 로그 만들기'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+
     setState(() {
       _isReading = true;
       _errorMessage = null;
@@ -110,11 +162,43 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       }
       entries.sort(_compareEntriesByTime);
 
-      final firstGroupKey = entries.isEmpty ? null : entries.first.dateKey;
+      if (replacesSavedDraft) {
+        try {
+          await _draftStore.delete();
+        } catch (error) {
+          if (!mounted) return;
+          setState(() => _isReading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('새 로그를 시작하지 못했습니다: $error')),
+          );
+          return;
+        }
+      }
+
+      final existingPaths = _entries.map((entry) => entry.photo.path).toSet();
+      final nextEntries = append
+          ? [
+              ..._entries,
+              ...entries.where(
+                (entry) => !existingPaths.contains(entry.photo.path),
+              ),
+            ]
+          : entries;
+      nextEntries.sort(_compareEntriesByTime);
+      final firstGroupKey = nextEntries.isEmpty
+          ? null
+          : append && _selectedDateKey != null
+          ? _selectedDateKey
+          : nextEntries.first.dateKey;
       setState(() {
-        _entries = entries;
+        _entries = nextEntries;
         _selectedDateKey = firstGroupKey;
         _isReading = false;
+        if (!append) {
+          _editorKey = GlobalKey();
+          _editingSavedDraft = false;
+          if (replacesSavedDraft) _savedDraft = null;
+        }
       });
     } catch (error) {
       setState(() {
@@ -124,9 +208,81 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     }
   }
 
+  Future<void> _saveDraft(_RouteDraftResult draft) async {
+    try {
+      final stored = await _draftStore.save(_routeDraftToJson(draft));
+      final savedDraft = _routeDraftFromJson(stored);
+      if (!mounted || savedDraft == null) return;
+      setState(() {
+        _savedDraft = savedDraft;
+        _entries = const [];
+        _selectedDateKey = null;
+        _editingSavedDraft = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('기기에 로그를 임시 저장했어요.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('임시 저장하지 못했습니다: $error')));
+    }
+  }
+
+  void _resumeDraft() {
+    final draft = _savedDraft;
+    if (draft == null || draft.entries.isEmpty) return;
+    setState(() {
+      _entries = [...draft.entries];
+      _selectedDateKey = draft.entries.first.dateKey;
+      _editorKey = GlobalKey();
+      _editingSavedDraft = true;
+    });
+  }
+
+  Future<void> _discardDraft() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('로그 작성을 취소할까요?'),
+        content: const Text('선택한 사진과 편집한 내용이 모두 사라집니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('작성 취소'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await _draftStore.delete();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('임시 로그를 삭제하지 못했습니다: $error')));
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _entries = const [];
+      _selectedDateKey = null;
+      _savedDraft = null;
+      _editingSavedDraft = false;
+      _errorMessage = null;
+    });
+  }
+
   void _selectDate(String key) {
     setState(() {
       _selectedDateKey = key;
+      _editorKey = GlobalKey();
     });
   }
 
@@ -209,8 +365,20 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
         return;
       }
 
+      try {
+        await _draftStore.delete();
+      } catch (_) {
+        // The saved route remains valid even if stale local draft cleanup fails.
+      }
+      if (!mounted) return;
+
       setState(() {
+        _entries = const [];
+        _selectedDateKey = null;
+        _savedDraft = null;
+        _editingSavedDraft = false;
         _isSavingRoute = false;
+        _errorMessage = null;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.strings.savedPhotoRouteToProfile)),
@@ -305,6 +473,38 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     final selectedGroup = _selectedGroup;
 
     return Scaffold(
+      bottomNavigationBar: _entries.isEmpty
+          ? null
+          : AppStickyActionBar(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isSavingRoute
+                          ? null
+                          : () => _editorKey.currentState?._saveTemporary(),
+                      icon: const Icon(Icons.drafts_outlined),
+                      label: const Text('임시 저장'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _isSavingRoute
+                          ? null
+                          : () => _editorKey.currentState?._save(),
+                      icon: _isSavingRoute
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: Text(_isSavingRoute ? '저장 중' : '로그 저장'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
@@ -313,64 +513,200 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
               children: [
-            Text(
-              strings.photoTitle,
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              strings.photoSubtitle,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: _isReading ? null : _pickPhotos,
-              icon: _isReading
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.photo_library_outlined),
-              label: Text(
-                _isReading ? strings.readingPhotos : strings.choosePhotos,
-              ),
-            ),
-            const SizedBox(height: 20),
-            if (_errorMessage != null) _MessagePanel(message: _errorMessage!),
-            if (_entries.isEmpty)
-              const _EmptyState()
-            else ...[
-              _SummaryPanel(entries: _entries),
-              const SizedBox(height: 16),
-              _DateSelector(
-                groups: _dateGroups,
-                selectedKey: selectedGroup?.key,
-                onSelected: _selectDate,
-              ),
-              const SizedBox(height: 12),
-              _SaveRoutePanel(
-                group: selectedGroup,
-                isSaving: _isSavingRoute,
-                placeCandidateService: _placeCandidateService,
-                onPlaceSelected: _selectPlace,
-                onSaveDraft: _isSavingRoute ? null : _saveSelectedGroupAsRoute,
-                plannedRoute: widget.plannedRoute,
-              ),
-              const SizedBox(height: 16),
-              if (selectedGroup != null) ...[
-                _MultiMapPanel(group: selectedGroup),
-                const SizedBox(height: 16),
-                _PhotoGrid(group: selectedGroup, onPhotoTap: _showDetails),
-              ],
-            ],
+                if (_entries.isEmpty)
+                  AppHeroCard(
+                    padding: const EdgeInsets.all(22),
+                    visual: AppHeroVisual.photos,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.auto_awesome_mosaic_outlined,
+                          color: AppColors.accentLime,
+                          size: 30,
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          strings.photoTitle,
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(color: AppColors.white),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          strings.photoSubtitle,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: AppColors.white.withValues(alpha: .78),
+                              ),
+                        ),
+                        const SizedBox(height: 20),
+                        FilledButton.icon(
+                          onPressed: _isReading ? null : () => _pickPhotos(),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.white,
+                            foregroundColor: AppColors.primaryBlue,
+                          ),
+                          icon: _isReading
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.photo_library_outlined),
+                          label: Text(
+                            _isReading
+                                ? strings.readingPhotos
+                                : strings.choosePhotos,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (_entries.isEmpty && _savedDraft != null) ...[
+                  const SizedBox(height: 16),
+                  _SavedDraftCard(
+                    draft: _savedDraft!,
+                    onResume: _resumeDraft,
+                    onDiscard: _discardDraft,
+                  ),
+                ],
+                const SizedBox(height: 22),
+                AppStepIndicator(
+                  steps: const ['사진 선택', '로그 편집', '저장'],
+                  currentIndex: _entries.isEmpty ? 0 : 1,
+                ),
+                const SizedBox(height: 22),
+                if (_errorMessage != null)
+                  _MessagePanel(message: _errorMessage!),
+                if (_entries.isEmpty)
+                  const _EmptyState()
+                else ...[
+                  _SummaryPanel(entries: _entries),
+                  const SizedBox(height: 16),
+                  _DateSelector(
+                    groups: _dateGroups,
+                    selectedKey: selectedGroup?.key,
+                    onSelected: _selectDate,
+                  ),
+                  const SizedBox(height: 12),
+                  _SaveRoutePanel(
+                    editorKey: _editorKey,
+                    group: selectedGroup,
+                    placeCandidateService: _placeCandidateService,
+                    onPlaceSelected: _selectPlace,
+                    onSaveDraft: _isSavingRoute
+                        ? null
+                        : _saveSelectedGroupAsRoute,
+                    onTemporarySave: _saveDraft,
+                    savedDraft: _editingSavedDraft ? _savedDraft : null,
+                    isReadingPhotos: _isReading,
+                    onAddPhotos: () => _pickPhotos(append: true),
+                    onDiscard: _discardDraft,
+                    plannedRoute: widget.plannedRoute,
+                  ),
+                  const SizedBox(height: 16),
+                  if (selectedGroup != null) ...[
+                    _MultiMapPanel(group: selectedGroup),
+                    const SizedBox(height: 16),
+                    ExpansionTile(
+                      tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+                      childrenPadding: const EdgeInsets.only(bottom: 8),
+                      title: Text('사진 전체 보기 · ${selectedGroup.photos.length}장'),
+                      children: [
+                        _PhotoGrid(
+                          group: selectedGroup,
+                          onPhotoTap: _showDetails,
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SavedDraftCard extends StatelessWidget {
+  const _SavedDraftCard({
+    required this.draft,
+    required this.onResume,
+    required this.onDiscard,
+  });
+
+  final _RouteDraftResult draft;
+  final VoidCallback onResume;
+  final VoidCallback onDiscard;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AppRadii.card),
+        border: Border.all(color: AppColors.primaryBlueSoft),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlueSoft,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: const Icon(
+                  Icons.drafts_outlined,
+                  color: AppColors.primaryBlue,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      draft.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '임시 저장된 로그 · 사진 ${draft.entries.length}장',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: '작성 취소',
+                onPressed: onDiscard,
+                color: AppColors.error,
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onResume,
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('이어서 작성'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -386,12 +722,11 @@ class _SummaryPanel extends StatelessWidget {
     final locatedCount = entries
         .where((entry) => entry.metadata.hasLocation)
         .length;
-    return _Panel(
-      title: context.strings.selectedPhotos,
-      children: [
-        _InfoRow(label: context.strings.photos, value: '${entries.length}'),
-        _InfoRow(label: context.strings.withGps, value: '$locatedCount'),
-        _InfoRow(
+    return AppMetricStrip(
+      items: [
+        (label: context.strings.photos, value: '${entries.length}'),
+        (label: context.strings.withGps, value: '$locatedCount'),
+        (
           label: context.strings.withoutGps,
           value: '${entries.length - locatedCount}',
         ),
@@ -436,29 +771,35 @@ class _DateSelector extends StatelessWidget {
 
 class _SaveRoutePanel extends StatelessWidget {
   const _SaveRoutePanel({
+    required this.editorKey,
     required this.group,
-    required this.isSaving,
     required this.placeCandidateService,
     required this.onPlaceSelected,
     required this.onSaveDraft,
+    required this.onTemporarySave,
+    required this.savedDraft,
+    required this.isReadingPhotos,
+    required this.onAddPhotos,
+    required this.onDiscard,
     this.plannedRoute,
   });
 
+  final GlobalKey<_RouteDraftInlineEditorState> editorKey;
   final _PhotoDateGroup? group;
-  final bool isSaving;
   final PlaceCandidateService placeCandidateService;
   final void Function(String entryId, PlaceCandidate candidate) onPlaceSelected;
   final ValueChanged<_RouteDraftResult>? onSaveDraft;
+  final ValueChanged<_RouteDraftResult> onTemporarySave;
+  final _RouteDraftResult? savedDraft;
+  final bool isReadingPhotos;
+  final VoidCallback onAddPhotos;
+  final VoidCallback onDiscard;
   final PlannedRoute? plannedRoute;
 
   @override
   Widget build(BuildContext context) {
     final group = this.group;
     final photoCount = group?.photos.length ?? 0;
-    final groupFingerprint = group == null
-        ? ''
-        : group.photos.map((entry) => entry.id).join('-');
-
     return _Panel(
       title: context.strings.createRoute,
       children: [
@@ -470,25 +811,55 @@ class _SaveRoutePanel extends StatelessWidget {
             context,
           ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
         ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: isReadingPhotos ? null : onAddPhotos,
+                icon: isReadingPhotos
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_photo_alternate_outlined),
+                label: const Text('사진 추가'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            IconButton.outlined(
+              tooltip: '현재 로그 작성 취소',
+              onPressed: onDiscard,
+              color: AppColors.error,
+              icon: const Icon(Icons.delete_outline_rounded),
+            ),
+          ],
+        ),
         if (group != null) ...[
           const SizedBox(height: 14),
           _RouteDraftInlineEditor(
-            key: ValueKey('route-draft-editor-${group.key}-$groupFingerprint'),
+            key: editorKey,
             initialTitle:
+                savedDraft?.title ??
                 plannedRoute?.title ??
                 context.strings.photoRouteTitle(
                   _displayGroupLabel(context, group),
                 ),
-            initialDescription: '',
-            initialRegions: plannedRoute?.city.isNotEmpty == true
-                ? [plannedRoute!.city]
-                : const [],
-            initialTags: [context.strings.photoTag, context.strings.localTag],
+            initialDescription: savedDraft?.description ?? '',
+            initialRegions:
+                savedDraft?.regions ??
+                (plannedRoute?.city.isNotEmpty == true
+                    ? [plannedRoute!.city]
+                    : const []),
+            initialTags:
+                savedDraft?.tags ??
+                [context.strings.photoTag, context.strings.localTag],
+            initialVisibility: savedDraft?.visibility ?? RouteVisibility.public,
             entries: group.photos,
-            isSaving: isSaving,
             placeCandidateService: placeCandidateService,
             onPlaceSelected: onPlaceSelected,
             onSave: onSaveDraft,
+            onTemporarySave: onTemporarySave,
           ),
         ],
       ],
@@ -516,6 +887,98 @@ class _RouteDraftResult {
   final List<_PhotoEntry> entries;
 }
 
+Map<String, dynamic> _routeDraftToJson(_RouteDraftResult draft) {
+  return {
+    'version': 1,
+    'title': draft.title,
+    'description': draft.description,
+    'regions': draft.regions,
+    'tags': draft.tags,
+    'visibility': draft.visibility.name,
+    'coverImagePath': draft.coverImagePath,
+    'coverPhotoIndex': draft.entries.indexWhere(
+      (entry) => entry.photo.path == draft.coverImagePath,
+    ),
+    'entries': [
+      for (final entry in draft.entries)
+        {
+          'photoPath': entry.photo.path,
+          'metadata': {
+            'fileName': entry.metadata.fileName,
+            'takenAt': entry.metadata.takenAt?.toIso8601String(),
+            'latitude': entry.metadata.latitude,
+            'longitude': entry.metadata.longitude,
+            'cameraMake': entry.metadata.cameraMake,
+            'cameraModel': entry.metadata.cameraModel,
+          },
+          if (entry.selectedPlace case final place?)
+            'selectedPlace': {
+              'id': place.id,
+              'name': place.name,
+              'address': place.address,
+              'source': place.source,
+              'category': place.category,
+              'distanceMeters': place.distanceMeters,
+              'latitude': place.latitude,
+              'longitude': place.longitude,
+            },
+        },
+    ],
+  };
+}
+
+_RouteDraftResult? _routeDraftFromJson(Map<String, dynamic> json) {
+  if (json['version'] != 1) return null;
+  final entries = <_PhotoEntry>[];
+  for (final raw in json['entries'] as List? ?? const []) {
+    if (raw is! Map) continue;
+    final entry = Map<String, dynamic>.from(raw);
+    final photoPath = entry['photoPath'] as String? ?? '';
+    final rawMetadata = entry['metadata'];
+    if (photoPath.isEmpty || rawMetadata is! Map) continue;
+    final metadata = Map<String, dynamic>.from(rawMetadata);
+    final rawPlace = entry['selectedPlace'];
+    entries.add(
+      _PhotoEntry(
+        photo: XFile(photoPath),
+        metadata: PhotoMetadata(
+          fileName: metadata['fileName'] as String? ?? '',
+          takenAt: DateTime.tryParse(metadata['takenAt'] as String? ?? ''),
+          latitude: (metadata['latitude'] as num?)?.toDouble(),
+          longitude: (metadata['longitude'] as num?)?.toDouble(),
+          cameraMake: metadata['cameraMake'] as String?,
+          cameraModel: metadata['cameraModel'] as String?,
+        ),
+        selectedPlace: rawPlace is Map
+            ? PlaceCandidate.fromJson(Map<String, dynamic>.from(rawPlace))
+            : null,
+      ),
+    );
+  }
+  if (entries.isEmpty) return null;
+
+  final visibility = RouteVisibility.values.firstWhere(
+    (value) => value.name == json['visibility'],
+    orElse: () => RouteVisibility.public,
+  );
+  final coverIndex = (json['coverPhotoIndex'] as num?)?.toInt() ?? 0;
+  final coverImagePath =
+      entries[coverIndex >= 0 && coverIndex < entries.length ? coverIndex : 0]
+          .photo
+          .path;
+  return _RouteDraftResult(
+    title: json['title'] as String? ?? '사진 여행 로그',
+    description: json['description'] as String? ?? '',
+    regions: (json['regions'] as List? ?? const [])
+        .whereType<String>()
+        .toList(),
+    tags: (json['tags'] as List? ?? const []).whereType<String>().toList(),
+    visibility: visibility,
+    coverImagePath: coverImagePath,
+    entries: entries,
+  );
+}
+
 class _RouteDraftInlineEditor extends StatefulWidget {
   const _RouteDraftInlineEditor({
     super.key,
@@ -523,22 +986,24 @@ class _RouteDraftInlineEditor extends StatefulWidget {
     required this.initialDescription,
     required this.initialRegions,
     required this.initialTags,
+    required this.initialVisibility,
     required this.entries,
-    required this.isSaving,
     required this.placeCandidateService,
     required this.onPlaceSelected,
     required this.onSave,
+    required this.onTemporarySave,
   });
 
   final String initialTitle;
   final String initialDescription;
   final List<String> initialRegions;
   final List<String> initialTags;
+  final RouteVisibility initialVisibility;
   final List<_PhotoEntry> entries;
-  final bool isSaving;
   final PlaceCandidateService placeCandidateService;
   final void Function(String entryId, PlaceCandidate candidate) onPlaceSelected;
   final ValueChanged<_RouteDraftResult>? onSave;
+  final ValueChanged<_RouteDraftResult> onTemporarySave;
 
   @override
   State<_RouteDraftInlineEditor> createState() =>
@@ -552,7 +1017,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
   late List<_PhotoEntry> _entries;
   late List<String> _tags;
   late List<String> _regions;
-  RouteVisibility _visibility = RouteVisibility.public;
+  late RouteVisibility _visibility;
   bool _regionSelectedManually = false;
   String? _selectedCoverEntryId;
   String? _editingEntryId;
@@ -566,6 +1031,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
     );
     _tagsController = TextEditingController();
     _tags = [...widget.initialTags];
+    _visibility = widget.initialVisibility;
     _regions = [...widget.initialRegions];
     _entries = [...widget.entries];
     _selectedCoverEntryId = _entries.firstOrNull?.id;
@@ -598,10 +1064,6 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
 
   void _reorderEntries(int oldIndex, int newIndex) {
     setState(() {
-      if (newIndex > oldIndex) {
-        newIndex -= 1;
-      }
-
       final entry = _entries.removeAt(oldIndex);
       _entries.insert(newIndex, entry);
     });
@@ -639,12 +1101,6 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
       return;
     }
 
-    final title = _titleController.text.trim().isEmpty
-        ? widget.initialTitle
-        : _titleController.text.trim();
-    final description = _descriptionController.text.trim().isEmpty
-        ? widget.initialDescription
-        : _descriptionController.text.trim();
     if (_regions.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -652,22 +1108,33 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
       return;
     }
     _addTag();
-    onSave(
-      _RouteDraftResult(
-        title: title,
-        description: description,
-        regions: _regions,
-        tags: _tags,
-        visibility: _visibility,
-        coverImagePath:
-            _entries
-                .where((entry) => entry.id == _selectedCoverEntryId)
-                .firstOrNull
-                ?.photo
-                .path ??
-            '',
-        entries: _entries,
-      ),
+    onSave(_buildDraft());
+  }
+
+  void _saveTemporary() {
+    _addTag();
+    widget.onTemporarySave(_buildDraft());
+  }
+
+  _RouteDraftResult _buildDraft() {
+    return _RouteDraftResult(
+      title: _titleController.text.trim().isEmpty
+          ? widget.initialTitle
+          : _titleController.text.trim(),
+      description: _descriptionController.text.trim().isEmpty
+          ? widget.initialDescription
+          : _descriptionController.text.trim(),
+      regions: [..._regions],
+      tags: [..._tags],
+      visibility: _visibility,
+      coverImagePath:
+          _entries
+              .where((entry) => entry.id == _selectedCoverEntryId)
+              .firstOrNull
+              ?.photo
+              .path ??
+          '',
+      entries: [..._entries],
     );
   }
 
@@ -745,12 +1212,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '대표 이미지',
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall,
-        ),
+        Text('대표 이미지', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         SizedBox(
           height: 84,
@@ -915,9 +1377,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
         const SizedBox(height: 18),
         Text(
           context.strings.includedStops,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium,
+          style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 10),
         ReorderableListView.builder(
@@ -926,7 +1386,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
           physics: const NeverScrollableScrollPhysics(),
           buildDefaultDragHandles: false,
           itemCount: _entries.length,
-          onReorder: _reorderEntries,
+          onReorderItem: _reorderEntries,
           itemBuilder: (context, index) {
             final entry = _entries[index];
 
@@ -971,21 +1431,6 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
               ),
             );
           },
-        ),
-        const SizedBox(height: 2),
-        FilledButton.icon(
-          onPressed: widget.isSaving || missingPlaceCount > 0 ? null : _save,
-          icon: widget.isSaving
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.save_outlined),
-          label: Text(
-            widget.isSaving
-                ? context.strings.savingRoute
-                : context.strings.saveRoute,
-          ),
         ),
       ],
     );
@@ -1244,7 +1689,7 @@ class _PhotoPreview extends StatelessWidget {
 }
 
 class _PhotoBytesCache {
-  static final _cache = LinkedHashMap<String, Future<Uint8List>>();
+  static final _cache = <String, Future<Uint8List>>{};
   static const _maxEntries = 48;
 
   static Future<Uint8List> load(XFile photo) {
@@ -1436,26 +1881,32 @@ class _PlaceCandidatePanel extends StatelessWidget {
               return Text(context.strings.noMatchingPlaces);
             }
 
-            return Column(
-              children: [
-                for (final candidate in result.candidates)
-                  Material(
-                    color: Colors.transparent,
-                    child: RadioListTile<String>(
-                      contentPadding: EdgeInsets.zero,
-                      value: candidate.id,
-                      groupValue: selectedPlace?.id,
-                      onChanged: (_) => onSelected(candidate),
-                      title: Text(
-                        candidate.displayName,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+            return RadioGroup<String>(
+              groupValue: selectedPlace?.id,
+              onChanged: (value) {
+                final candidate = result.candidates
+                    .where((item) => item.id == value)
+                    .firstOrNull;
+                if (candidate != null) onSelected(candidate);
+              },
+              child: Column(
+                children: [
+                  for (final candidate in result.candidates)
+                    Material(
+                      color: Colors.transparent,
+                      child: RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        value: candidate.id,
+                        title: Text(
+                          candidate.displayName,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
+                        subtitle: Text(candidate.displayDetail),
                       ),
-                      subtitle: Text(candidate.displayDetail),
                     ),
-                  ),
-              ],
+                ],
+              ),
             );
           },
         ),
@@ -1526,42 +1977,6 @@ class _Panel extends StatelessWidget {
             ...children,
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 82,
-            child: Text(
-              label,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
       ),
     );
   }

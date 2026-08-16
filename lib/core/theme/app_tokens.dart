@@ -1,3 +1,5 @@
+import 'package:flutter/animation.dart';
+
 abstract final class AppSpacing {
   static const xs = 8.0;
   static const sm = 12.0;
@@ -20,4 +22,11 @@ abstract final class AppLayout {
   static const tabletGutter = 40.0;
   static const readingWidth = 680.0;
   static const contentWidth = 1120.0;
+}
+
+abstract final class AppMotion {
+  static const quick = Duration(milliseconds: 140);
+  static const standard = Duration(milliseconds: 240);
+  static const emphasized = Duration(milliseconds: 320);
+  static const curve = Curves.easeOutCubic;
 }

@@ -8,6 +8,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/premium_ui.dart';
 import '../../../services/supabase_initializer.dart';
 import '../../route_search/data/route_repository_provider.dart';
 import '../../route_search/data/route_repository.dart';
@@ -136,68 +137,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: FutureBuilder<List<TravelRoute>>(
               future: _downloadedRoutesFuture,
               builder: (context, snapshot) {
-            final routes = snapshot.data ?? const <TravelRoute>[];
-            final uploadedRoutes = routes
-                .where((route) => !route.isDownloadedCopy)
-                .toList();
+                final routes = snapshot.data ?? const <TravelRoute>[];
+                final uploadedRoutes = routes
+                    .where((route) => !route.isDownloadedCopy)
+                    .toList();
 
                 return RefreshIndicator(
-              onRefresh: () async {
-                await _reloadDownloadedRoutes();
-              },
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(28, 18, 28, 28),
-                children: [
-                  FutureBuilder<RouteProfileStats>(
-                    future: _profileStatsFuture,
-                    builder: (context, statsSnapshot) => _ProfileHeader(
-                      user: isSupabaseConfigured
-                          ? supabaseClient.auth.currentUser
-                          : null,
-                      stats: statsSnapshot.data,
-                      onSignOut:
-                          isSupabaseConfigured &&
-                              supabaseClient.auth.currentUser != null
-                          ? _signOut
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  const _LanguageSelector(),
-                  const SizedBox(height: 24),
-                  Text(
-                    strings.myRouteList,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  if (snapshot.hasError)
-                    Center(
-                      child: Column(
-                        children: [
-                          const Text('내 로그를 불러오지 못했습니다.'),
-                          const SizedBox(height: 8),
-                          OutlinedButton(
-                            onPressed: _reloadDownloadedRoutes,
-                            child: const Text('다시 시도'),
+                  onRefresh: () async {
+                    await _reloadDownloadedRoutes();
+                  },
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(28, 18, 28, 28),
+                    children: [
+                      FutureBuilder<RouteProfileStats>(
+                        future: _profileStatsFuture,
+                        builder: (context, statsSnapshot) => _ProfileHeader(
+                          user: isSupabaseConfigured
+                              ? supabaseClient.auth.currentUser
+                              : null,
+                          stats: statsSnapshot.data,
+                          onSignOut:
+                              isSupabaseConfigured &&
+                                  supabaseClient.auth.currentUser != null
+                              ? _signOut
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const _LanguageSelector(),
+                      const SizedBox(height: 24),
+                      Text(
+                        strings.myRouteList,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      if (snapshot.hasError)
+                        Center(
+                          child: Column(
+                            children: [
+                              const Text('내 로그를 불러오지 못했습니다.'),
+                              const SizedBox(height: 8),
+                              OutlinedButton(
+                                onPressed: _reloadDownloadedRoutes,
+                                child: const Text('다시 시도'),
+                              ),
+                            ],
                           ),
+                        )
+                      else if (!snapshot.hasData)
+                        const _ProfileSkeleton()
+                      else if (uploadedRoutes.isEmpty)
+                        const _EmptyDownloadedRoutes()
+                      else
+                        for (final route in uploadedRoutes) ...[
+                          _DownloadedRouteTile(
+                            route: route,
+                            onOpen: () => _openRoute(route),
+                            onDelete: () => _deleteRoute(route),
+                          ),
+                          const SizedBox(height: 12),
                         ],
-                      ),
-                    )
-                  else if (!snapshot.hasData)
-                    const _ProfileSkeleton()
-                  else if (uploadedRoutes.isEmpty)
-                    const _EmptyDownloadedRoutes()
-                  else
-                    for (final route in uploadedRoutes) ...[
-                      _DownloadedRouteTile(
-                        route: route,
-                        onOpen: () => _openRoute(route),
-                        onDelete: () => _deleteRoute(route),
-                      ),
-                      const SizedBox(height: 12),
                     ],
-                ],
-              ),
+                  ),
                 );
               },
             ),
@@ -230,70 +231,77 @@ class _ProfileHeader extends StatelessWidget {
         : metadataName;
     final initial = displayName.isEmpty ? 'G' : displayName.characters.first;
 
-    return Column(
-      children: [
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 37,
-              backgroundColor: AppColors.sky,
-              child: Text(
-                initial.toUpperCase(),
-                style: const TextStyle(
-                  color: AppColors.primaryBlue,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(width: 18),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    displayName,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    user == null ? '공개 로그만 둘러보는 중' : user!.email ?? '',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.gray500,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (onSignOut != null)
-              IconButton(
-                tooltip: '로그아웃',
-                onPressed: onSignOut,
-                icon: const Icon(Icons.logout),
-              ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        AppCard(
-          child: Row(
+    return AppHeroCard(
+      padding: const EdgeInsets.all(20),
+      visual: AppHeroVisual.profile,
+      child: Column(
+        children: [
+          Row(
             children: [
-              Expanded(
-                child: _ProfileStat(
-                  label: '누적 좋아요',
-                  value: '${stats?.receivedLikes ?? 0}',
+              CircleAvatar(
+                radius: 37,
+                backgroundColor: AppColors.accentLime,
+                child: Text(
+                  initial.toUpperCase(),
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
+              const SizedBox(width: 18),
               Expanded(
-                child: _ProfileStat(
-                  label: '루트 참고',
-                  value: '${stats?.downloads ?? 0}',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleLarge?.copyWith(color: AppColors.white),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      user == null ? '공개 로그만 둘러보는 중' : user!.email ?? '',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.white.withValues(alpha: .72),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              if (onSignOut != null)
+                IconButton(
+                  tooltip: '로그아웃',
+                  onPressed: onSignOut,
+                  color: AppColors.white,
+                  icon: const Icon(Icons.logout),
+                ),
             ],
           ),
-        ),
-      ],
+          const SizedBox(height: 24),
+          AppCard(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _ProfileStat(
+                    label: '누적 좋아요',
+                    value: '${stats?.receivedLikes ?? 0}',
+                  ),
+                ),
+                Expanded(
+                  child: _ProfileStat(
+                    label: '루트 참고',
+                    value: '${stats?.downloads ?? 0}',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -319,9 +327,9 @@ class _ProfileStat extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           value,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineSmall,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
         ),
       ],
     );
@@ -453,9 +461,9 @@ class _EmptyDownloadedRoutes extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.black12),
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.surfaceElevated,
+        border: Border.all(color: AppColors.borderSubtle),
+        borderRadius: BorderRadius.circular(AppRadii.card),
       ),
       child: Text(context.strings.emptyDownloadedRoutes),
     );

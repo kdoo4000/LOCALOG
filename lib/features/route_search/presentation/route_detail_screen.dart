@@ -192,7 +192,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           final route = detail.route;
           final sortedPlaces = [...route.places]
             ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-          final coverHeight = MediaQuery.sizeOf(context).height;
+          final coverHeight = MediaQuery.sizeOf(context).height * .78;
           if (!_didSetInitialScrollPosition) {
             _didSetInitialScrollPosition = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -222,7 +222,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Color(0x29000000),
+                          color: Color(0x292457F5),
                           blurRadius: 20,
                           offset: Offset(0, -4),
                         ),
@@ -669,42 +669,42 @@ class _TimelinePlace extends StatelessWidget {
                         onTap: () =>
                             _openPhotoViewer(context, place.photoUrls, 0),
                         child: Hero(
-                      tag: 'route-photo-${place.id}-0',
-                      child: Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: _StoredRoutePhoto(
-                              path: place.photoUrls.first,
-                              width: 108,
-                              height: 108,
-                            ),
-                          ),
-                          if (place.photoUrls.length > 1)
-                            Positioned(
-                              right: 7,
-                              bottom: 7,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xB3000000),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  '+${place.photoUrls.length - 1}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                          tag: 'route-photo-${place.id}-0',
+                          child: Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: _StoredRoutePhoto(
+                                  path: place.photoUrls.first,
+                                  width: 108,
+                                  height: 108,
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
+                              if (place.photoUrls.length > 1)
+                                Positioned(
+                                  right: 7,
+                                  bottom: 7,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xB3000000),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      '+${place.photoUrls.length - 1}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),

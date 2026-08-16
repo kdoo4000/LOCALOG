@@ -154,45 +154,59 @@ class _MainShellScreenState extends State<MainShellScreen> {
           const ProfileScreen(),
         ],
       ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          border: Border(top: BorderSide(color: AppColors.gray200)),
-        ),
-        child: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          destinations: [
-            NavigationDestination(
-              icon: const Icon(Icons.home_outlined),
-              selectedIcon: const Icon(Icons.home_rounded),
-              label: strings.navHome,
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceElevated,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.borderSubtle),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x142457F5),
+                blurRadius: 24,
+                offset: Offset(0, 10),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: NavigationBar(
+              selectedIndex: _currentIndex,
+              onDestinationSelected: (index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              },
+              destinations: [
+                NavigationDestination(
+                  icon: const Icon(Icons.home_outlined),
+                  selectedIcon: const Icon(Icons.home_rounded),
+                  label: strings.navHome,
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.search),
+                  selectedIcon: const Icon(Icons.search_rounded),
+                  label: strings.navSearch,
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  selectedIcon: const Icon(Icons.add_photo_alternate_rounded),
+                  label: strings.navUpload,
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.map_outlined),
+                  selectedIcon: const Icon(Icons.map_rounded),
+                  label: strings.navPlan,
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.person_outline_rounded),
+                  selectedIcon: const Icon(Icons.person_rounded),
+                  label: strings.navProfile,
+                ),
+              ],
             ),
-            NavigationDestination(
-              icon: const Icon(Icons.search),
-              selectedIcon: const Icon(Icons.search_rounded),
-              label: strings.navSearch,
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.add_photo_alternate_outlined),
-              selectedIcon: const Icon(Icons.add_photo_alternate_rounded),
-              label: strings.navUpload,
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.map_outlined),
-              selectedIcon: const Icon(Icons.map_rounded),
-              label: strings.navPlan,
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.person_outline_rounded),
-              selectedIcon: const Icon(Icons.person_rounded),
-              label: strings.navProfile,
-            ),
-          ],
+          ),
         ),
       ),
     );

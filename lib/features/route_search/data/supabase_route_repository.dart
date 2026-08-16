@@ -431,7 +431,7 @@ class SupabaseRouteRepository implements RouteRepository {
         ? const <dynamic>[]
         : (row['route_photos'] as List? ?? const <dynamic>[]);
     final storagePaths = <String>{
-      if (coverPath != null) coverPath,
+      ?coverPath,
       for (final raw in rawPhotos)
         if (_asMap(raw)['storage_path'] is String)
           _asMap(raw)['storage_path'] as String,
@@ -534,11 +534,10 @@ class SupabaseRouteRepository implements RouteRepository {
         .whereType<String>()
         .toList();
     final regionRows =
-        (row['route_regions'] as List? ?? const []).map(_asMap).toList()
-          ..sort(
-            (a, b) =>
-                _asInt(a['order_index']).compareTo(_asInt(b['order_index'])),
-          );
+        (row['route_regions'] as List? ?? const []).map(_asMap).toList()..sort(
+          (a, b) =>
+              _asInt(a['order_index']).compareTo(_asInt(b['order_index'])),
+        );
     final regions = regionRows
         .map((region) => region['region_name'])
         .whereType<String>()

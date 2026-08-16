@@ -8,6 +8,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/premium_ui.dart';
 import '../../../models/photo_metadata.dart';
 import '../../../services/exif_metadata_reader.dart';
 import '../../../services/original_media_picker.dart';
@@ -173,10 +174,11 @@ class _PlannedRouteLogCreateScreenState
         logId: saved.id,
       );
       if (!mounted) return;
-      await Navigator.of(
-        context,
-      ).pushNamed(RouteNames.routeDetail, arguments: saved.id);
-      if (mounted) Navigator.of(context).pop(updatedPlan);
+      await Navigator.of(context).popAndPushNamed(
+        RouteNames.routeDetail,
+        result: updatedPlan,
+        arguments: saved.id,
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -191,101 +193,127 @@ class _PlannedRouteLogCreateScreenState
     final missingCount = _places
         .where((place) => _photosByPlaceId[place.id]!.isEmpty)
         .length;
+    final completedCount = _places.length - missingCount;
     return Scaffold(
       appBar: AppBar(title: const Text('장소별 사진 추가')),
+      bottomNavigationBar: AppStickyActionBar(
+        child: FilledButton.icon(
+          onPressed: _saving || missingCount > 0 ? null : _save,
+          icon: _saving
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.auto_stories_outlined),
+          label: Text(
+            _saving
+                ? '로그 저장 중...'
+                : missingCount == 0
+                ? '로그 만들기'
+                : '사진이 필요한 장소 $missingCount곳',
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: AppLayout.readingWidth),
             child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          children: [
-            Text(
-              '계획한 루트에 사진을 채워 로그를 만드세요',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '각 장소에 해당하는 사진을 한 장 이상 추가하면 루트 순서 그대로 로그가 만들어집니다.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _titleController,
-              decoration: const InputDecoration(
-                labelText: '로그 제목',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _descriptionController,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: '로그 설명 (선택)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 20),
-            for (var index = 0; index < _places.length; index++) ...[
-              _PlacePhotoCard(
-                index: index,
-                place: _places[index],
-                photos: _photosByPlaceId[_places[index].id]!,
-                selectedCoverPath: _coverPhotoPath,
-                isReading: _readingPlaceId == _places[index].id,
-                onAddPhotos: () => _addPhotos(_places[index]),
-                onSelectCover: (photo) =>
-                    setState(() => _coverPhotoPath = photo.file.path),
-                onRemovePhoto: (photo) =>
-                    _removePhoto(_places[index].id, photo),
-              ),
-              const SizedBox(height: 12),
-            ],
-            const SizedBox(height: 8),
-            DropdownButtonFormField<RouteVisibility>(
-              initialValue: _visibility,
-              decoration: const InputDecoration(
-                labelText: '공개 범위',
-                border: OutlineInputBorder(),
-              ),
-              items: const [
-                DropdownMenuItem(
-                  value: RouteVisibility.public,
-                  child: Text('전체 공개'),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+              children: [
+                Text(
+                  '계획한 루트에 사진을 채워 로그를 만드세요',
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
-                DropdownMenuItem(
-                  value: RouteVisibility.private,
-                  child: Text('나만 보기'),
+                const SizedBox(height: 8),
+                Text(
+                  '각 장소에 해당하는 사진을 한 장 이상 추가하면 루트 순서 그대로 로그가 만들어집니다.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              ],
-              onChanged: _saving
-                  ? null
-                  : (value) {
-                      if (value != null) setState(() => _visibility = value);
-                    },
-            ),
-            const SizedBox(height: 18),
-            FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.auto_stories_outlined),
-              label: Text(
-                _saving
-                    ? '로그 저장 중...'
-                    : missingCount == 0
-                    ? '로그 만들기'
-                    : '사진이 필요한 장소 $missingCount곳',
-              ),
-            ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: LinearProgressIndicator(
+                        value: _places.isEmpty
+                            ? 0
+                            : completedCount / _places.length,
+                        minHeight: 7,
+                        borderRadius: BorderRadius.circular(AppRadii.pill),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      '$completedCount/${_places.length}곳 완료',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(
+                    labelText: '로그 제목',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _descriptionController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: '로그 설명 (선택)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                for (var index = 0; index < _places.length; index++) ...[
+                  _PlacePhotoCard(
+                    index: index,
+                    place: _places[index],
+                    photos: _photosByPlaceId[_places[index].id]!,
+                    selectedCoverPath: _coverPhotoPath,
+                    isReading: _readingPlaceId == _places[index].id,
+                    onAddPhotos: () => _addPhotos(_places[index]),
+                    onSelectCover: (photo) =>
+                        setState(() => _coverPhotoPath = photo.file.path),
+                    onRemovePhoto: (photo) =>
+                        _removePhoto(_places[index].id, photo),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                const SizedBox(height: 8),
+                DropdownButtonFormField<RouteVisibility>(
+                  initialValue: _visibility,
+                  decoration: const InputDecoration(
+                    labelText: '공개 범위',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: RouteVisibility.public,
+                      child: Text('전체 공개'),
+                    ),
+                    DropdownMenuItem(
+                      value: RouteVisibility.private,
+                      child: Text('나만 보기'),
+                    ),
+                  ],
+                  onChanged: _saving
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            setState(() => _visibility = value);
+                          }
+                        },
+                ),
               ],
             ),
           ),
@@ -392,53 +420,53 @@ class _PlacePhotoCard extends StatelessWidget {
                     child: GestureDetector(
                       onTap: () => onSelectCover(photo),
                       child: Container(
-                      width: 92,
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? AppColors.primaryBlue
-                            : AppColors.gray200,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(9),
-                            child: _XFileImage(file: photo.file),
-                          ),
-                          if (selected)
-                            const Positioned(
-                              left: 5,
-                              bottom: 5,
-                              child: Icon(
-                                Icons.star,
-                                size: 18,
-                                color: AppColors.accentLime,
-                              ),
+                        width: 92,
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? AppColors.primaryBlue
+                              : AppColors.gray200,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(9),
+                              child: _XFileImage(file: photo.file),
                             ),
-                          Positioned(
-                            right: 2,
-                            top: 2,
-                            child: Material(
-                              color: const Color(0xB3000000),
-                              shape: const CircleBorder(),
-                              child: InkWell(
-                                customBorder: const CircleBorder(),
-                                onTap: () => onRemovePhoto(photo),
-                                child: const Padding(
-                                  padding: EdgeInsets.all(4),
-                                  child: Icon(
-                                    Icons.close,
-                                    size: 15,
-                                    color: Colors.white,
+                            if (selected)
+                              const Positioned(
+                                left: 5,
+                                bottom: 5,
+                                child: Icon(
+                                  Icons.star,
+                                  size: 18,
+                                  color: AppColors.accentLime,
+                                ),
+                              ),
+                            Positioned(
+                              right: 2,
+                              top: 2,
+                              child: Material(
+                                color: const Color(0xB3000000),
+                                shape: const CircleBorder(),
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: () => onRemovePhoto(photo),
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(4),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 15,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
                       ),
                     ),
                   );

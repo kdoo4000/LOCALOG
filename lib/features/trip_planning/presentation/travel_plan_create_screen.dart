@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/premium_ui.dart';
 import '../../route_search/presentation/region_picker_screen.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
@@ -130,74 +131,86 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
     final dayCount = range == null ? null : range.duration.inDays + 1;
     return Scaffold(
       appBar: AppBar(title: Text(_isEditing ? '여행 계획 수정' : '새 여행 계획')),
+      bottomNavigationBar: AppStickyActionBar(
+        child: FilledButton.icon(
+          onPressed: _saving ? null : _save,
+          icon: _saving
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.arrow_forward_rounded),
+          label: Text(_isEditing ? '변경사항 저장' : '여행 계획 만들기'),
+        ),
+      ),
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: AppLayout.readingWidth),
             child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            Text(
-              _isEditing ? '여행 계획을 다듬어볼까요?' : '어디에서 며칠을 보낼까요?',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _isEditing
-                  ? '기간을 줄이면 범위 밖 일정과 루트는 삭제돼요.'
-                  : '선택한 날짜마다 하루치 루트를 하나씩 계획할 수 있어요.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 28),
-            TextField(
-              controller: _titleController,
-              decoration: const InputDecoration(
-                labelText: '여행 이름',
-                hintText: '예: 부산 여름 여행',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 14),
-            RegionSelectionField(
-              regions: _regions,
-              onTap: _selectRegion,
-              helperText: _regions.isEmpty
-                  ? '여러 시·도와 시·군·구를 선택할 수 있어요.'
-                  : '${_regions.length}개 지역 선택됨',
-            ),
-            const SizedBox(height: 14),
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-              shape: RoundedRectangleBorder(
-                side: const BorderSide(color: AppColors.gray200),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              leading: const Icon(Icons.calendar_month_outlined),
-              title: Text(
-                range == null
-                    ? '여행 날짜 선택'
-                    : '${_dateLabel(range.start)} ~ ${_dateLabel(range.end)}',
-              ),
-              subtitle: dayCount == null
-                  ? const Text('시작일과 종료일')
-                  : Text('${dayCount - 1}박 $dayCount일'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _selectDates,
-            ),
-            const SizedBox(height: 28),
-            FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add_rounded),
-              label: Text(_isEditing ? '변경사항 저장' : '여행 계획 만들기'),
-            ),
+              padding: const EdgeInsets.all(24),
+              children: [
+                Text(
+                  _isEditing ? '여행 계획을 다듬어볼까요?' : '어디에서 며칠을 보낼까요?',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _isEditing
+                      ? '기간을 줄이면 범위 밖 일정과 루트는 삭제돼요.'
+                      : '선택한 날짜마다 하루치 루트를 하나씩 계획할 수 있어요.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                AppStepIndicator(
+                  steps: const ['이름', '지역', '날짜'],
+                  currentIndex: range != null
+                      ? 2
+                      : _regions.isNotEmpty
+                      ? 1
+                      : 0,
+                ),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(
+                    labelText: '여행 이름',
+                    hintText: '예: 부산 여름 여행',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                RegionSelectionField(
+                  regions: _regions,
+                  onTap: _selectRegion,
+                  helperText: _regions.isEmpty
+                      ? '여러 시·도와 시·군·구를 선택할 수 있어요.'
+                      : '${_regions.length}개 지역 선택됨',
+                ),
+                const SizedBox(height: 14),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                  tileColor: AppColors.surfaceElevated,
+                  shape: RoundedRectangleBorder(
+                    side: const BorderSide(color: AppColors.gray200),
+                    borderRadius: BorderRadius.circular(AppRadii.control),
+                  ),
+                  leading: const Icon(Icons.calendar_month_outlined),
+                  title: Text(
+                    range == null
+                        ? '여행 날짜 선택'
+                        : '${_dateLabel(range.start)} ~ ${_dateLabel(range.end)}',
+                  ),
+                  subtitle: dayCount == null
+                      ? const Text('시작일과 종료일')
+                      : Text('${dayCount - 1}박 $dayCount일'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _selectDates,
+                ),
+                const SizedBox(height: 28),
               ],
             ),
           ),

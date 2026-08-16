@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_tokens.dart';
+
 class AppCard extends StatefulWidget {
   const AppCard({
     super.key,
@@ -34,9 +36,9 @@ class _AppCardState extends State<AppCard> {
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return AnimatedScale(
-      scale: !reduceMotion && _pressed ? .985 : 1,
-      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 120),
-      curve: Curves.easeOut,
+      scale: !reduceMotion && _pressed ? .98 : 1,
+      duration: reduceMotion ? Duration.zero : AppMotion.quick,
+      curve: AppMotion.curve,
       child: Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(

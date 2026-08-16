@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/premium_ui.dart';
 import '../../../models/place_candidate.dart';
 import '../../route_search/domain/route_place.dart';
 import '../../route_search/presentation/widgets/route_stop_edit_tile.dart';
@@ -121,31 +122,43 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_isCreating ? '직접 루트 만들기' : '계획 루트 수정'),
-        actions: [
-          IconButton(
-            tooltip: '장소 추가',
-            onPressed: _saving ? null : _addPlace,
-            icon: const Icon(Icons.add_location_alt_outlined),
-          ),
-          TextButton(
-            onPressed: _saving ? null : _save,
-            child: const Text('저장'),
-          ),
-        ],
+      appBar: AppBar(title: Text(_isCreating ? '직접 루트 만들기' : '계획 루트 수정')),
+      bottomNavigationBar: AppStickyActionBar(
+        child: FilledButton.icon(
+          onPressed: _saving ? null : _save,
+          icon: _saving
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.save_outlined),
+          label: Text(_saving ? '저장 중' : '루트 저장'),
+        ),
       ),
       body: SafeArea(
         child: Column(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-              child: TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: '루트 이름',
-                  border: OutlineInputBorder(),
-                ),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _titleController,
+                    decoration: const InputDecoration(
+                      labelText: '루트 이름',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _saving ? null : _addPlace,
+                      icon: const Icon(Icons.add_location_alt_outlined),
+                      label: const Text('장소 추가'),
+                    ),
+                  ),
+                ],
               ),
             ),
             if (widget.route?.hasSourceLog == true)

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/premium_ui.dart';
 import '../../../core/widgets/region_chip_wrap.dart';
 import '../../../services/naver_static_map_service.dart';
 import '../../photo_location/naver_dynamic_map.dart';
@@ -213,19 +214,6 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
         actions: [
           if (plan != null)
             IconButton(
-              tooltip: '영수증 정산',
-              onPressed: _deletingPlan
-                  ? null
-                  : () => Navigator.of(context).push<void>(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            ReceiptSettlementScreen(travelTitle: plan.title),
-                      ),
-                    ),
-              icon: const Icon(Icons.receipt_long_outlined),
-            ),
-          if (plan != null)
-            IconButton(
               tooltip: '계획 수정',
               onPressed: _deletingPlan ? null : () => _editPlan(plan),
               icon: const Icon(Icons.edit_outlined),
@@ -268,23 +256,70 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
         children: [
-          Text(
-            '${plan.nightCount}박 ${plan.dayCount}일',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.gray500,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 9),
-          RegionChipWrap(regions: plan.effectiveRegions),
-          const SizedBox(height: 16),
-          _TripCollaborationCard(
-            onInvite: () => _showInviteNotice(context),
-            onSettlement: () => Navigator.of(context).push<void>(
-              MaterialPageRoute(
-                builder: (_) =>
-                    ReceiptSettlementScreen(travelTitle: plan.title),
-              ),
+          AppHeroCard(
+            padding: const EdgeInsets.all(22),
+            visual: AppHeroVisual.calendar,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${plan.nightCount}박 ${plan.dayCount}일',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(color: AppColors.accentLime),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${plan.startDate.month}.${plan.startDate.day} — ${plan.endDate.month}.${plan.endDate.day}',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: AppColors.white,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                RegionChipWrap(
+                  regions: plan.effectiveRegions,
+                  foregroundColor: AppColors.white,
+                  backgroundColor: AppColors.white.withValues(alpha: .12),
+                  borderColor: AppColors.white.withValues(alpha: .25),
+                ),
+                const SizedBox(height: 20),
+                Divider(color: AppColors.white.withValues(alpha: .2)),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => _showInviteNotice(context),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.white,
+                          foregroundColor: AppColors.primaryBlue,
+                        ),
+                        icon: const Icon(Icons.person_add_alt_1_outlined),
+                        label: const Text('초대'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => Navigator.of(context).push<void>(
+                          MaterialPageRoute(
+                            builder: (_) => ReceiptSettlementScreen(
+                              travelTitle: plan.title,
+                            ),
+                          ),
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.white,
+                          foregroundColor: AppColors.primaryBlue,
+                        ),
+                        icon: const Icon(Icons.receipt_long_outlined),
+                        label: const Text('정산'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 20),
@@ -393,7 +428,7 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
             children: [
               Text('동행자 초대', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
-              const Text('일정 공동 편집과 정산 공유를 위한 초대 기능을 준비하고 있어요.'),
+              const Text('동행자 초대는 아직 사용할 수 없어요. 다음 업데이트에서 제공할 예정입니다.'),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
@@ -405,82 +440,6 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _TripCollaborationCard extends StatelessWidget {
-  const _TripCollaborationCard({
-    required this.onInvite,
-    required this.onSettlement,
-  });
-
-  final VoidCallback onInvite;
-  final VoidCallback onSettlement;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.sky,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.group_outlined,
-                  color: AppColors.primaryBlue,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '함께하는 여행',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '동행자와 일정과 정산을 공유해요.',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: AppColors.gray500),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onInvite,
-                  icon: const Icon(Icons.person_add_alt_1_outlined),
-                  label: const Text('동행자 초대'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onSettlement,
-                  icon: const Icon(Icons.receipt_long_outlined),
-                  label: const Text('정산하기'),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/app_card.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
 import 'travel_plan_create_screen.dart';
@@ -157,7 +158,11 @@ class _PlanRouteImportScreenState extends State<PlanRouteImportScreen> {
                       ),
                       const SizedBox(height: 8),
                       for (final day in plan.days)
-                        Card(
+                        AppCard(
+                          padding: EdgeInsets.zero,
+                          onTap: _savingDayId == null
+                              ? () => _selectDay(day)
+                              : null,
                           child: ListTile(
                             leading: CircleAvatar(
                               child: Text('${day.dayIndex + 1}'),
@@ -183,9 +188,6 @@ class _PlanRouteImportScreenState extends State<PlanRouteImportScreen> {
                                         ? Icons.add_circle_outline
                                         : Icons.swap_horiz,
                                   ),
-                            onTap: _savingDayId == null
-                                ? () => _selectDay(day)
-                                : null,
                           ),
                         ),
                       const SizedBox(height: 18),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/premium_ui.dart';
 import '../../../core/widgets/region_chip_wrap.dart';
 
 String? inferMostFrequentRegion(Iterable<String> addresses) {
@@ -222,12 +223,15 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
                       '방문할 지역을 선택해 주세요.',
                       style: TextStyle(color: AppColors.gray500),
                     )
-                  : Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final region in _selectedRegions)
-                          InputChip(
+                  : SizedBox(
+                      height: 40,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _selectedRegions.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          final region = _selectedRegions.elementAt(index);
+                          return InputChip(
                             label: Text(_regionChipLabel(region)),
                             onDeleted: () => _removeRegion(region),
                             deleteIcon: const Icon(Icons.close, size: 16),
@@ -240,8 +244,9 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
                               fontWeight: FontWeight.w800,
                             ),
                             visualDensity: VisualDensity.compact,
-                          ),
-                      ],
+                          );
+                        },
+                      ),
                     ),
             ),
             const Divider(height: 1),
@@ -378,12 +383,7 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
-                border: Border(top: BorderSide(color: AppColors.gray200)),
-              ),
+            AppStickyActionBar(
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton(

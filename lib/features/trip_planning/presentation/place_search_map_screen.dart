@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/premium_ui.dart';
 import '../../../models/place_candidate.dart';
 import '../../../services/naver_static_map_service.dart';
 import '../../../services/place_candidate_service.dart';
@@ -98,8 +99,22 @@ class _PlaceSearchMapScreenState extends State<PlaceSearchMapScreen> {
         : located.indexWhere((candidate) => candidate.id == _selected!.id);
     final normalizedSelectedIndex =
         selectedIndex != null && selectedIndex >= 0 ? selectedIndex : null;
+    final mapHeight = (MediaQuery.sizeOf(context).height * .38).clamp(
+      240.0,
+      380.0,
+    );
     return Scaffold(
       appBar: AppBar(title: const Text('장소 검색')),
+      bottomNavigationBar: AppStickyActionBar(
+        child: FilledButton(
+          onPressed: _selected == null
+              ? null
+              : () => Navigator.of(context).pop(_selected),
+          child: Text(
+            _selected == null ? '장소를 선택해 주세요' : '${_selected!.displayName} 추가',
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -139,7 +154,7 @@ class _PlaceSearchMapScreenState extends State<PlaceSearchMapScreen> {
               ),
             ),
             SizedBox(
-              height: 300,
+              height: mapHeight,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -167,7 +182,7 @@ class _PlaceSearchMapScreenState extends State<PlaceSearchMapScreen> {
                             longitude: candidate.longitude!,
                           ),
                       ],
-                      height: 300,
+                      height: mapHeight,
                       connectPoints: false,
                       selectedIndex: normalizedSelectedIndex,
                       onPointTap: (index) => _selectCandidate(located[index]),
@@ -246,27 +261,6 @@ class _PlaceSearchMapScreenState extends State<PlaceSearchMapScreen> {
                         );
                       },
                     ),
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                8,
-                16,
-                12 + MediaQuery.paddingOf(context).bottom,
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _selected == null
-                      ? null
-                      : () => Navigator.of(context).pop(_selected),
-                  child: Text(
-                    _selected == null
-                        ? '장소를 선택해 주세요'
-                        : '${_selected!.displayName} 추가',
-                  ),
-                ),
-              ),
             ),
           ],
         ),

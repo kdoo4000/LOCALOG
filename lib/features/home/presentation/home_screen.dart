@@ -7,11 +7,13 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/premium_ui.dart';
 import '../../../core/widgets/region_chip_wrap.dart';
 import '../../route_search/data/route_repository_provider.dart';
 import '../../route_search/domain/travel_route.dart';
 import '../../route_search/presentation/route_detail_screen.dart';
 import '../../route_search/presentation/widgets/route_card.dart';
+import '../../receipt_settlement/presentation/receipt_settlement_screen.dart';
 import '../../trip_planning/data/travel_plan_repository_provider.dart';
 import '../../trip_planning/domain/travel_plan.dart';
 import '../../trip_planning/presentation/travel_plan_create_screen.dart';
@@ -114,6 +116,16 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) await _reloadNextPlan();
   }
 
+  Future<void> _openSettlement() async {
+    final plan = _nextPlan;
+    if (plan == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => ReceiptSettlementScreen(travelTitle: plan.title),
+      ),
+    );
+  }
+
   Future<void> _createPlan() async {
     if (widget.isGuest) {
       widget.onLoginTap?.call();
@@ -143,61 +155,60 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(24, 18, 24, 32),
               children: [
-            _HomeHeader(
-              isGuest: widget.isGuest,
-              user: widget.user,
-              nextPlan: _nextPlan,
-              loadingPlan: _loadingPlan,
-              onOpenPlan: _openNextPlan,
-              onCreatePlan: _createPlan,
-              onProfileTap: widget.onProfileTap,
-              onLoginTap: widget.onLoginTap,
-            ),
-            const SizedBox(height: 26),
-                Text(
-              strings.monthlyRecommend,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 12),
-            FutureBuilder<List<TravelRoute>>(
-              future: _routesFuture,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return _LoadError(onRetry: _reloadRoutes);
-                }
-                if (!snapshot.hasData) {
-                  return const _RouteCardSkeleton();
-                }
-
-                final routes = snapshot.data!;
-                if (routes.isEmpty) {
-                  return Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: AppColors.sky,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Text('아직 공개된 로그가 없습니다.'),
-                  );
-                }
-                final featured = routes.first;
-                return RouteCard(
-                  route: featured,
-                  onTap: () => _openRoute(featured),
-                );
-              },
+                _HomeHeader(
+                  isGuest: widget.isGuest,
+                  user: widget.user,
+                  nextPlan: _nextPlan,
+                  loadingPlan: _loadingPlan,
+                  onOpenPlan: _openNextPlan,
+                  onSettlement: _openSettlement,
+                  onCreatePlan: _createPlan,
+                  onProfileTap: widget.onProfileTap,
+                  onLoginTap: widget.onLoginTap,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 _ShortcutGrid(
                   onRouteSearchTap: () => widget.onSearchTap?.call(null),
                   onUploadTap: widget.onUploadTap,
                 ),
                 const SizedBox(height: 28),
-            _PopularPlacesPanel(
-              onPlaceTap: (place) => widget.onSearchTap?.call(place),
-            ),
+                Text(
+                  strings.monthlyRecommend,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                FutureBuilder<List<TravelRoute>>(
+                  future: _routesFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return _LoadError(onRetry: _reloadRoutes);
+                    }
+                    if (!snapshot.hasData) {
+                      return const _RouteCardSkeleton();
+                    }
+
+                    final routes = snapshot.data!;
+                    if (routes.isEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: AppColors.sky,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Text('아직 공개된 로그가 없습니다.'),
+                      );
+                    }
+                    final featured = routes.first;
+                    return RouteCard(
+                      route: featured,
+                      onTap: () => _openRoute(featured),
+                    );
+                  },
+                ),
+                const SizedBox(height: 28),
+                _PopularPlacesPanel(
+                  onPlaceTap: (place) => widget.onSearchTap?.call(place),
+                ),
               ],
             ),
           ),
@@ -236,6 +247,7 @@ class _HomeHeader extends StatelessWidget {
     required this.nextPlan,
     required this.loadingPlan,
     required this.onOpenPlan,
+    required this.onSettlement,
     required this.onCreatePlan,
   });
 
@@ -246,6 +258,7 @@ class _HomeHeader extends StatelessWidget {
   final TravelPlan? nextPlan;
   final bool loadingPlan;
   final VoidCallback onOpenPlan;
+  final VoidCallback onSettlement;
   final VoidCallback onCreatePlan;
 
   @override
@@ -315,21 +328,12 @@ class _HomeHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(22, 24, 22, 26),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.primaryBlue, AppColors.primaryBlueDark],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(AppRadii.feature),
-          ),
+        AppHeroCard(
           child: _NextTravelContent(
             plan: nextPlan,
             loading: loadingPlan,
             onOpenPlan: onOpenPlan,
+            onSettlement: onSettlement,
             onCreatePlan: onCreatePlan,
           ),
         ),
@@ -343,12 +347,14 @@ class _NextTravelContent extends StatelessWidget {
     required this.plan,
     required this.loading,
     required this.onOpenPlan,
+    required this.onSettlement,
     required this.onCreatePlan,
   });
 
   final TravelPlan? plan;
   final bool loading;
   final VoidCallback onOpenPlan;
+  final VoidCallback onSettlement;
   final VoidCallback onCreatePlan;
 
   @override
@@ -392,6 +398,9 @@ class _NextTravelContent extends StatelessWidget {
       );
     }
 
+    final status = travelPlanHomeStatus(plan, DateTime.now());
+    final showSettlement = status != TravelPlanHomeStatus.upcoming;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -421,12 +430,39 @@ class _NextTravelContent extends StatelessWidget {
           compact: true,
         ),
         const SizedBox(height: 20),
-        _HeroActionButton(
-          key: const ValueKey('home-open-plan-button'),
-          label: travelPlanHomeActionLabel(plan, DateTime.now()),
-          icon: Icons.arrow_forward_rounded,
-          onPressed: onOpenPlan,
-        ),
+        if (showSettlement)
+          Row(
+            children: [
+              Expanded(
+                child: _HeroActionButton(
+                  key: const ValueKey('home-open-plan-button'),
+                  label: status == TravelPlanHomeStatus.ongoing
+                      ? '오늘 일정'
+                      : '여행 기록',
+                  icon: Icons.arrow_forward_rounded,
+                  onPressed: onOpenPlan,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _HeroActionButton(
+                  key: const ValueKey('home-settlement-button'),
+                  label: '정산',
+                  icon: Icons.receipt_long_outlined,
+                  onPressed: onSettlement,
+                  backgroundColor: AppColors.accentLime,
+                  foregroundColor: AppColors.ink,
+                ),
+              ),
+            ],
+          )
+        else
+          _HeroActionButton(
+            key: const ValueKey('home-open-plan-button'),
+            label: travelPlanHomeActionLabel(plan, DateTime.now()),
+            icon: Icons.arrow_forward_rounded,
+            onPressed: onOpenPlan,
+          ),
       ],
     );
   }
@@ -464,19 +500,23 @@ class _HeroActionButton extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.onPressed,
+    this.backgroundColor = AppColors.white,
+    this.foregroundColor = AppColors.primaryBlue,
   });
 
   final String label;
   final IconData icon;
   final VoidCallback onPressed;
+  final Color backgroundColor;
+  final Color foregroundColor;
 
   @override
   Widget build(BuildContext context) {
     return FilledButton.icon(
       onPressed: onPressed,
       style: FilledButton.styleFrom(
-        backgroundColor: AppColors.white,
-        foregroundColor: AppColors.primaryBlue,
+        backgroundColor: backgroundColor,
+        foregroundColor: foregroundColor,
       ),
       icon: Icon(icon),
       label: Text(label),
@@ -555,29 +595,36 @@ TravelPlan? featuredTravelPlan(Iterable<TravelPlan> plans, DateTime now) {
   final allPlans = plans.toList();
   if (allPlans.isEmpty) return null;
 
-  final ongoing = allPlans
-      .where(
-        (plan) => travelPlanHomeStatus(plan, now) == TravelPlanHomeStatus.ongoing,
-      )
-      .toList()
-    ..sort((a, b) => b.startDate.compareTo(a.startDate));
+  final ongoing =
+      allPlans
+          .where(
+            (plan) =>
+                travelPlanHomeStatus(plan, now) == TravelPlanHomeStatus.ongoing,
+          )
+          .toList()
+        ..sort((a, b) => b.startDate.compareTo(a.startDate));
   if (ongoing.isNotEmpty) return ongoing.first;
 
-  final upcoming = allPlans
-      .where(
-        (plan) => travelPlanHomeStatus(plan, now) == TravelPlanHomeStatus.upcoming,
-      )
-      .toList()
-    ..sort((a, b) => a.startDate.compareTo(b.startDate));
+  final upcoming =
+      allPlans
+          .where(
+            (plan) =>
+                travelPlanHomeStatus(plan, now) ==
+                TravelPlanHomeStatus.upcoming,
+          )
+          .toList()
+        ..sort((a, b) => a.startDate.compareTo(b.startDate));
   if (upcoming.isNotEmpty) return upcoming.first;
 
-  final completed = allPlans
-      .where(
-        (plan) =>
-            travelPlanHomeStatus(plan, now) == TravelPlanHomeStatus.completed,
-      )
-      .toList()
-    ..sort((a, b) => b.endDate.compareTo(a.endDate));
+  final completed =
+      allPlans
+          .where(
+            (plan) =>
+                travelPlanHomeStatus(plan, now) ==
+                TravelPlanHomeStatus.completed,
+          )
+          .toList()
+        ..sort((a, b) => b.endDate.compareTo(a.endDate));
   return completed.first;
 }
 
@@ -632,7 +679,6 @@ class _ShortcutGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final strings = context.strings;
     final items =
         <
           ({
@@ -645,122 +691,118 @@ class _ShortcutGrid extends StatelessWidget {
         >[
           (
             icon: Icons.route_outlined,
-            label: strings.shortcutRouteSearch,
+            label: '로그 찾기',
             color: AppColors.sky,
             action: onRouteSearchTap,
             key: 'home-shortcut-search',
           ),
           (
-            icon: Icons.receipt_long_outlined,
-            label: strings.shortcutScanReceipt,
-            color: AppColors.yellow,
-            action: null,
-            key: 'home-shortcut-receipt',
-          ),
-          (
             icon: Icons.add_photo_alternate_outlined,
-            label: strings.shortcutUploadRoute,
+            label: '로그 만들기',
             color: AppColors.mint,
             action: onUploadTap,
             key: 'home-shortcut-upload',
-          ),
-          (
-            icon: Icons.map_outlined,
-            label: strings.shortcutMapView,
-            color: AppColors.sky,
-            action: null,
-            key: 'home-shortcut-map',
           ),
         ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final textScale = MediaQuery.textScalerOf(context).scale(1);
-        final crossAxisCount = textScale >= 1.3
-            ? 1
-            : constraints.maxWidth >= 760
-            ? 4
-            : 2;
-        final aspectRatio = crossAxisCount == 1 ? 4.2 : 2.15;
-
-        return GridView.count(
-          crossAxisCount: crossAxisCount,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: aspectRatio,
-          children: [
-            for (final item in items)
-              Semantics(
-                button: true,
-                enabled: item.action != null,
-                label: item.label,
-                hint: item.action == null ? '준비 중' : null,
-                child: Opacity(
-                  opacity: item.action == null ? .58 : 1,
-                  child: Material(
-                    color: item.action == null
-                        ? AppColors.disabledSurface
-                        : item.color,
-                    borderRadius: BorderRadius.circular(AppRadii.card),
-                    child: InkWell(
-                      key: ValueKey(item.key),
-                      borderRadius: BorderRadius.circular(AppRadii.card),
-                      onTap: item.action,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
+        Widget tile(
+          ({
+            IconData icon,
+            String label,
+            Color color,
+            VoidCallback? action,
+            String key,
+          })
+          item,
+          double height,
+        ) => SizedBox(
+          key: ValueKey(item.key),
+          height: height,
+          child: Semantics(
+            button: true,
+            enabled: item.action != null,
+            label: item.label,
+            hint: item.action == null ? '준비 중' : null,
+            child: Opacity(
+              opacity: item.action == null ? .58 : 1,
+              child: Material(
+                color: item.action == null
+                    ? AppColors.disabledSurface
+                    : item.color,
+                borderRadius: BorderRadius.circular(AppRadii.card),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(AppRadii.card),
+                  onTap: item.action,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 16,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(item.icon, color: AppColors.primaryBlue, size: 24),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            item.label,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: AppColors.ink,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
                         ),
-                        child: Row(
-                          children: [
-                          Icon(
-                            item.icon,
-                            color: AppColors.primaryBlue,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              item.label,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.labelMedium
-                                  ?.copyWith(
-                                    color: AppColors.ink,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                        if (item.action == null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 4,
                             ),
-                          ),
-                          if (item.action == null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.surface,
-                                borderRadius: BorderRadius.circular(
-                                  AppRadii.pill,
-                                ),
-                              ),
-                              child: const Text(
-                                '준비 중',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.disabledContent,
-                                ),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(
+                                AppRadii.pill,
                               ),
                             ),
-                          ],
-                        ),
-                      ),
+                            child: const Text(
+                              '준비 중',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.disabledContent,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
               ),
+            ),
+          ),
+        );
+
+        if (textScale >= 1.3 || constraints.maxWidth < 360) {
+          return Column(
+            children: [
+              for (var index = 0; index < items.length; index++) ...[
+                tile(items[index], 72),
+                if (index != items.length - 1) const SizedBox(height: 12),
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: tile(items[0], 88)),
+            const SizedBox(width: 12),
+            Expanded(child: tile(items[1], 88)),
           ],
         );
       },
@@ -786,39 +828,48 @@ class _PopularPlacesPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '최근 인기 관광지',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium,
-          ),
+          Text('최근 인기 관광지', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 14),
-          for (final place in places) ...[
-            AppCard(
-              onTap: () => onPlaceTap(place.$1),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      place.$1,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+          SizedBox(
+            height: 124,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: places.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final place = places[index];
+                return SizedBox(
+                  width: 220,
+                  child: AppCard(
+                    onTap: () => onPlaceTap(place.$1),
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Icon(
+                          Icons.near_me_outlined,
+                          color: index == 0
+                              ? AppColors.primaryBlue
+                              : AppColors.textSecondary,
+                        ),
+                        Text(
+                          place.$1,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Text(
+                          place.$2,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(color: AppColors.gray500),
+                        ),
+                      ],
                     ),
                   ),
-                  Text(
-                    place.$2,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.gray500,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
-            const SizedBox(height: 10),
-          ],
+          ),
         ],
       ),
     );

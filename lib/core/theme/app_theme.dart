@@ -54,7 +54,11 @@ abstract final class AppTheme {
               fontWeight: FontWeight.w700,
             ),
             bodyLarge: const TextStyle(fontSize: 16, height: 1.55),
-            bodyMedium: const TextStyle(fontSize: 15, height: 1.5),
+            bodyMedium: const TextStyle(
+              fontSize: 15,
+              height: 1.5,
+              fontWeight: FontWeight.w500,
+            ),
             labelLarge: const TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -81,9 +85,7 @@ abstract final class AppTheme {
           minimumSize: const Size.fromHeight(56),
           backgroundColor: AppColors.primaryBlue,
           foregroundColor: AppColors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadii.control),
-          ),
+          shape: const StadiumBorder(),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
           animationDuration: const Duration(milliseconds: 180),
         ),
@@ -116,7 +118,10 @@ abstract final class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadii.control),
-          borderSide: const BorderSide(color: AppColors.primaryBlue, width: 1.4),
+          borderSide: const BorderSide(
+            color: AppColors.primaryBlue,
+            width: 1.4,
+          ),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadii.control),
@@ -161,7 +166,7 @@ abstract final class AppTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.surface,
+        color: AppColors.surfaceElevated,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
@@ -170,14 +175,14 @@ abstract final class AppTheme {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: AppColors.white,
+        backgroundColor: AppColors.surfaceElevated,
         elevation: 0,
-        indicatorColor: AppColors.accentLime,
-        height: 76,
+        indicatorColor: AppColors.primaryBlueSoft,
+        height: 68,
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             color: states.contains(WidgetState.selected)
-                ? AppColors.primaryBlue
+                ? AppColors.primaryBlueDark
                 : AppColors.gray500,
             fontSize: 13,
             fontWeight: FontWeight.w700,
@@ -186,7 +191,7 @@ abstract final class AppTheme {
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
             color: states.contains(WidgetState.selected)
-                ? AppColors.primaryBlue
+                ? AppColors.primaryBlueDark
                 : AppColors.gray500,
           ),
         ),
