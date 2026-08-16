@@ -207,7 +207,7 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
     final districts = <String>[_allDistricts, ...sortedDistricts];
 
     return Scaffold(
-      backgroundColor: AppColors.white,
+      backgroundColor: AppColors.warmBackground,
       appBar: AppBar(title: const Text('지역 선택')),
       body: SafeArea(
         child: Column(
@@ -231,7 +231,7 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
                             label: Text(_regionChipLabel(region)),
                             onDeleted: () => _removeRegion(region),
                             deleteIcon: const Icon(Icons.close, size: 16),
-                            backgroundColor: AppColors.white,
+                            backgroundColor: AppColors.surface,
                             side: const BorderSide(
                               color: AppColors.primaryBlue,
                             ),
@@ -263,7 +263,7 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
                                 final selected = province == _selectedProvince;
                                 return Material(
                                   color: selected
-                                      ? AppColors.white
+                                      ? AppColors.surface
                                       : Colors.transparent,
                                   child: InkWell(
                                     onTap: () => setState(
@@ -297,7 +297,7 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
                                                     ? AppColors.ink
                                                     : AppColors.gray500,
                                                 fontWeight: selected
-                                                    ? FontWeight.w900
+                                                    ? FontWeight.w700
                                                     : FontWeight.w600,
                                               ),
                                             ),
@@ -308,7 +308,7 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
                                               style: const TextStyle(
                                                 color: AppColors.primaryBlue,
                                                 fontSize: 12,
-                                                fontWeight: FontWeight.w900,
+                                                fontWeight: FontWeight.w700,
                                               ),
                                             ),
                                         ],
@@ -345,7 +345,7 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
                               return Material(
                                 color: selected
                                     ? AppColors.sky.withValues(alpha: 0.45)
-                                    : AppColors.white,
+                                    : AppColors.surface,
                                 child: ListTile(
                                   minTileHeight: 52,
                                   contentPadding: const EdgeInsets.symmetric(
@@ -358,7 +358,7 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
                                           ? AppColors.primaryBlue
                                           : AppColors.ink,
                                       fontWeight: selected
-                                          ? FontWeight.w900
+                                          ? FontWeight.w700
                                           : FontWeight.w600,
                                     ),
                                   ),
@@ -381,7 +381,7 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
             Container(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               decoration: const BoxDecoration(
-                color: AppColors.white,
+                color: AppColors.surface,
                 border: Border(top: BorderSide(color: AppColors.gray200)),
               ),
               child: SizedBox(

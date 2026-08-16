@@ -56,8 +56,8 @@ class AppStrings {
   String get navHome => isKo ? '홈' : 'Home';
   String get navSearch => isKo ? '검색' : 'Search';
   String get navUpload => isKo ? '업로드' : 'Upload';
-  String get navPlan => isKo ? '계획' : 'Plan';
-  String get navMap => isKo ? '정산' : 'Split';
+  String get navPlan => isKo ? '내 여행' : 'My trips';
+  String get navSettlement => isKo ? '정산' : 'Split';
   String get navProfile => isKo ? '프로필' : 'Profile';
 
   String get mapComingTitle => isKo ? '영수증 정산' : 'Receipt settlement';
@@ -66,28 +66,33 @@ class AppStrings {
       : 'Receipt upload and item splitting are coming soon.';
 
   String get homeHeroTitle =>
-      isKo ? 'Where should\nwe go today?' : 'Where should\nwe go today?';
-  String get homeLocation => isKo ? 'Seoul, Korea' : 'Seoul, Korea';
+      isKo ? '오늘은 어디로\n떠나볼까요?' : 'Where should\nwe go today?';
+  String get homeLocation => isKo ? '대한민국 서울' : 'Seoul, Korea';
   String get destinationComing => isKo
       ? '여행 지역 설정은 다음 단계에서 연결할게요.'
       : 'Destination settings will be connected in the next step.';
   String shortcutComing(String label) => isKo
       ? '$label 화면은 다음 단계에서 연결할게요.'
       : '$label will be connected in the next step.';
-  String get monthlyRecommend =>
-      isKo ? 'July\'s local picks' : 'July\'s local picks';
-  String get shortcutRouteSearch => isKo ? 'Log' : 'Log';
-  String get shortcutScanReceipt => isKo ? 'Receipt' : 'Receipt';
-  String get shortcutUploadRoute => isKo ? 'Upload' : 'Upload';
-  String get shortcutDownload => isKo ? 'Plan' : 'Plan';
-  String get shortcutMapView => isKo ? 'Map' : 'Map';
-  String get shortcutNotifications => isKo ? 'Alerts' : 'Alerts';
+  String get monthlyRecommend => isKo ? '이번 달 로컬 추천' : 'Local picks this month';
+  String get shortcutRouteSearch => isKo ? '로그 찾기' : 'Find logs';
+  String get shortcutScanReceipt => isKo ? '영수증 정산' : 'Split receipt';
+  String get shortcutUploadRoute => isKo ? '로그 만들기' : 'Create log';
+  String get shortcutDownload => isKo ? '내 여행' : 'My trips';
+  String get shortcutMapView => isKo ? '지도 보기' : 'Map';
+  String get shortcutNotifications => isKo ? '알림' : 'Alerts';
 
   String get routeSearchTitle => isKo ? '어떤 로컬 로그를 찾아볼까요?' : 'Find a local log';
   String get routeSearchHint =>
       isKo ? '성수, 야경, 한식...' : 'Seongsu, night view, food...';
   String get noMatchingRoutes =>
       isKo ? '조건에 맞는 로그가 없어요.' : 'No logs match your search.';
+  String get recommendedKeywords => isKo ? '추천 키워드' : 'Suggested keywords';
+  String get searchResults => isKo ? '검색 결과' : 'Search results';
+  String get clearFilters => isKo ? '필터 초기화' : 'Clear filters';
+  String get searchEmptyHint => isKo
+      ? '검색어나 추천 키워드를 지우고 다시 둘러보세요.'
+      : 'Clear the search or suggested keywords and browse again.';
   List<String> get searchTags => isKo
       ? const ['성수', '홍대', '야경', '궁궐', '박물관', '닭한마리', '이태원', '기념품']
       : const [

@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/l10n/app_language.dart';
 import '../../core/router/route_names.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_tokens.dart';
 import '../../models/place_candidate.dart';
 import '../../models/photo_metadata.dart';
 import '../../services/exif_metadata_reader.dart';
@@ -305,21 +306,25 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
 
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-          children: [
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: AppLayout.readingWidth),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+              children: [
             Text(
               strings.photoTitle,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
+              style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 8),
             Text(
               strings.photoSubtitle,
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+              ).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
@@ -362,7 +367,9 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
                 _PhotoGrid(group: selectedGroup, onPhotoTap: _showDetails),
               ],
             ],
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -461,7 +468,7 @@ class _SaveRoutePanel extends StatelessWidget {
               : context.strings.reviewPhotoStops(photoCount),
           style: Theme.of(
             context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+          ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
         ),
         if (group != null) ...[
           const SizedBox(height: 14),
@@ -742,7 +749,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
           '대표 이미지',
           style: Theme.of(
             context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          ).textTheme.titleSmall,
         ),
         const SizedBox(height: 8),
         SizedBox(
@@ -754,42 +761,56 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
             itemBuilder: (context, index) {
               final entry = _entries[index];
               final selected = entry.id == _selectedCoverEntryId;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedCoverEntryId = entry.id),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  width: 84,
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? AppColors.primaryBlue
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(11),
-                        child: _PhotoImage(photo: entry.photo, cacheWidth: 240),
+              return Semantics(
+                button: true,
+                selected: selected,
+                label: '${context.strings.photos} ${index + 1}',
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () =>
+                        setState(() => _selectedCoverEntryId = entry.id),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      width: 84,
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? AppColors.primaryBlue
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      if (selected)
-                        const Align(
-                          alignment: Alignment.topRight,
-                          child: Padding(
-                            padding: EdgeInsets.all(5),
-                            child: CircleAvatar(
-                              radius: 10,
-                              backgroundColor: AppColors.accentLime,
-                              child: Icon(
-                                Icons.check,
-                                size: 14,
-                                color: AppColors.ink,
-                              ),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(11),
+                            child: _PhotoImage(
+                              photo: entry.photo,
+                              cacheWidth: 240,
                             ),
                           ),
-                        ),
-                    ],
+                          if (selected)
+                            const Align(
+                              alignment: Alignment.topRight,
+                              child: Padding(
+                                padding: EdgeInsets.all(5),
+                                child: CircleAvatar(
+                                  radius: 10,
+                                  backgroundColor: AppColors.accentLime,
+                                  child: Icon(
+                                    Icons.check,
+                                    size: 14,
+                                    color: AppColors.ink,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -896,7 +917,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
           context.strings.includedStops,
           style: Theme.of(
             context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ).textTheme.titleMedium,
         ),
         const SizedBox(height: 10),
         ReorderableListView.builder(
@@ -1001,7 +1022,7 @@ class _RouteDraftPlaceEditor extends StatelessWidget {
                         ? context.strings.choosePlace
                         : context.strings.changePlace,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -1037,18 +1058,30 @@ class _PhotoGrid extends StatelessWidget {
       title:
           '${_displayGroupLabel(context, group)} ${context.strings.timelineSuffix}',
       children: [
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 4,
-            mainAxisSpacing: 4,
-          ),
-          itemCount: group.photos.length,
-          itemBuilder: (context, index) {
-            final entry = group.photos[index];
-            return _PhotoTile(entry: entry, onTap: () => onPhotoTap(entry));
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 720 ? 5 : 3;
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                crossAxisSpacing: 4,
+                mainAxisSpacing: 4,
+              ),
+              itemCount: group.photos.length,
+              itemBuilder: (context, index) {
+                final entry = group.photos[index];
+                return Semantics(
+                  button: true,
+                  label: '${context.strings.photos} ${index + 1}',
+                  child: _PhotoTile(
+                    entry: entry,
+                    onTap: () => onPhotoTap(entry),
+                  ),
+                );
+              },
+            );
           },
         ),
       ],
@@ -1455,7 +1488,7 @@ class _MultiMapPanel extends StatelessWidget {
           context.strings.markerCount(points.length),
           style: Theme.of(
             context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+          ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
         ),
         const SizedBox(height: 12),
         NaverDynamicMap(points: points),
@@ -1517,7 +1550,7 @@ class _InfoRow extends StatelessWidget {
               label,
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
             ),
           ),
           Expanded(

@@ -262,7 +262,7 @@ class SupabaseRouteRepository implements RouteRepository {
       final isPublic =
           !route.isDownloadedCopy && route.visibility == RouteVisibility.public;
       final result = await _client.rpc(
-        'save_route_revision',
+        'save_route_revision_with_regions',
         params: {
           'p_route_id': routeId,
           'p_title': route.title.trim(),
@@ -274,11 +274,11 @@ class SupabaseRouteRepository implements RouteRepository {
           'p_places': prepared.places,
           'p_photos': prepared.photos,
           'p_cover_image_path': prepared.coverPath,
+          'p_regions': route.effectiveRegions.toList(),
         },
       );
       final response = _asMap(result);
       revisionCommitted = true;
-      await _replaceRouteRegions(routeId, route.effectiveRegions);
       final removedPaths =
           (response['removed_storage_paths'] as List? ?? const [])
               .whereType<String>()
@@ -294,28 +294,6 @@ class SupabaseRouteRepository implements RouteRepository {
       }
       rethrow;
     }
-  }
-
-  Future<void> _replaceRouteRegions(
-    String routeId,
-    Iterable<String> regions,
-  ) async {
-    final normalized = regions
-        .map((region) => region.trim())
-        .where((region) => region.isNotEmpty)
-        .toSet()
-        .toList();
-    if (normalized.isEmpty) throw StateError('로그에는 하나 이상의 지역이 필요합니다.');
-
-    await _client.from('route_regions').delete().eq('route_id', routeId);
-    await _client.from('route_regions').insert([
-      for (var index = 0; index < normalized.length; index++)
-        {
-          'route_id': routeId,
-          'region_name': normalized[index],
-          'order_index': index,
-        },
-    ]);
   }
 
   Future<_PreparedPhotos> _preparePhotos(

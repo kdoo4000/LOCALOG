@@ -9,7 +9,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../services/supabase_initializer.dart';
 import '../../photo_location/photo_location_page.dart';
 import '../../profile/presentation/profile_screen.dart';
-import '../../receipt_settlement/presentation/receipt_settlement_screen.dart';
 import '../../route_search/presentation/route_search_screen.dart';
 import '../../trip_planning/presentation/travel_plan_screen.dart';
 import 'home_screen.dart';
@@ -45,9 +44,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
     super.dispose();
   }
 
-  Future<void> _openProfile() => Navigator.of(
-    context,
-  ).push<void>(MaterialPageRoute(builder: (_) => const ProfileScreen()));
+  void _openProfile() => setState(() => _currentIndex = 4);
 
   Future<void> _openLogin() =>
       Navigator.of(context).pushNamed(RouteNames.login);
@@ -154,7 +151,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
           ),
           const PhotoLocationPage(),
           const TravelPlanScreen(),
-          const ReceiptSettlementScreen(),
+          const ProfileScreen(),
         ],
       ),
       bottomNavigationBar: DecoratedBox(
@@ -191,9 +188,9 @@ class _MainShellScreenState extends State<MainShellScreen> {
               label: strings.navPlan,
             ),
             NavigationDestination(
-              icon: const Icon(Icons.receipt_long_outlined),
-              selectedIcon: const Icon(Icons.receipt_long_rounded),
-              label: strings.navMap,
+              icon: const Icon(Icons.person_outline_rounded),
+              selectedIcon: const Icon(Icons.person_rounded),
+              label: strings.navProfile,
             ),
           ],
         ),

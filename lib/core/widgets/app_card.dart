@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class AppCard extends StatelessWidget {
+class AppCard extends StatefulWidget {
   const AppCard({
     super.key,
     required this.child,
@@ -13,12 +13,37 @@ class AppCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
+  State<AppCard> createState() => _AppCardState();
+}
+
+class _AppCardState extends State<AppCard> {
+  bool _pressed = false;
+
+  @override
+  void didUpdateWidget(covariant AppCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.onTap == null && _pressed) _pressed = false;
+  }
+
+  void _setPressed(bool value) {
+    if (widget.onTap == null || _pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(padding: padding, child: child),
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return AnimatedScale(
+      scale: !reduceMotion && _pressed ? .985 : 1,
+      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: widget.onTap,
+          onHighlightChanged: _setPressed,
+          child: Padding(padding: widget.padding, child: widget.child),
+        ),
       ),
     );
   }

@@ -20,16 +20,20 @@ class RouteCard extends StatelessWidget {
     );
     final cityInitial = route.city.isEmpty ? '?' : route.city.substring(0, 1);
 
-    return AppCard(
-      onTap: onTap,
-      padding: const EdgeInsets.all(18),
-      child: Row(
+    return Semantics(
+      button: onTap != null,
+      label: '${route.title}, ${route.city}, ${route.places.length}개 장소',
+      child: AppCard(
+        onTap: onTap,
+        padding: EdgeInsets.zero,
+        child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             child: Container(
-              width: 52,
-              height: 52,
+              width: double.infinity,
+              height: 184,
               alignment: Alignment.center,
               color: AppColors.accentLime,
               child: _RouteCoverImage(
@@ -38,40 +42,40 @@ class RouteCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   route.title,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     height: 1.16,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
+                RegionChipWrap(regions: route.effectiveRegions, compact: true),
+                const SizedBox(height: 10),
                 Text(
                   '추천 $upvote · ${route.places.length}곳 · $duration',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: AppColors.gray500,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 8),
-                RegionChipWrap(regions: route.effectiveRegions, compact: true),
                 if (route.tags.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 6,
                     runSpacing: 6,
                     children: [
-                      for (final tag in route.tags.take(4))
+                      for (final tag in route.tags.take(2))
                         _RouteTagChip(label: tag),
                     ],
                   ),
@@ -79,7 +83,8 @@ class RouteCard extends StatelessWidget {
               ],
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -101,8 +106,8 @@ class _RouteCoverImage extends StatelessWidget {
     if (imagePath.startsWith('assets/')) {
       return Image.asset(
         imagePath,
-        width: 52,
-        height: 52,
+        width: double.infinity,
+        height: 184,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => _CityInitial(initial: fallbackInitial),
       );
@@ -112,8 +117,8 @@ class _RouteCoverImage extends StatelessWidget {
     if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
       return Image.network(
         imagePath,
-        width: 52,
-        height: 52,
+        width: double.infinity,
+        height: 184,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => _CityInitial(initial: fallbackInitial),
       );
@@ -136,7 +141,7 @@ class _CityInitial extends StatelessWidget {
         style: const TextStyle(
           color: AppColors.primaryBlue,
           fontSize: 22,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -164,7 +169,7 @@ class _RouteTagChip extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: AppColors.primaryBlue,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
             height: 1,
           ),
         ),

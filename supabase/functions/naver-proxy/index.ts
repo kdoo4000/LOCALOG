@@ -66,12 +66,24 @@ type JsonRecord = Record<string, unknown>;
 
 const authenticatedHandler = withSupabase(
   { auth: "user" },
-  async (request: Request) => {
+  async (request: Request, context) => {
     if (request.method !== "GET") {
       return textResponse("Method not allowed", 405);
     }
 
     try {
+      const { data: quotaAvailable, error: quotaError } =
+        await context.supabase.rpc("consume_naver_proxy_quota");
+      if (quotaError) {
+        console.error("naver-proxy quota check failed", quotaError);
+        return textResponse("Unable to verify request quota", 503);
+      }
+      if (!quotaAvailable) {
+        return textResponse("Too many requests", 429, {
+          "Retry-After": "60",
+        });
+      }
+
       const url = new URL(request.url);
       const action = url.pathname.split("/").filter(Boolean).at(-1);
       switch (action) {
@@ -526,13 +538,18 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function textResponse(body: string, status: number): Response {
+function textResponse(
+  body: string,
+  status: number,
+  extraHeaders: HeadersInit = {},
+): Response {
   return new Response(body, {
     status,
     headers: {
       ...corsHeaders,
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store",
+      ...extraHeaders,
     },
   });
 }

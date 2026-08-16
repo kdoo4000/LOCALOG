@@ -81,46 +81,20 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
     if (normalizedRegions.isEmpty) {
       throw ArgumentError('하나 이상의 지역이 필요합니다.');
     }
-    final owner = _user;
-    final row = await _client
-        .from('travel_plans')
-        .insert({
-          'owner_id': owner.id,
-          'title': title.trim(),
-          'region_name': normalizedRegions.first,
-          'start_date': _dateValue(startDate),
-          'end_date': _dateValue(endDate),
-        })
-        .select('id')
-        .single();
-    final planId = row['id'] as String;
-    try {
-      await _client.from('travel_plan_regions').insert([
-        for (var index = 0; index < normalizedRegions.length; index++)
-          {
-            'plan_id': planId,
-            'region_name': normalizedRegions[index],
-            'order_index': index,
-          },
-      ]);
-      final dayCount =
-          _dateOnly(endDate).difference(_dateOnly(startDate)).inDays + 1;
-      await _client.from('travel_plan_days').insert([
-        for (var index = 0; index < dayCount; index++)
-          {
-            'plan_id': planId,
-            'travel_date': _dateValue(startDate.add(Duration(days: index))),
-            'day_index': index,
-          },
-      ]);
-      final saved = await getPlanById(planId);
-      if (saved == null) throw StateError('여행 계획을 다시 불러오지 못했습니다.');
-      _changes.add(null);
-      return saved;
-    } catch (_) {
-      await _client.from('travel_plans').delete().eq('id', planId);
-      rethrow;
-    }
+    _user;
+    final planId = await _client.rpc(
+      'create_travel_plan',
+      params: {
+        'p_title': title.trim(),
+        'p_regions': normalizedRegions,
+        'p_start_date': _dateValue(startDate),
+        'p_end_date': _dateValue(endDate),
+      },
+    ) as String;
+    final saved = await getPlanById(planId);
+    if (saved == null) throw StateError('여행 계획을 다시 불러오지 못했습니다.');
+    _changes.add(null);
+    return saved;
   }
 
   @override
@@ -384,9 +358,6 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
       '${value.year.toString().padLeft(4, '0')}-'
       '${value.month.toString().padLeft(2, '0')}-'
       '${value.day.toString().padLeft(2, '0')}';
-
-  static DateTime _dateOnly(DateTime value) =>
-      DateTime(value.year, value.month, value.day);
 
   static DateTime _parseDate(dynamic value) {
     final parsed = DateTime.parse(value.toString());

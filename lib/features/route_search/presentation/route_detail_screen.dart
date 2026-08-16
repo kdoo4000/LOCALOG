@@ -248,7 +248,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                         Text(
                           strings.visitTimeline,
                           style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w900),
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 14),
                         for (final place in sortedPlaces) ...[
@@ -393,7 +393,7 @@ class _RouteVotePanel extends StatelessWidget {
                 child: Text(
                   strings.routeVoteTitle,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -464,13 +464,20 @@ class _DetailHero extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          GestureDetector(
-            onTap: routePhotos.isEmpty
-                ? null
-                : () => _openPhotoViewer(context, routePhotos, 0),
-            child: coverPath != null
-                ? _StoredRoutePhoto(path: coverPath)
-                : const ColoredBox(color: AppColors.primaryBlue),
+          Semantics(
+            button: routePhotos.isNotEmpty,
+            label: routePhotos.isEmpty ? '루트 대표 이미지' : '루트 사진 전체 화면으로 보기',
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: routePhotos.isEmpty
+                    ? null
+                    : () => _openPhotoViewer(context, routePhotos, 0),
+                child: coverPath != null
+                    ? _StoredRoutePhoto(path: coverPath)
+                    : const ColoredBox(color: AppColors.primaryBlue),
+              ),
+            ),
           ),
           const IgnorePointer(
             child: DecoratedBox(
@@ -510,7 +517,7 @@ class _DetailHero extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     color: AppColors.white,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     height: 1.12,
                   ),
                 ),
@@ -524,7 +531,7 @@ class _DetailHero extends StatelessWidget {
                         _authorInitial(route.authorName),
                         style: const TextStyle(
                           color: AppColors.primaryBlue,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -577,7 +584,7 @@ class _HeroPill extends StatelessWidget {
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
           color: AppColors.ink,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -605,7 +612,7 @@ class _TimelinePlace extends StatelessWidget {
           foregroundColor: AppColors.primaryBlue,
           child: Text(
             '${place.orderIndex + 1}',
-            style: const TextStyle(fontWeight: FontWeight.w900),
+            style: const TextStyle(fontWeight: FontWeight.w700),
           ),
         ),
         const SizedBox(width: 18),
@@ -622,7 +629,7 @@ class _TimelinePlace extends StatelessWidget {
                       Text(
                         place.name,
                         style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w900),
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -651,9 +658,17 @@ class _TimelinePlace extends StatelessWidget {
                 ),
                 if (place.photoUrls.isNotEmpty) ...[
                   const SizedBox(width: 14),
-                  GestureDetector(
-                    onTap: () => _openPhotoViewer(context, place.photoUrls, 0),
-                    child: Hero(
+                  Semantics(
+                    button: true,
+                    label: '${place.name} 사진 전체 화면으로 보기',
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () =>
+                            _openPhotoViewer(context, place.photoUrls, 0),
+                        child: Hero(
                       tag: 'route-photo-${place.id}-0',
                       child: Stack(
                         children: [
@@ -683,12 +698,14 @@ class _TimelinePlace extends StatelessWidget {
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 11,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ),
                             ),
                         ],
+                      ),
+                        ),
                       ),
                     ),
                   ),
@@ -911,7 +928,7 @@ class _RouteMapPanel extends StatelessWidget {
             context.strings.routeMap,
             style: Theme.of(
               context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           if (points.isEmpty)

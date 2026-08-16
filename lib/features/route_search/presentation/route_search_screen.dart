@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_language.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../trip_planning/domain/travel_plan.dart';
 import '../data/route_repository_provider.dart';
 import '../domain/travel_route.dart';
@@ -160,31 +161,41 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
     setState(() => _routesFuture = _loadRoutes());
   }
 
+  void _clearFilters() {
+    _searchController.clear();
+    setState(() {
+      _keyword = '';
+      _selectedTagKeys.clear();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
 
     return Scaffold(
       body: SafeArea(
-        child: FutureBuilder<List<TravelRoute>>(
-          future: _routesFuture,
-          builder: (context, snapshot) {
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: AppLayout.contentWidth),
+            child: FutureBuilder<List<TravelRoute>>(
+              future: _routesFuture,
+              builder: (context, snapshot) {
             final routes = snapshot.data ?? const <TravelRoute>[];
             final filteredRoutes = routes.where((route) {
               return _matchesKeyword(strings, route) &&
                   _matchesSelectedTags(strings, route);
             }).toList();
 
-            return ListView(
+                return ListView(
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
               children: [
                 Text(
                   widget.targetPlanDayId == null
                       ? strings.routeSearchTitle
                       : '로그에서 루트 찾기',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: Theme.of(context).textTheme.headlineMedium,
                 ),
                 const SizedBox(height: 20),
                 SearchBar(
@@ -199,10 +210,8 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  '추천 키워드',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  strings.recommendedKeywords,
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -221,50 +230,149 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                 ),
                 const SizedBox(height: 28),
                 Text(
-                  '검색 결과',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  strings.searchResults,
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 12),
                 if (snapshot.hasError)
-                  Center(
-                    child: Column(
-                      children: [
-                        const Text('검색 결과를 불러오지 못했습니다.'),
-                        const SizedBox(height: 8),
-                        OutlinedButton(
-                          onPressed: _reloadRoutes,
-                          child: const Text('다시 시도'),
-                        ),
-                      ],
-                    ),
+                  _SearchMessage(
+                    icon: Icons.wifi_off_rounded,
+                    title: '검색 결과를 불러오지 못했습니다.',
+                    actionLabel: '다시 시도',
+                    onAction: _reloadRoutes,
                   )
                 else if (!snapshot.hasData)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(),
-                    ),
-                  )
+                  const _RouteResultsSkeleton()
                 else if (filteredRoutes.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.yellow,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(strings.noMatchingRoutes),
+                  _SearchMessage(
+                    icon: Icons.travel_explore_rounded,
+                    title: strings.noMatchingRoutes,
+                    message: strings.searchEmptyHint,
+                    actionLabel: strings.clearFilters,
+                    onAction: _clearFilters,
                   )
                 else
-                  for (final route in filteredRoutes) ...[
-                    RouteCard(route: route, onTap: () => _openRoute(route)),
-                    const SizedBox(height: 12),
-                  ],
+                  _RouteResults(
+                    routes: filteredRoutes,
+                    onOpen: _openRoute,
+                  ),
               ],
             );
-          },
+              },
+            ),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _RouteResults extends StatelessWidget {
+  const _RouteResults({required this.routes, required this.onOpen});
+
+  final List<TravelRoute> routes;
+  final ValueChanged<TravelRoute> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 760) {
+          return Column(
+            children: [
+              for (final route in routes) ...[
+                RouteCard(route: route, onTap: () => onOpen(route)),
+                const SizedBox(height: 16),
+              ],
+            ],
+          );
+        }
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: routes.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 20,
+            mainAxisSpacing: 20,
+            childAspectRatio: 1.2,
+          ),
+          itemBuilder: (context, index) {
+            final route = routes[index];
+            return RouteCard(route: route, onTap: () => onOpen(route));
+          },
+        );
+      },
+    );
+  }
+}
+
+class _RouteResultsSkeleton extends StatelessWidget {
+  const _RouteResultsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '검색 결과를 불러오는 중',
+      child: Column(
+        children: List.generate(
+          3,
+          (_) => Container(
+            height: 286,
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceMuted,
+              borderRadius: BorderRadius.circular(AppRadii.card),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchMessage extends StatelessWidget {
+  const _SearchMessage({
+    required this.icon,
+    required this.title,
+    required this.actionLabel,
+    required this.onAction,
+    this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? message;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.card),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 36, color: AppColors.primaryBlue),
+          const SizedBox(height: 14),
+          Text(title, textAlign: TextAlign.center),
+          if (message != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              message!,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          OutlinedButton(onPressed: onAction, child: Text(actionLabel)),
+        ],
       ),
     );
   }

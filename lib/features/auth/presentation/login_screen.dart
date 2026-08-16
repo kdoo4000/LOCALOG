@@ -135,9 +135,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Text(
                   _isSignUp ? 'LOCALOG 회원가입' : 'LOCALOG 로그인',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 24),
                 Form(

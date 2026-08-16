@@ -27,7 +27,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Photo access is needed to read taken date and GPS metadata for local passes.</string>
+	<string>여행 사진과 영수증을 선택하려면 사진 접근 권한이 필요합니다.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>영수증을 촬영하고 품목을 인식하려면 카메라 권한이 필요합니다.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Photo library access is needed to save generated local pass images.</string>
 	<key>UIApplicationSceneManifest</key>

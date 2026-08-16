@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../route_search/presentation/region_picker_screen.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
@@ -130,14 +131,16 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(_isEditing ? '여행 계획 수정' : '새 여행 계획')),
       body: SafeArea(
-        child: ListView(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: AppLayout.readingWidth),
+            child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
             Text(
               _isEditing ? '여행 계획을 다듬어볼까요?' : '어디에서 며칠을 보낼까요?',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
             Text(
@@ -146,7 +149,7 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
                   : '선택한 날짜마다 하루치 루트를 하나씩 계획할 수 있어요.',
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.gray500),
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 28),
             TextField(
@@ -195,7 +198,9 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
                   : const Icon(Icons.add_rounded),
               label: Text(_isEditing ? '변경사항 저장' : '여행 계획 만들기'),
             ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );

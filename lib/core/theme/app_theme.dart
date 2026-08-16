@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'app_tokens.dart';
 
 abstract final class AppTheme {
   static ThemeData get light {
@@ -14,14 +15,55 @@ abstract final class AppTheme {
 
     return ThemeData(
       colorScheme: scheme,
-      scaffoldBackgroundColor: AppColors.gray50,
+      scaffoldBackgroundColor: AppColors.warmBackground,
       fontFamily: 'Pretendard',
       useMaterial3: true,
-      textTheme: Typography.blackMountainView.apply(
-        bodyColor: AppColors.ink,
-        displayColor: AppColors.ink,
-        fontFamily: 'Pretendard',
-      ),
+      textTheme: Typography.blackMountainView
+          .apply(
+            bodyColor: AppColors.textPrimary,
+            displayColor: AppColors.textPrimary,
+            fontFamily: 'Pretendard',
+          )
+          .copyWith(
+            headlineLarge: const TextStyle(
+              fontSize: 34,
+              height: 1.12,
+              letterSpacing: -1.1,
+              fontWeight: FontWeight.w800,
+            ),
+            headlineMedium: const TextStyle(
+              fontSize: 27,
+              height: 1.18,
+              letterSpacing: -.7,
+              fontWeight: FontWeight.w700,
+            ),
+            headlineSmall: const TextStyle(
+              fontSize: 23,
+              height: 1.22,
+              letterSpacing: -.4,
+              fontWeight: FontWeight.w700,
+            ),
+            titleLarge: const TextStyle(
+              fontSize: 20,
+              height: 1.3,
+              fontWeight: FontWeight.w700,
+            ),
+            titleMedium: const TextStyle(
+              fontSize: 17,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+            ),
+            bodyLarge: const TextStyle(fontSize: 16, height: 1.55),
+            bodyMedium: const TextStyle(fontSize: 15, height: 1.5),
+            labelLarge: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+            labelMedium: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.gray50,
         foregroundColor: AppColors.ink,
@@ -40,9 +82,10 @@ abstract final class AppTheme {
           backgroundColor: AppColors.primaryBlue,
           foregroundColor: AppColors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadii.control),
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
+          animationDuration: const Duration(milliseconds: 180),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -51,7 +94,7 @@ abstract final class AppTheme {
           foregroundColor: AppColors.ink,
           side: const BorderSide(color: AppColors.gray200),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadii.control),
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
         ),
@@ -64,16 +107,24 @@ abstract final class AppTheme {
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadii.control),
           borderSide: const BorderSide(color: AppColors.gray200),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadii.control),
           borderSide: const BorderSide(color: AppColors.gray200),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadii.control),
           borderSide: const BorderSide(color: AppColors.primaryBlue, width: 1.4),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadii.control),
+          borderSide: const BorderSide(color: AppColors.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadii.control),
+          borderSide: const BorderSide(color: AppColors.error, width: 1.4),
         ),
         labelStyle: const TextStyle(color: AppColors.gray500),
       ),
@@ -84,7 +135,9 @@ abstract final class AppTheme {
           BorderSide(color: AppColors.gray200),
         ),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.control),
+          ),
         ),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 14),
@@ -95,7 +148,9 @@ abstract final class AppTheme {
         selectedColor: AppColors.secondaryLavender,
         disabledColor: AppColors.gray100,
         side: const BorderSide(color: AppColors.gray200),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadii.pill),
+        ),
         labelStyle: const TextStyle(
           color: AppColors.ink,
           fontWeight: FontWeight.w700,
@@ -106,13 +161,12 @@ abstract final class AppTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.white,
-        elevation: 1.5,
-        shadowColor: const Color(0x1A2457F5),
+        color: AppColors.surface,
+        elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFFE8ECF4)),
+          borderRadius: BorderRadius.circular(AppRadii.card),
+          side: const BorderSide(color: AppColors.borderSubtle),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -125,8 +179,8 @@ abstract final class AppTheme {
             color: states.contains(WidgetState.selected)
                 ? AppColors.primaryBlue
                 : AppColors.gray500,
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
           ),
         ),
         iconTheme: WidgetStateProperty.resolveWith(

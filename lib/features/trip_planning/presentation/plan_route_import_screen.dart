@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
 import 'travel_plan_create_screen.dart';
@@ -112,8 +113,12 @@ class _PlanRouteImportScreenState extends State<PlanRouteImportScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('루트를 여행 계획에 추가')),
       body: SafeArea(
-        child: _loading && _plans.isEmpty
-            ? const Center(child: CircularProgressIndicator())
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: AppLayout.readingWidth),
+            child: _loading && _plans.isEmpty
+            ? const _ImportSkeleton()
             : _loadError != null && _plans.isEmpty
             ? Center(
                 child: OutlinedButton(
@@ -126,16 +131,16 @@ class _PlanRouteImportScreenState extends State<PlanRouteImportScreen> {
                 children: [
                   Text(
                     '적용할 날짜를 선택하세요',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 6),
                   Text(
                     '사진과 개인 기록은 복사하지 않고 하루치 루트만 가져옵니다.',
                     style: Theme.of(
                       context,
-                    ).textTheme.bodyMedium?.copyWith(color: AppColors.gray500),
+                    ).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 20),
                   if (_plans.isEmpty)
@@ -148,8 +153,7 @@ class _PlanRouteImportScreenState extends State<PlanRouteImportScreen> {
                     for (final plan in _plans) ...[
                       Text(
                         plan.title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w900),
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       for (final day in plan.days)
@@ -194,6 +198,33 @@ class _PlanRouteImportScreenState extends State<PlanRouteImportScreen> {
                   ],
                 ],
               ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ImportSkeleton extends StatelessWidget {
+  const _ImportSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '여행 계획을 불러오는 중',
+      child: ExcludeSemantics(
+        child: ListView.separated(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          itemCount: 3,
+          separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+          itemBuilder: (_, index) => Container(
+            height: index == 0 ? 68 : 84,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceMuted,
+              borderRadius: BorderRadius.circular(AppRadii.card),
+            ),
+          ),
+        ),
       ),
     );
   }

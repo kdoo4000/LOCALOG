@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_language.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../models/place_candidate.dart';
 import '../../../services/place_candidate_service.dart';
 import '../data/route_repository_provider.dart';
@@ -266,13 +267,13 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                         Text(
                           strings.customizeYourRoute,
                           style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w900),
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           strings.customizeYourRouteSubtitle,
                           style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: Colors.black54, height: 1.45),
+                              ?.copyWith(color: AppColors.textSecondary, height: 1.45),
                         ),
                         if (widget.createNewCopy) ...[
                           const SizedBox(height: 12),
@@ -368,13 +369,13 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                         Text(
                           strings.includedStops,
                           style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w900),
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           strings.routeEditGestureHelp,
                           style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: Colors.black54),
+                              ?.copyWith(color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 10),
                         ReorderableListView.builder(
@@ -728,7 +729,10 @@ class _PlaceSearchResults extends StatelessWidget {
         '장소명을 검색한 뒤 결과에서 장소를 선택하세요. 카테고리와 주소는 자동으로 입력됩니다.',
         style: Theme.of(
           context,
-        ).textTheme.bodySmall?.copyWith(color: Colors.black54, height: 1.4),
+        ).textTheme.bodySmall?.copyWith(
+          color: AppColors.textSecondary,
+          height: 1.4,
+        ),
       );
     }
 
@@ -855,7 +859,7 @@ class _LockedPlaceSummary extends StatelessWidget {
               place.name,
               style: Theme.of(
                 context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
             Text(
@@ -864,7 +868,7 @@ class _LockedPlaceSummary extends StatelessWidget {
                   : '${place.category} · $address',
               style: Theme.of(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
             ),
           ],
         ),

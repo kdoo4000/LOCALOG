@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/l10n/app_language.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../models/photo_metadata.dart';
 import '../../../services/exif_metadata_reader.dart';
@@ -193,21 +194,23 @@ class _PlannedRouteLogCreateScreenState
     return Scaffold(
       appBar: AppBar(title: const Text('장소별 사진 추가')),
       body: SafeArea(
-        child: ListView(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: AppLayout.readingWidth),
+            child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
             Text(
               '계획한 루트에 사진을 채워 로그를 만드세요',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
             Text(
               '각 장소에 해당하는 사진을 한 장 이상 추가하면 루트 순서 그대로 로그가 만들어집니다.',
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.gray500),
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 20),
             TextField(
@@ -283,7 +286,9 @@ class _PlannedRouteLogCreateScreenState
                     : '사진이 필요한 장소 $missingCount곳',
               ),
             ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -332,7 +337,7 @@ class _PlacePhotoCard extends StatelessWidget {
                   children: [
                     Text(
                       place.name,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     if (place.address != null)
                       Text(
@@ -380,9 +385,13 @@ class _PlacePhotoCard extends StatelessWidget {
                 itemBuilder: (context, photoIndex) {
                   final photo = photos[photoIndex];
                   final selected = photo.file.path == selectedCoverPath;
-                  return GestureDetector(
-                    onTap: () => onSelectCover(photo),
-                    child: Container(
+                  return Semantics(
+                    button: true,
+                    selected: selected,
+                    label: '사진 ${photoIndex + 1} 대표 이미지로 선택',
+                    child: GestureDetector(
+                      onTap: () => onSelectCover(photo),
+                      child: Container(
                       width: 92,
                       padding: const EdgeInsets.all(3),
                       decoration: BoxDecoration(
@@ -429,6 +438,7 @@ class _PlacePhotoCard extends StatelessWidget {
                             ),
                           ),
                         ],
+                      ),
                       ),
                     ),
                   );

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n/app_language.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/region_chip_wrap.dart';
 import '../../route_search/data/route_repository_provider.dart';
@@ -79,12 +80,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showUnavailable(String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.strings.shortcutComing(label))),
-    );
-  }
-
   Future<void> _reloadNextPlan() async {
     final generation = ++_planLoadGeneration;
     try {
@@ -141,9 +136,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(28, 18, 28, 28),
-          children: [
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: AppLayout.contentWidth),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(24, 18, 24, 32),
+              children: [
             _HomeHeader(
               isGuest: widget.isGuest,
               user: widget.user,
@@ -155,17 +154,11 @@ class _HomeScreenState extends State<HomeScreen> {
               onLoginTap: widget.onLoginTap,
             ),
             const SizedBox(height: 26),
-            _ShortcutGrid(
-              onRouteSearchTap: () => widget.onSearchTap?.call(null),
-              onUploadTap: widget.onUploadTap,
-              onUnavailableTap: _showUnavailable,
-            ),
-            const SizedBox(height: 24),
-            Text(
+                Text(
               strings.monthlyRecommend,
               style: Theme.of(
                 context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+              ).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
             FutureBuilder<List<TravelRoute>>(
@@ -175,12 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   return _LoadError(onRetry: _reloadRoutes);
                 }
                 if (!snapshot.hasData) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(),
-                    ),
-                  );
+                  return const _RouteCardSkeleton();
                 }
 
                 final routes = snapshot.data!;
@@ -200,12 +188,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () => _openRoute(featured),
                 );
               },
-            ),
-            const SizedBox(height: 28),
+                ),
+                const SizedBox(height: 24),
+                _ShortcutGrid(
+                  onRouteSearchTap: () => widget.onSearchTap?.call(null),
+                  onUploadTap: widget.onUploadTap,
+                ),
+                const SizedBox(height: 28),
             _PopularPlacesPanel(
               onPlaceTap: (place) => widget.onSearchTap?.call(place),
             ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -286,7 +281,7 @@ class _HomeHeader extends StatelessWidget {
                 ),
                 child: const Text(
                   '로그인',
-                  style: TextStyle(fontWeight: FontWeight.w900),
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               )
             else
@@ -311,7 +306,7 @@ class _HomeHeader extends StatelessWidget {
                       user?.initial ?? 'L',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -319,7 +314,7 @@ class _HomeHeader extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: AppSpacing.lg),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(22, 24, 22, 26),
@@ -329,7 +324,7 @@ class _HomeHeader extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(AppRadii.feature),
           ),
           child: _NextTravelContent(
             plan: nextPlan,
@@ -378,7 +373,7 @@ class _NextTravelContent extends StatelessWidget {
             '여행을 떠나볼까요?',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
               color: AppColors.white,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
@@ -408,7 +403,7 @@ class _NextTravelContent extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
             color: AppColors.white,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             height: 1.12,
           ),
         ),
@@ -455,7 +450,7 @@ class _TravelBadge extends StatelessWidget {
         style: const TextStyle(
           color: AppColors.ink,
           fontSize: 12,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
           letterSpacing: .3,
         ),
       ),
@@ -495,6 +490,52 @@ TravelPlan? nearestActiveTravelPlan(Iterable<TravelPlan> plans, DateTime now) {
       plans.where((plan) => !_dateOnly(plan.endDate).isBefore(today)).toList()
         ..sort((a, b) => a.startDate.compareTo(b.startDate));
   return active.firstOrNull;
+}
+
+class _RouteCardSkeleton extends StatelessWidget {
+  const _RouteCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '추천 로그를 불러오는 중',
+      child: ExcludeSemantics(
+        child: Container(
+          height: 286,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadii.card),
+            border: Border.all(color: AppColors.borderSubtle),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 176,
+                decoration: const BoxDecoration(
+                  color: AppColors.surfaceMuted,
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(AppRadii.card),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(width: 210, height: 18, color: AppColors.gray200),
+                    const SizedBox(height: 12),
+                    Container(width: 150, height: 13, color: AppColors.gray200),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 enum TravelPlanHomeStatus { upcoming, ongoing, completed }
@@ -584,12 +625,10 @@ class _ShortcutGrid extends StatelessWidget {
   const _ShortcutGrid({
     required this.onRouteSearchTap,
     required this.onUploadTap,
-    required this.onUnavailableTap,
   });
 
   final VoidCallback? onRouteSearchTap;
   final VoidCallback? onUploadTap;
-  final ValueChanged<String> onUnavailableTap;
 
   @override
   Widget build(BuildContext context) {
@@ -634,45 +673,97 @@ class _ShortcutGrid extends StatelessWidget {
           ),
         ];
 
-    return GridView.count(
-      crossAxisCount: 4,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 0.92,
-      children: [
-        for (final item in items)
-          Material(
-            color: item.color,
-            borderRadius: BorderRadius.circular(18),
-            child: InkWell(
-              key: ValueKey(item.key),
-              borderRadius: BorderRadius.circular(18),
-              onTap: item.action ?? () => onUnavailableTap(item.label),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(item.icon, color: AppColors.primaryBlue, size: 26),
-                    const SizedBox(height: 8),
-                    Text(
-                      item.label,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w900,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final crossAxisCount = textScale >= 1.3
+            ? 1
+            : constraints.maxWidth >= 760
+            ? 4
+            : 2;
+        final aspectRatio = crossAxisCount == 1 ? 4.2 : 2.15;
+
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: aspectRatio,
+          children: [
+            for (final item in items)
+              Semantics(
+                button: true,
+                enabled: item.action != null,
+                label: item.label,
+                hint: item.action == null ? '준비 중' : null,
+                child: Opacity(
+                  opacity: item.action == null ? .58 : 1,
+                  child: Material(
+                    color: item.action == null
+                        ? AppColors.disabledSurface
+                        : item.color,
+                    borderRadius: BorderRadius.circular(AppRadii.card),
+                    child: InkWell(
+                      key: ValueKey(item.key),
+                      borderRadius: BorderRadius.circular(AppRadii.card),
+                      onTap: item.action,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        child: Row(
+                          children: [
+                          Icon(
+                            item.icon,
+                            color: AppColors.primaryBlue,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              item.label,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(
+                                    color: AppColors.ink,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                          if (item.action == null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadii.pill,
+                                ),
+                              ),
+                              child: const Text(
+                                '준비 중',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.disabledContent,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
@@ -699,7 +790,7 @@ class _PopularPlacesPanel extends StatelessWidget {
             '최근 인기 관광지',
             style: Theme.of(
               context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ).textTheme.titleMedium,
           ),
           const SizedBox(height: 14),
           for (final place in places) ...[

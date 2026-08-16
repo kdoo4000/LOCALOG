@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/l10n/app_language.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../services/supabase_initializer.dart';
 import '../../route_search/data/route_repository_provider.dart';
@@ -128,15 +129,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(strings.profileTitle)),
       body: SafeArea(
-        child: FutureBuilder<List<TravelRoute>>(
-          future: _downloadedRoutesFuture,
-          builder: (context, snapshot) {
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: AppLayout.readingWidth),
+            child: FutureBuilder<List<TravelRoute>>(
+              future: _downloadedRoutesFuture,
+              builder: (context, snapshot) {
             final routes = snapshot.data ?? const <TravelRoute>[];
             final uploadedRoutes = routes
                 .where((route) => !route.isDownloadedCopy)
                 .toList();
 
-            return RefreshIndicator(
+                return RefreshIndicator(
               onRefresh: () async {
                 await _reloadDownloadedRoutes();
               },
@@ -162,9 +167,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 24),
                   Text(
                     strings.myRouteList,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 16),
                   if (snapshot.hasError)
@@ -181,12 +184,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     )
                   else if (!snapshot.hasData)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: CircularProgressIndicator(),
-                      ),
-                    )
+                    const _ProfileSkeleton()
                   else if (uploadedRoutes.isEmpty)
                     const _EmptyDownloadedRoutes()
                   else
@@ -200,8 +198,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                 ],
               ),
-            );
-          },
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
@@ -242,7 +242,7 @@ class _ProfileHeader extends StatelessWidget {
                 style: const TextStyle(
                   color: AppColors.primaryBlue,
                   fontSize: 28,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -253,9 +253,7 @@ class _ProfileHeader extends StatelessWidget {
                 children: [
                   Text(
                     displayName,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -323,7 +321,7 @@ class _ProfileStat extends StatelessWidget {
           value,
           style: Theme.of(
             context,
-          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+          ).textTheme.headlineSmall,
         ),
       ],
     );
@@ -344,9 +342,7 @@ class _LanguageSelector extends StatelessWidget {
         children: [
           Text(
             strings.language,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 12),
           SegmentedButton<AppLanguage>(
@@ -364,6 +360,24 @@ class _LanguageSelector extends StatelessWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ProfileSkeleton extends StatelessWidget {
+  const _ProfileSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '내 로그를 불러오는 중',
+      child: Container(
+        height: 132,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceMuted,
+          borderRadius: BorderRadius.circular(AppRadii.card),
+        ),
       ),
     );
   }
