@@ -1,7 +1,70 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/l10n/app_language.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
+
+class RouteStopDismissible extends StatelessWidget {
+  const RouteStopDismissible({
+    super.key,
+    required this.dismissKey,
+    required this.child,
+    required this.onDismissed,
+    this.confirmDismiss,
+    this.enabled = true,
+  });
+
+  final Key dismissKey;
+  final Widget child;
+  final VoidCallback onDismissed;
+  final Future<bool> Function()? confirmDismiss;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadii.card),
+      child: Dismissible(
+        key: dismissKey,
+        direction: enabled
+            ? DismissDirection.endToStart
+            : DismissDirection.none,
+        dismissThresholds: const {DismissDirection.endToStart: .42},
+        movementDuration: AppMotion.emphasized,
+        resizeDuration: AppMotion.standard,
+        confirmDismiss: confirmDismiss == null
+            ? null
+            : (_) => confirmDismiss!(),
+        onDismissed: (_) => onDismissed(),
+        background: ColoredBox(
+          color: colors.errorContainer,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Icon(
+                  Icons.delete_outline_rounded,
+                  color: colors.onErrorContainer,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  context.strings.delete,
+                  style: TextStyle(
+                    color: colors.onErrorContainer,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
 
 class RouteStopEditTile extends StatelessWidget {
   const RouteStopEditTile({
@@ -30,6 +93,7 @@ class RouteStopEditTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
+      margin: EdgeInsets.zero,
       padding: const EdgeInsets.all(10),
       child: Row(
         children: [

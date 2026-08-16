@@ -200,9 +200,10 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
   }
 
   Future<void> _addOrEditItem([ReceiptItemDraft? existing]) async {
-    final result = await showDialog<ReceiptItemDraft>(
-      context: context,
-      builder: (context) => _ReceiptItemEditorDialog(existing: existing),
+    final result = await Navigator.of(context).push<ReceiptItemDraft>(
+      MaterialPageRoute(
+        builder: (_) => _ReceiptItemEditorScreen(existing: existing),
+      ),
     );
     if (result == null || !mounted) return;
     setState(() {
@@ -428,17 +429,17 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
   }
 }
 
-class _ReceiptItemEditorDialog extends StatefulWidget {
-  const _ReceiptItemEditorDialog({this.existing});
+class _ReceiptItemEditorScreen extends StatefulWidget {
+  const _ReceiptItemEditorScreen({this.existing});
 
   final ReceiptItemDraft? existing;
 
   @override
-  State<_ReceiptItemEditorDialog> createState() =>
-      _ReceiptItemEditorDialogState();
+  State<_ReceiptItemEditorScreen> createState() =>
+      _ReceiptItemEditorScreenState();
 }
 
-class _ReceiptItemEditorDialogState extends State<_ReceiptItemEditorDialog> {
+class _ReceiptItemEditorScreenState extends State<_ReceiptItemEditorScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _quantityController;
@@ -482,55 +483,75 @@ class _ReceiptItemEditorDialogState extends State<_ReceiptItemEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.existing == null ? '품목 직접 추가' : '품목 수정'),
-      content: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _nameController,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: '품목명'),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? '품목명을 입력해 주세요.'
-                    : null,
+    final isEditing = widget.existing != null;
+    return Scaffold(
+      appBar: AppBar(title: Text(isEditing ? '품목 수정' : '품목 직접 추가')),
+      bottomNavigationBar: AppStickyActionBar(
+        child: FilledButton.icon(
+          onPressed: _save,
+          icon: const Icon(Icons.save_outlined),
+          label: Text(isEditing ? '수정 내용 저장' : '품목 추가'),
+        ),
+      ),
+      body: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: AppLayout.readingWidth),
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+                children: [
+                  Text(
+                    isEditing
+                        ? '영수증에서 인식한 품목 정보를 바로잡아 주세요.'
+                        : '정산에 포함할 품목과 금액을 입력해 주세요.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  TextFormField(
+                    controller: _nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: '품목명'),
+                    textInputAction: TextInputAction.next,
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? '품목명을 입력해 주세요.'
+                        : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _quantityController,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(labelText: '수량'),
+                    validator: (value) => (int.tryParse(value ?? '') ?? 0) < 1
+                        ? '1 이상의 수량을 입력해 주세요.'
+                        : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _amountController,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _save(),
+                    decoration: const InputDecoration(
+                      labelText: '총 금액',
+                      suffixText: '원',
+                    ),
+                    validator: (value) =>
+                        (int.tryParse((value ?? '').replaceAll(',', '')) ?? 0) < 1
+                        ? '금액을 입력해 주세요.'
+                        : null,
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _quantityController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: '수량'),
-                validator: (value) => (int.tryParse(value ?? '') ?? 0) < 1
-                    ? '1 이상의 수량을 입력해 주세요.'
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _amountController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: '총 금액',
-                  suffixText: '원',
-                ),
-                validator: (value) =>
-                    (int.tryParse((value ?? '').replaceAll(',', '')) ?? 0) < 1
-                    ? '금액을 입력해 주세요.'
-                    : null,
-              ),
-            ],
+            ),
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('취소'),
-        ),
-        FilledButton(onPressed: _save, child: const Text('저장')),
-      ],
     );
   }
 }

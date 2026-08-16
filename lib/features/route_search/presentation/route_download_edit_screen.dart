@@ -4,11 +4,11 @@ import '../../../core/l10n/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/premium_ui.dart';
 import '../../../models/place_candidate.dart';
-import '../../../services/place_candidate_service.dart';
 import '../data/route_repository_provider.dart';
 import '../domain/route_download_template.dart';
 import '../domain/route_place.dart';
 import '../domain/travel_route.dart';
+import '../../trip_planning/presentation/place_search_map_screen.dart';
 import 'widgets/route_stop_edit_tile.dart';
 
 class RouteDownloadEditScreen extends StatefulWidget {
@@ -189,13 +189,9 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
   }
 
   Future<void> _showEditPlaceDialog(RoutePlace place) async {
-    final updatedPlace = await showDialog<RoutePlace>(
-      context: context,
-      builder: (context) => _PlaceDialog(
-        title: context.strings.editPlace,
-        actionLabel: context.strings.saveRoute,
-        orderIndex: place.orderIndex,
-        initialPlace: place,
+    final updatedPlace = await Navigator.of(context).push<RoutePlace>(
+      MaterialPageRoute(
+        builder: (_) => _PlaceDetailsEditScreen(place: place),
       ),
     );
 
@@ -211,22 +207,58 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
     });
   }
 
-  Future<void> _showAddPlaceDialog() async {
-    final place = await showDialog<RoutePlace>(
-      context: context,
-      builder: (context) => _PlaceDialog(
-        title: context.strings.addPlace,
-        actionLabel: context.strings.add,
-        orderIndex: _places.length,
-      ),
+  Future<PlaceCandidate?> _choosePlace() {
+    return Navigator.of(context).push<PlaceCandidate>(
+      MaterialPageRoute(builder: (_) => const PlaceSearchMapScreen()),
     );
+  }
 
-    if (place == null || !mounted) {
-      return;
-    }
+  RoutePlace _routePlaceFromCandidate(
+    PlaceCandidate candidate, {
+    RoutePlace? existing,
+  }) {
+    final category = candidate.category?.trim();
+    return RoutePlace(
+      id:
+          existing?.id ??
+          'custom-${DateTime.now().microsecondsSinceEpoch}',
+      placeProvider: candidate.source,
+      externalPlaceId: candidate.id,
+      name: candidate.displayName,
+      category: category?.isNotEmpty == true ? category! : '장소',
+      orderIndex: existing?.orderIndex ?? _places.length,
+      address: candidate.address,
+      visitedAt: existing?.visitedAt,
+      memo: existing?.memo,
+      latitude: candidate.latitude,
+      longitude: candidate.longitude,
+      estimatedCostWon: existing?.estimatedCostWon,
+      photoUrls: existing?.photoUrls ?? const [],
+      photoStoragePaths: existing?.photoStoragePaths ?? const [],
+      purchasedItems: existing?.purchasedItems ?? const [],
+    );
+  }
+
+  Future<void> _showAddPlaceDialog() async {
+    final candidate = await _choosePlace();
+    if (candidate == null || !mounted) return;
+
+    final place = _routePlaceFromCandidate(candidate);
 
     setState(() {
       _places = [..._places, place];
+    });
+  }
+
+  Future<void> _changePlace(RoutePlace place) async {
+    final candidate = await _choosePlace();
+    if (candidate == null || !mounted) return;
+    final updated = _routePlaceFromCandidate(candidate, existing: place);
+    setState(() {
+      _places = [
+        for (final item in _places)
+          if (item.id == place.id) updated else item,
+      ];
     });
   }
 
@@ -403,19 +435,16 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                           itemBuilder: (context, index) {
                             final place = _places[index];
 
-                            return Dismissible(
+                            return Padding(
                               key: ValueKey('download-place-${place.id}'),
-                              direction: DismissDirection.horizontal,
-                              confirmDismiss: (_) => _confirmSwipeRemove(),
-                              onDismissed: (_) => _removePlace(place),
-                              background: const _SwipeDeleteBackground(
-                                alignment: Alignment.centerLeft,
-                              ),
-                              secondaryBackground: const _SwipeDeleteBackground(
-                                alignment: Alignment.centerRight,
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: RouteStopDismissible(
+                                dismissKey: ValueKey(
+                                  'download-dismiss-${place.id}',
+                                ),
+                                enabled: _places.length > 1,
+                                confirmDismiss: _confirmSwipeRemove,
+                                onDismissed: () => _removePlace(place),
                                 child: ReorderableDelayedDragStartListener(
                                   index: index,
                                   child: RouteStopEditTile(
@@ -423,6 +452,8 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                                     title: place.name,
                                     subtitle: _placeSubtitle(context, place),
                                     onEdit: () => _showEditPlaceDialog(place),
+                                    onChoosePlace: () => _changePlace(place),
+                                    placeSelected: true,
                                     showDragHandle: false,
                                   ),
                                 ),
@@ -440,45 +471,6 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
   }
 }
 
-class _SwipeDeleteBackground extends StatelessWidget {
-  const _SwipeDeleteBackground({required this.alignment});
-
-  final Alignment alignment;
-
-  @override
-  Widget build(BuildContext context) {
-    final isLeft = alignment == Alignment.centerLeft;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 22),
-      alignment: alignment,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        textDirection: isLeft ? TextDirection.ltr : TextDirection.rtl,
-        children: [
-          Icon(
-            Icons.delete_outline,
-            color: Theme.of(context).colorScheme.onErrorContainer,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            context.strings.delete,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onErrorContainer,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class RouteDownloadEditArguments {
   const RouteDownloadEditArguments({
     required this.routeId,
@@ -489,110 +481,35 @@ class RouteDownloadEditArguments {
   final bool createNewCopy;
 }
 
-class _PlaceDialog extends StatefulWidget {
-  const _PlaceDialog({
-    required this.title,
-    required this.actionLabel,
-    required this.orderIndex,
-    this.initialPlace,
-  });
+class _PlaceDetailsEditScreen extends StatefulWidget {
+  const _PlaceDetailsEditScreen({required this.place});
 
-  final String title;
-  final String actionLabel;
-  final int orderIndex;
-  final RoutePlace? initialPlace;
+  final RoutePlace place;
 
   @override
-  State<_PlaceDialog> createState() => _PlaceDialogState();
+  State<_PlaceDetailsEditScreen> createState() =>
+      _PlaceDetailsEditScreenState();
 }
 
-class _PlaceDialogState extends State<_PlaceDialog> {
-  final _placeCandidateService = const PlaceCandidateService();
-  final _searchController = TextEditingController();
-  final _nameController = TextEditingController();
-  final _categoryController = TextEditingController();
-  final _addressController = TextEditingController();
+class _PlaceDetailsEditScreenState extends State<_PlaceDetailsEditScreen> {
   final _memoController = TextEditingController();
   final _costController = TextEditingController();
-  Future<PlaceCandidateResult>? _searchFuture;
-  PlaceCandidate? _selectedCandidate;
-
-  bool get _isEditing => widget.initialPlace != null;
 
   @override
   void initState() {
     super.initState();
-    final initialPlace = widget.initialPlace;
-    if (initialPlace == null) {
-      return;
-    }
-
-    _nameController.text = initialPlace.name;
-    _categoryController.text = initialPlace.category;
-    _addressController.text = initialPlace.address ?? '';
-    _memoController.text = initialPlace.memo ?? '';
-    _costController.text = initialPlace.estimatedCostWon?.toString() ?? '';
+    _memoController.text = widget.place.memo ?? '';
+    _costController.text = widget.place.estimatedCostWon?.toString() ?? '';
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
-    _nameController.dispose();
-    _categoryController.dispose();
-    _addressController.dispose();
     _memoController.dispose();
     _costController.dispose();
     super.dispose();
   }
 
-  void _searchPlace() {
-    final query = _searchController.text.trim();
-    if (query.length < 2) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.strings.enterPlaceName)));
-      return;
-    }
-
-    setState(() {
-      _selectedCandidate = null;
-      _searchFuture = _placeCandidateService.searchByKeyword(query);
-    });
-  }
-
-  void _selectCandidate(PlaceCandidate candidate) {
-    setState(() {
-      _selectedCandidate = candidate;
-      _nameController.text = candidate.displayName;
-      _categoryController.text = candidate.category?.trim() ?? '';
-      _addressController.text = candidate.address.trim();
-    });
-  }
-
   void _submit() {
-    if (!_isEditing && _selectedCandidate == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('검색 결과에서 장소를 선택해 주세요.')));
-      return;
-    }
-
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.strings.enterPlaceName)));
-      return;
-    }
-
-    final address = _addressController.text.trim();
-    if (address.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('주소가 확인되는 장소를 선택해 주세요.')));
-      return;
-    }
-
     final costText = _costController.text.trim().replaceAll(',', '');
     final estimatedCost = costText.isEmpty ? null : int.tryParse(costText);
     if (costText.isNotEmpty && estimatedCost == null) {
@@ -602,34 +519,12 @@ class _PlaceDialogState extends State<_PlaceDialog> {
       return;
     }
 
-    final initialPlace = widget.initialPlace;
     Navigator.of(context).pop(
-      RoutePlace(
-        id:
-            initialPlace?.id ??
-            'custom-${DateTime.now().microsecondsSinceEpoch}',
-        canonicalPlaceId: _selectedCandidate == null
-            ? initialPlace?.canonicalPlaceId
-            : null,
-        placeProvider:
-            _selectedCandidate?.source ?? initialPlace?.placeProvider,
-        externalPlaceId:
-            _selectedCandidate?.id ?? initialPlace?.externalPlaceId,
-        name: name,
-        category: _categoryController.text.trim().isEmpty
-            ? '장소'
-            : _categoryController.text.trim(),
-        address: address,
+      widget.place.copyWith(
         memo: _memoController.text.trim().isEmpty
             ? null
             : _memoController.text.trim(),
-        latitude: initialPlace?.latitude ?? _selectedCandidate?.latitude,
-        longitude: initialPlace?.longitude ?? _selectedCandidate?.longitude,
         estimatedCostWon: estimatedCost,
-        photoUrls: initialPlace?.photoUrls ?? const [],
-        photoStoragePaths: initialPlace?.photoStoragePaths ?? const [],
-        purchasedItems: initialPlace?.purchasedItems ?? const [],
-        orderIndex: widget.orderIndex,
       ),
     );
   }
@@ -638,44 +533,23 @@ class _PlaceDialogState extends State<_PlaceDialog> {
   Widget build(BuildContext context) {
     final strings = context.strings;
 
-    return AlertDialog(
-      title: Text(widget.title),
-      content: SingleChildScrollView(
-        child: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Scaffold(
+      appBar: AppBar(title: Text(strings.editPlace)),
+      bottomNavigationBar: AppStickyActionBar(
+        child: FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.save_outlined),
+          label: Text(strings.saveRoute),
+        ),
+      ),
+      body: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
             children: [
-              if (_isEditing) ...[
-                _LockedPlaceSummary(place: widget.initialPlace!),
-                const SizedBox(height: 12),
-              ] else ...[
-                TextField(
-                  controller: _searchController,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    labelText: strings.searchPlace,
-                    hintText: strings.exampleCafe,
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: IconButton(
-                      onPressed: _searchPlace,
-                      tooltip: strings.searchPlace,
-                      icon: const Icon(Icons.arrow_forward),
-                    ),
-                    border: const OutlineInputBorder(),
-                  ),
-                  textInputAction: TextInputAction.search,
-                  onSubmitted: (_) => _searchPlace(),
-                ),
-                const SizedBox(height: 10),
-                _PlaceSearchResults(
-                  searchFuture: _searchFuture,
-                  selectedCandidate: _selectedCandidate,
-                  onSelected: _selectCandidate,
-                ),
-                const SizedBox(height: 10),
-              ],
+              _LockedPlaceSummary(place: widget.place),
+              const SizedBox(height: 24),
               TextField(
                 controller: _memoController,
                 decoration: InputDecoration(
@@ -685,7 +559,7 @@ class _PlaceDialogState extends State<_PlaceDialog> {
                 minLines: 1,
                 maxLines: 3,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
               TextField(
                 controller: _costController,
                 decoration: InputDecoration(
@@ -698,139 +572,6 @@ class _PlaceDialogState extends State<_PlaceDialog> {
             ],
           ),
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(strings.cancel),
-        ),
-        FilledButton(onPressed: _submit, child: Text(widget.actionLabel)),
-      ],
-    );
-  }
-}
-
-class _PlaceSearchResults extends StatelessWidget {
-  const _PlaceSearchResults({
-    required this.searchFuture,
-    required this.selectedCandidate,
-    required this.onSelected,
-  });
-
-  final Future<PlaceCandidateResult>? searchFuture;
-  final PlaceCandidate? selectedCandidate;
-  final ValueChanged<PlaceCandidate> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final future = searchFuture;
-    if (future == null) {
-      return Text(
-        '장소명을 검색한 뒤 결과에서 장소를 선택하세요. 카테고리와 주소는 자동으로 입력됩니다.',
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(
-          color: AppColors.textSecondary,
-          height: 1.4,
-        ),
-      );
-    }
-
-    return FutureBuilder<PlaceCandidateResult>(
-      future: future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
-
-        final result = snapshot.data;
-        if (result == null || !result.isSuccess) {
-          return _SearchMessage(
-            icon: Icons.error_outline,
-            message: result?.errorMessage ?? '장소 검색 결과를 불러오지 못했어요.',
-          );
-        }
-        if (result.candidates.isEmpty) {
-          return _SearchMessage(
-            icon: Icons.location_off_outlined,
-            message: context.strings.noMatchingPlaces,
-          );
-        }
-
-        return ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 260),
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: result.candidates.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final candidate = result.candidates[index];
-              final selected = selectedCandidate?.id == candidate.id;
-              return ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                selected: selected,
-                selectedTileColor: Theme.of(
-                  context,
-                ).colorScheme.primaryContainer.withValues(alpha: 0.45),
-                leading: Icon(
-                  selected ? Icons.check_circle : Icons.location_on_outlined,
-                  color: selected
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.black45,
-                ),
-                title: Text(
-                  candidate.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                subtitle: Text(
-                  candidate.displayDetail,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                onTap: () => onSelected(candidate),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _SearchMessage extends StatelessWidget {
-  const _SearchMessage({required this.icon, required this.message});
-
-  final IconData icon;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.black45),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(height: 1.4),
-            ),
-          ),
-        ],
       ),
     );
   }

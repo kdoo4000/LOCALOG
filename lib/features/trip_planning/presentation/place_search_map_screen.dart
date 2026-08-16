@@ -10,7 +10,25 @@ import '../../../services/place_candidate_service.dart';
 import '../../photo_location/naver_dynamic_map.dart';
 
 class PlaceSearchMapScreen extends StatefulWidget {
-  const PlaceSearchMapScreen({super.key});
+  const PlaceSearchMapScreen({
+    super.key,
+    this.initialLatitude,
+    this.initialLongitude,
+    this.placeCandidateService = const PlaceCandidateService(),
+  });
+
+  final double? initialLatitude;
+  final double? initialLongitude;
+  final PlaceCandidateService placeCandidateService;
+
+  bool get hasInitialLocation {
+    final latitude = initialLatitude;
+    final longitude = initialLongitude;
+    return latitude != null &&
+        longitude != null &&
+        latitude.isFinite &&
+        longitude.isFinite;
+  }
 
   @override
   State<PlaceSearchMapScreen> createState() => _PlaceSearchMapScreenState();
@@ -18,7 +36,6 @@ class PlaceSearchMapScreen extends StatefulWidget {
 
 class _PlaceSearchMapScreenState extends State<PlaceSearchMapScreen> {
   final _controller = TextEditingController();
-  final _service = const PlaceCandidateService();
   Timer? _debounce;
   List<PlaceCandidate> _candidates = const [];
   PlaceCandidate? _selected;
@@ -30,6 +47,18 @@ class _PlaceSearchMapScreenState extends State<PlaceSearchMapScreen> {
 
   List<PlaceCandidate> get _locatedCandidates =>
       _candidates.where((candidate) => candidate.hasLocation).toList();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.hasInitialLocation) {
+      _mapCenter = MapPoint(
+        latitude: widget.initialLatitude!,
+        longitude: widget.initialLongitude!,
+      );
+      unawaited(_loadNearbyCandidates());
+    }
+  }
 
   @override
   void dispose() {
@@ -57,17 +86,42 @@ class _PlaceSearchMapScreenState extends State<PlaceSearchMapScreen> {
     );
   }
 
+  Future<void> _loadNearbyCandidates() async {
+    final generation = ++_requestGeneration;
+    setState(() {
+      _searching = true;
+      _message = null;
+    });
+    final result = await widget.placeCandidateService.findCandidates(
+      latitude: widget.initialLatitude!,
+      longitude: widget.initialLongitude!,
+    );
+    if (!mounted || generation != _requestGeneration) return;
+    setState(() {
+      _searching = false;
+      if (!result.isSuccess) {
+        _message = result.errorMessage;
+        return;
+      }
+      _candidates = result.candidates;
+      _selected = result.candidates.firstOrNull;
+      _message = result.candidates.isEmpty ? '주변 장소를 찾지 못했습니다.' : null;
+    });
+  }
+
   Future<void> _search({required bool useMapCenter}) async {
     final query = _controller.text.trim();
     if (query.length < 2) return;
     final generation = ++_requestGeneration;
-    final center = useMapCenter ? _mapCenter : null;
+    final center = useMapCenter || widget.hasInitialLocation
+        ? _mapCenter
+        : null;
     setState(() {
       _searching = true;
       _message = null;
       _showSearchAreaButton = false;
     });
-    final result = await _service.searchByKeyword(
+    final result = await widget.placeCandidateService.searchByKeyword(
       query,
       latitude: center?.latitude,
       longitude: center?.longitude,

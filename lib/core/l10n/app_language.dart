@@ -325,8 +325,8 @@ class AppStrings {
   String get add => isKo ? '추가' : 'Add';
   String get dragToReorder => isKo ? '끌어서 순서 변경' : 'Drag to reorder';
   String get routeEditGestureHelp => isKo
-      ? '카드를 길게 눌러 순서를 바꾸고, 좌우로 밀어서 삭제할 수 있어요.'
-      : 'Long-press a card to reorder it, or swipe either way to delete it.';
+      ? '카드를 길게 눌러 순서를 바꾸고, 왼쪽으로 밀어 삭제할 수 있어요.'
+      : 'Long-press a card to reorder it, or swipe left to delete it.';
   String get moveUp => isKo ? '위로 이동' : 'Move up';
   String get moveDown => isKo ? '아래로 이동' : 'Move down';
   String get delete => isKo ? '삭제' : 'Delete';

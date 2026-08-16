@@ -119,6 +119,34 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
     });
   }
 
+  Future<void> _changePlace(RoutePlace place) async {
+    final candidate = await Navigator.of(context).push<PlaceCandidate>(
+      MaterialPageRoute(builder: (_) => const PlaceSearchMapScreen()),
+    );
+    if (candidate == null || !mounted) return;
+    final category = candidate.category?.trim();
+    final updated = RoutePlace(
+      id: place.id,
+      placeProvider: candidate.source,
+      externalPlaceId: candidate.id,
+      name: candidate.displayName,
+      category: category?.isNotEmpty == true ? category! : '장소',
+      orderIndex: place.orderIndex,
+      address: candidate.address,
+      visitedAt: place.visitedAt,
+      memo: place.memo,
+      latitude: candidate.latitude,
+      longitude: candidate.longitude,
+      estimatedCostWon: place.estimatedCostWon,
+      photoUrls: place.photoUrls,
+      photoStoragePaths: place.photoStoragePaths,
+      purchasedItems: place.purchasedItems,
+    );
+    setState(() {
+      _places[_places.indexWhere((item) => item.id == place.id)] = updated;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -209,29 +237,27 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
                   onReorderItem: _reorder,
                   itemBuilder: (context, index) {
                     final place = _places[index];
-                    return Dismissible(
-                      key: ValueKey(place.id),
-                      direction: _places.length <= 1
-                          ? DismissDirection.none
-                          : DismissDirection.endToStart,
-                      background: Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.only(right: 20),
-                        alignment: Alignment.centerRight,
-                        color: Theme.of(context).colorScheme.error,
-                        child: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.white,
+                    return Padding(
+                      key: ValueKey('planned-place-${place.id}'),
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: RouteStopDismissible(
+                        dismissKey: ValueKey('planned-dismiss-${place.id}'),
+                        enabled: _places.length > 1,
+                        onDismissed: () => setState(
+                          () => _places.removeWhere(
+                            (item) => item.id == place.id,
+                          ),
                         ),
-                      ),
-                      onDismissed: (_) =>
-                          setState(() => _places.removeAt(index)),
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: RouteStopEditTile(
+                        child: ReorderableDelayedDragStartListener(
                           index: index,
-                          title: place.name,
-                          subtitle: place.address ?? place.category,
+                          child: RouteStopEditTile(
+                            index: index,
+                            title: place.name,
+                            subtitle: place.address ?? place.category,
+                            onChoosePlace: () => _changePlace(place),
+                            placeSelected: true,
+                            showDragHandle: false,
+                          ),
                         ),
                       ),
                     );

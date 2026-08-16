@@ -24,6 +24,7 @@ import '../route_search/presentation/widgets/route_stop_edit_tile.dart';
 import '../route_search/presentation/region_picker_screen.dart';
 import '../trip_planning/data/travel_plan_repository_provider.dart';
 import '../trip_planning/domain/travel_plan.dart';
+import '../trip_planning/presentation/place_search_map_screen.dart';
 import 'consecutive_grouping.dart';
 import 'naver_dynamic_map.dart';
 
@@ -593,7 +594,6 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
                   _SaveRoutePanel(
                     editorKey: _editorKey,
                     group: selectedGroup,
-                    placeCandidateService: _placeCandidateService,
                     onPlaceSelected: _selectPlace,
                     onSaveDraft: _isSavingRoute
                         ? null
@@ -773,7 +773,6 @@ class _SaveRoutePanel extends StatelessWidget {
   const _SaveRoutePanel({
     required this.editorKey,
     required this.group,
-    required this.placeCandidateService,
     required this.onPlaceSelected,
     required this.onSaveDraft,
     required this.onTemporarySave,
@@ -786,7 +785,6 @@ class _SaveRoutePanel extends StatelessWidget {
 
   final GlobalKey<_RouteDraftInlineEditorState> editorKey;
   final _PhotoDateGroup? group;
-  final PlaceCandidateService placeCandidateService;
   final void Function(String entryId, PlaceCandidate candidate) onPlaceSelected;
   final ValueChanged<_RouteDraftResult>? onSaveDraft;
   final ValueChanged<_RouteDraftResult> onTemporarySave;
@@ -856,7 +854,6 @@ class _SaveRoutePanel extends StatelessWidget {
                 [context.strings.photoTag, context.strings.localTag],
             initialVisibility: savedDraft?.visibility ?? RouteVisibility.public,
             entries: group.photos,
-            placeCandidateService: placeCandidateService,
             onPlaceSelected: onPlaceSelected,
             onSave: onSaveDraft,
             onTemporarySave: onTemporarySave,
@@ -988,7 +985,6 @@ class _RouteDraftInlineEditor extends StatefulWidget {
     required this.initialTags,
     required this.initialVisibility,
     required this.entries,
-    required this.placeCandidateService,
     required this.onPlaceSelected,
     required this.onSave,
     required this.onTemporarySave,
@@ -1000,7 +996,6 @@ class _RouteDraftInlineEditor extends StatefulWidget {
   final List<String> initialTags;
   final RouteVisibility initialVisibility;
   final List<_PhotoEntry> entries;
-  final PlaceCandidateService placeCandidateService;
   final void Function(String entryId, PlaceCandidate candidate) onPlaceSelected;
   final ValueChanged<_RouteDraftResult>? onSave;
   final ValueChanged<_RouteDraftResult> onTemporarySave;
@@ -1020,7 +1015,6 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
   late RouteVisibility _visibility;
   bool _regionSelectedManually = false;
   String? _selectedCoverEntryId;
-  String? _editingEntryId;
 
   @override
   void initState() {
@@ -1081,9 +1075,6 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
       _entries = _entries.where((item) => item.id != entry.id).toList();
       if (_selectedCoverEntryId == entry.id) {
         _selectedCoverEntryId = _entries.firstOrNull?.id;
-      }
-      if (_editingEntryId == entry.id) {
-        _editingEntryId = null;
       }
       _applySuggestedRegion();
     });
@@ -1147,16 +1138,30 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
           else
             entry,
       ];
-      _editingEntryId = entryId;
       _applySuggestedRegion();
     });
     widget.onPlaceSelected(entryId, candidate);
   }
 
-  void _editPlace(_PhotoEntry entry) {
-    setState(() {
-      _editingEntryId = _editingEntryId == entry.id ? null : entry.id;
-    });
+  Future<void> _editPlace(_PhotoEntry entry) async {
+    final metadata = entry.metadata;
+    final selectedPlace = entry.selectedPlace;
+    final initialLatitude = metadata.hasLocation
+        ? metadata.latitude
+        : selectedPlace?.latitude;
+    final initialLongitude = metadata.hasLocation
+        ? metadata.longitude
+        : selectedPlace?.longitude;
+    final candidate = await Navigator.of(context).push<PlaceCandidate>(
+      MaterialPageRoute(
+        builder: (_) => PlaceSearchMapScreen(
+          initialLatitude: initialLatitude,
+          initialLongitude: initialLongitude,
+        ),
+      ),
+    );
+    if (candidate == null || !mounted) return;
+    _selectPlace(entry.id, candidate);
   }
 
   void _addTag() {
@@ -1414,79 +1419,12 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
                     onChoosePlace: () => _editPlace(entry),
                     placeSelected: entry.selectedPlace != null,
                   ),
-                  if (_editingEntryId == entry.id) ...[
-                    const SizedBox(height: 10),
-                    _RouteDraftPlaceEditor(
-                      entry: entry,
-                      placeCandidateService: widget.placeCandidateService,
-                      onPlaceSelected: _selectPlace,
-                      onClose: () {
-                        setState(() {
-                          _editingEntryId = null;
-                        });
-                      },
-                    ),
-                  ],
                 ],
               ),
             );
           },
         ),
       ],
-    );
-  }
-}
-
-class _RouteDraftPlaceEditor extends StatelessWidget {
-  const _RouteDraftPlaceEditor({
-    required this.entry,
-    required this.placeCandidateService,
-    required this.onPlaceSelected,
-    required this.onClose,
-  });
-
-  final _PhotoEntry entry;
-  final PlaceCandidateService placeCandidateService;
-  final void Function(String entryId, PlaceCandidate candidate) onPlaceSelected;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0x0F000000),
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    entry.selectedPlace == null
-                        ? context.strings.choosePlace
-                        : context.strings.changePlace,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: onClose,
-                  tooltip: context.strings.close,
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            _PhotoDetailsSheet(
-              key: ValueKey(entry.id),
-              entry: entry,
-              placeCandidateService: placeCandidateService,
-              onPlaceSelected: onPlaceSelected,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1718,7 +1656,6 @@ class _PhotoBytesCache {
 
 class _PhotoDetailsSheet extends StatefulWidget {
   const _PhotoDetailsSheet({
-    super.key,
     required this.entry,
     required this.placeCandidateService,
     required this.onPlaceSelected,

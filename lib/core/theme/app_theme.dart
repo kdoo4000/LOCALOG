@@ -85,7 +85,9 @@ abstract final class AppTheme {
           minimumSize: const Size.fromHeight(56),
           backgroundColor: AppColors.primaryBlue,
           foregroundColor: AppColors.white,
-          shape: const StadiumBorder(),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.control),
+          ),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
           animationDuration: const Duration(milliseconds: 180),
         ),
