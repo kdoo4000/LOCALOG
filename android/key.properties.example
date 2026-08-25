@@ -1,0 +1,4 @@
+storePassword=replace_with_secure_store_password
+keyPassword=replace_with_secure_key_password
+keyAlias=upload
+storeFile=C:/secure/path/localog-upload.jks

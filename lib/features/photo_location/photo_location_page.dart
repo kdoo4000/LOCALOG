@@ -453,6 +453,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       id: 'photo-place-${DateTime.now().microsecondsSinceEpoch}-$index',
       placeProvider: selectedPlace?.source,
       externalPlaceId: selectedPlace?.id,
+      sourceCategory: selectedPlace?.sourceCategory,
       name: selectedPlace?.displayName ?? context.strings.photoStop(index),
       category: category == null || category.isEmpty
           ? context.strings.photoSpot
@@ -915,6 +916,7 @@ Map<String, dynamic> _routeDraftToJson(_RouteDraftResult draft) {
               'address': place.address,
               'source': place.source,
               'category': place.category,
+              'sourceCategory': place.sourceCategory,
               'distanceMeters': place.distanceMeters,
               'latitude': place.latitude,
               'longitude': place.longitude,

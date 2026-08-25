@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/home/presentation/main_shell_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screen.dart';
+import '../../features/route_search/presentation/place_detail_screen.dart';
 import '../../features/route_search/presentation/route_detail_screen.dart';
 import '../../features/route_search/presentation/route_download_edit_screen.dart';
 import '../../features/splash/presentation/splash_screen.dart';
@@ -19,6 +20,7 @@ abstract final class AppRouter {
           RouteNames.login => const LoginScreen(),
           RouteNames.main => const MainShellScreen(),
           RouteNames.routeDetail => _routeDetailScreen(settings.arguments),
+          RouteNames.placeDetail => _placeDetailScreen(settings.arguments),
           RouteNames.routeDownloadEdit => _routeDownloadEditScreen(
             settings.arguments,
           ),
@@ -26,6 +28,11 @@ abstract final class AppRouter {
         };
       },
     );
+  }
+
+  static Widget _placeDetailScreen(Object? arguments) {
+    final args = arguments as PlaceDetailArguments;
+    return PlaceDetailScreen(place: args.place);
   }
 
   static Widget _routeDetailScreen(Object? arguments) {

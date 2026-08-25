@@ -4,5 +4,6 @@ abstract final class RouteNames {
   static const login = '/login';
   static const main = '/main';
   static const routeDetail = '/routes/detail';
+  static const placeDetail = '/places/detail';
   static const routeDownloadEdit = '/routes/download-edit';
 }

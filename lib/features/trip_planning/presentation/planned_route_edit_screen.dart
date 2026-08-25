@@ -106,6 +106,7 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
           id: 'planned-place-${DateTime.now().microsecondsSinceEpoch}',
           placeProvider: candidate.source,
           externalPlaceId: candidate.id,
+          sourceCategory: candidate.sourceCategory,
           name: candidate.displayName,
           category: candidate.category?.trim().isNotEmpty == true
               ? candidate.category!.trim()
@@ -129,6 +130,7 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
       id: place.id,
       placeProvider: candidate.source,
       externalPlaceId: candidate.id,
+      sourceCategory: candidate.sourceCategory,
       name: candidate.displayName,
       category: category?.isNotEmpty == true ? category! : '장소',
       orderIndex: place.orderIndex,
@@ -253,7 +255,7 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
                           child: RouteStopEditTile(
                             index: index,
                             title: place.name,
-                            subtitle: place.address ?? place.category,
+                            subtitle: place.address ?? place.displayCategory,
                             onChoosePlace: () => _changePlace(place),
                             placeSelected: true,
                             showDragHandle: false,

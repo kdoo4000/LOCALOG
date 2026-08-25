@@ -11,6 +11,7 @@ const searchClientSecret =
   Deno.env.get("NAVER_SEARCH_CLIENT_SECRET") ??
   Deno.env.get("NAVER_OPENAPI_CLIENT_SECRET") ??
   "";
+const tourApiServiceKey = Deno.env.get("TOUR_API_SERVICE_KEY") ?? "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -72,8 +73,11 @@ const authenticatedHandler = withSupabase(
     }
 
     try {
+      const userId = String(context.userClaims?.id ?? "");
       const { data: quotaAvailable, error: quotaError } =
-        await context.supabase.rpc("consume_naver_proxy_quota");
+        await context.supabaseAdmin.rpc("consume_naver_proxy_quota", {
+          p_user_id: userId,
+        });
       if (quotaError) {
         console.error("naver-proxy quota check failed", quotaError);
         return textResponse("Unable to verify request quota", 503);
@@ -92,6 +96,7 @@ const authenticatedHandler = withSupabase(
             ok: true,
             mapConfigured: Boolean(mapClientId && mapClientSecret),
             searchConfigured: Boolean(searchClientId && searchClientSecret),
+            tourApiConfigured: Boolean(tourApiServiceKey),
           });
         case "static-map":
           return await handleStaticMap(url);
@@ -99,12 +104,14 @@ const authenticatedHandler = withSupabase(
           return await handlePlaceCandidates(url);
         case "place-search":
           return await handlePlaceSearch(url);
+        case "tour-place-detail":
+          return await handleTourPlaceDetail(url);
         default:
           return textResponse("Not found", 404);
       }
     } catch (error) {
       console.error("naver-proxy request failed", error);
-      return jsonResponse({ error: String(error) }, 500);
+      return jsonResponse({ error: "Request failed" }, 500);
     }
   },
 );
@@ -145,6 +152,177 @@ async function handleStaticMap(requestUrl: URL): Promise<Response> {
       "Cache-Control": "private, max-age=60",
     },
   });
+}
+
+async function handleTourPlaceDetail(requestUrl: URL): Promise<Response> {
+  const name = (requestUrl.searchParams.get("name") ?? "").trim();
+  if (name.length < 2 || name.length > 100) {
+    return textResponse("name must contain between 2 and 100 characters", 400);
+  }
+  if (!tourApiServiceKey) {
+    return jsonResponse({ match: null, configured: false });
+  }
+
+  const requestedContentId = (
+    requestUrl.searchParams.get("contentId") ?? ""
+  ).trim();
+  const candidate = requestedContentId
+    ? { contentid: requestedContentId }
+    : selectTourCandidate(
+        await fetchTourItems("searchKeyword2", {
+          keyword: name,
+          numOfRows: "10",
+        }),
+        name,
+        parseOrigin(requestUrl),
+      );
+  if (!candidate) return jsonResponse({ match: null, configured: true });
+
+  const contentId = cleanText(candidate.contentid);
+  if (!/^\d+$/.test(contentId)) {
+    return textResponse("contentId must be numeric", 400);
+  }
+  const commonItems = await fetchTourItems("detailCommon2", {
+    contentId,
+  });
+  const common = commonItems[0] ?? candidate;
+  const contentTypeId = cleanText(
+    common.contenttypeid || candidate.contenttypeid,
+  );
+  const [introItems, imageItems] = await Promise.all([
+    fetchTourItems("detailIntro2", { contentId, contentTypeId }),
+    fetchTourItems("detailImage2", {
+      contentId,
+      imageYN: "Y",
+      numOfRows: "10",
+    }),
+  ]);
+  const intro = introItems[0] ?? {};
+  const image = imageItems.find((item) => cleanText(item.originimgurl)) ?? {};
+
+  return jsonResponse({
+    configured: true,
+    match: {
+      contentId,
+      overview: cleanHtml(common.overview),
+      imageUrl: cleanText(
+        common.firstimage || image.originimgurl || candidate.firstimage,
+      ),
+      homepage: cleanHomepage(common.homepage),
+      telephone: cleanHtml(common.tel),
+      openingHours: firstTourValue(intro, [
+        "usetime",
+        "opentimefood",
+        "checkintime",
+      ]),
+      restDay: firstTourValue(intro, [
+        "restdate",
+        "restdatefood",
+        "restdateculture",
+        "restdateleports",
+        "restdateshopping",
+      ]),
+      parking: firstTourValue(intro, [
+        "parking",
+        "parkingfood",
+        "parkingculture",
+        "parkingleports",
+        "parkingshopping",
+      ]),
+      fee: firstTourValue(intro, [
+        "usefee",
+        "infocenterculture",
+        "saleitemcost",
+      ]),
+    },
+  });
+}
+
+async function fetchTourItems(
+  operation: string,
+  parameters: Record<string, string>,
+): Promise<JsonRecord[]> {
+  const url = new URL(
+    `https://apis.data.go.kr/B551011/KorService2/${operation}`,
+  );
+  url.searchParams.set("serviceKey", tourApiServiceKey);
+  url.searchParams.set("MobileOS", "ETC");
+  url.searchParams.set("MobileApp", "LOCALOG");
+  url.searchParams.set("_type", "json");
+  url.searchParams.set("pageNo", "1");
+  url.searchParams.set("numOfRows", parameters.numOfRows ?? "20");
+  for (const [key, value] of Object.entries(parameters)) {
+    url.searchParams.set(key, value);
+  }
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    console.warn("TourAPI request failed", operation, response.status);
+    return [];
+  }
+  const json = asRecord(await response.json());
+  const body = asRecord(asRecord(json.response).body);
+  const item = asRecord(body.items).item;
+  if (Array.isArray(item)) return item.map(asRecord);
+  return item && typeof item === "object" ? [asRecord(item)] : [];
+}
+
+function selectTourCandidate(
+  items: JsonRecord[],
+  query: string,
+  origin: Point | null,
+): JsonRecord | null {
+  const normalizedQuery = normalizeTourName(query);
+  const ranked = items.map((item) => {
+    const title = normalizeTourName(cleanText(item.title));
+    const coordinates = tourCoordinates(item);
+    const distance = origin && coordinates
+      ? haversineMeters(origin, coordinates)
+      : null;
+    let score = title === normalizedQuery
+      ? 120
+      : title.includes(normalizedQuery) || normalizedQuery.includes(title)
+      ? origin == null
+        ? 0
+        : 70
+      : 0;
+    if (distance != null) {
+      if (distance <= 300) score += 60;
+      else if (distance <= 1000) score += 35;
+      else if (distance <= 3000) score += 10;
+      else score -= 100;
+    }
+    return { item, score };
+  }).sort((a, b) => b.score - a.score);
+  return ranked[0] && ranked[0].score >= 50 ? ranked[0].item : null;
+}
+
+function tourCoordinates(item: JsonRecord): Point | null {
+  const lat = Number.parseFloat(String(item.mapy ?? ""));
+  const lng = Number.parseFloat(String(item.mapx ?? ""));
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+}
+
+function normalizeTourName(value: string): string {
+  return value.toLowerCase().replace(/[^0-9a-z가-힣]/g, "");
+}
+
+function firstTourValue(item: JsonRecord, keys: string[]): string {
+  for (const key of keys) {
+    const value = cleanHtml(item[key]);
+    if (value) return value;
+  }
+  return "";
+}
+
+function cleanHtml(value: unknown): string {
+  return cleanText(String(value ?? "").replace(/<br\s*\/?\s*>/gi, "\n"));
+}
+
+function cleanHomepage(value: unknown): string {
+  const raw = String(value ?? "");
+  const href = raw.match(/href=["']([^"']+)["']/i)?.[1];
+  return href ? href.trim() : cleanHtml(raw);
 }
 
 async function handlePlaceSearch(requestUrl: URL): Promise<Response> {
@@ -323,7 +501,8 @@ function toPlaceCandidate(
     id: `${prefix}_${name}_${address}`,
     name,
     address,
-    category: cleanText(item.category),
+    category: cleanText(item.category).split(">").pop()?.trim() ?? "",
+    sourceCategory: cleanText(item.category),
     source: "naver_local_search",
     distanceMeters:
       item.distanceMeters == null ? null : Math.round(item.distanceMeters),

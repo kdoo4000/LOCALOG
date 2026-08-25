@@ -98,10 +98,12 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
     });
     try {
       final bytes = await image.readAsBytes();
+      if (!mounted) return;
+      setState(() => _receiptBytes = bytes);
+
       final result = await _ocr.scan(image.path);
       if (!mounted) return;
       setState(() {
-        _receiptBytes = bytes;
         _rawText = result.rawText;
         _receiptTotal = result.totalAmount;
         _items = result.items;
@@ -116,10 +118,13 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
           _errorMessage = '품목을 찾지 못했어요. 인식 원문을 확인하고 직접 추가해 주세요.';
         }
       });
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('Receipt OCR failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         setState(
-          () => _errorMessage = '영수증을 읽지 못했어요. 더 밝고 선명한 사진으로 다시 시도해 주세요.',
+          () => _errorMessage =
+              '영수증 OCR을 실행했지만 실패했어요. 오류: $error',
         );
       }
     } finally {

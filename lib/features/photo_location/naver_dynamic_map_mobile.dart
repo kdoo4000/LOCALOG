@@ -75,6 +75,7 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
         height: widget.height,
         width: double.infinity,
         child: NaverMap(
+          forceGesture: true,
           options: NaverMapViewOptions(
             initialCameraPosition: NCameraPosition(
               target: _toLatLng(center),

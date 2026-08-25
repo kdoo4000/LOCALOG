@@ -7,6 +7,7 @@ class RoutePlace {
     this.canonicalPlaceId,
     this.placeProvider,
     this.externalPlaceId,
+    this.sourceCategory,
     this.address,
     this.visitedAt,
     this.memo,
@@ -24,6 +25,7 @@ class RoutePlace {
   final String? canonicalPlaceId;
   final String? placeProvider;
   final String? externalPlaceId;
+  final String? sourceCategory;
   final String name;
   final String category;
   final int orderIndex;
@@ -37,6 +39,11 @@ class RoutePlace {
   final List<String> photoStoragePaths;
   final List<String> purchasedItems;
 
+  String get displayCategory {
+    final parts = category.split('>');
+    return parts.last.trim();
+  }
+
   bool get hasLocation {
     final lat = latitude;
     final lng = longitude;
@@ -48,6 +55,7 @@ class RoutePlace {
     Object? canonicalPlaceId = _keepValue,
     Object? placeProvider = _keepValue,
     Object? externalPlaceId = _keepValue,
+    Object? sourceCategory = _keepValue,
     String? name,
     String? category,
     int? orderIndex,
@@ -72,6 +80,9 @@ class RoutePlace {
       externalPlaceId: identical(externalPlaceId, _keepValue)
           ? this.externalPlaceId
           : externalPlaceId as String?,
+      sourceCategory: identical(sourceCategory, _keepValue)
+          ? this.sourceCategory
+          : sourceCategory as String?,
       name: name ?? this.name,
       category: category ?? this.category,
       orderIndex: orderIndex ?? this.orderIndex,

@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../services/supabase_initializer.dart';
+import '../../../services/image_upload_sanitizer.dart';
+import '../../../services/tour_api_service.dart';
 import '../domain/route_place.dart';
 import '../domain/route_download_template.dart';
 import '../domain/travel_route.dart';
@@ -18,6 +20,7 @@ class SupabaseRouteRepository implements RouteRepository {
   static const _bucket = 'route-photos';
   static const _signedUrlLifetime = 60 * 60 * 24;
   static const _maxPhotoBytes = 15 * 1024 * 1024;
+  static const _imageSanitizer = ImageUploadSanitizer();
 
   final StreamController<void> _changes = StreamController<void>.broadcast();
 
@@ -43,7 +46,7 @@ class SupabaseRouteRepository implements RouteRepository {
     route_tags(tag),
     route_regions(region_name, order_index),
     route_places(
-      id, place_id, name, category, order_index, address, latitude, longitude
+      id, place_id, name, category, source_category, order_index, address, latitude, longitude
     )
   ''';
 
@@ -57,7 +60,7 @@ class SupabaseRouteRepository implements RouteRepository {
     route_likes(user_id, is_positive),
     route_photos(storage_path, place_id, order_index, captured_at),
     route_places(
-      id, place_id, name, category, order_index, address, visited_at, memo,
+      id, place_id, name, category, source_category, order_index, address, visited_at, memo,
       latitude, longitude, estimated_cost_won,
       route_place_purchases(name, amount_won, order_index)
     )
@@ -79,6 +82,91 @@ class SupabaseRouteRepository implements RouteRepository {
 
   @override
   Future<TravelRoute?> getRouteById(String routeId) => _fetchRoute(routeId);
+
+  @override
+  Future<PlaceDetail> getPlaceDetail(RoutePlace place) async {
+    final placeId = place.canonicalPlaceId;
+    if (placeId == null) return PlaceDetail(place: place, routes: const []);
+
+    final placeRow = await _client
+        .from('places')
+        .select('id, name, category, address, latitude, longitude')
+        .eq('id', placeId)
+        .maybeSingle();
+    final routePlaceRows = await _client
+        .from('route_places')
+        .select('route_id')
+        .eq('place_id', placeId);
+    final canonical = placeRow != null
+        ? RoutePlace(
+            id: place.id,
+            canonicalPlaceId: placeId,
+            name: placeRow['name'] as String? ?? place.name,
+            category: placeRow['category'] as String? ?? place.category,
+            address: placeRow['address'] as String? ?? place.address,
+            latitude: _asDoubleOrNull(placeRow['latitude']),
+            longitude: _asDoubleOrNull(placeRow['longitude']),
+            orderIndex: place.orderIndex,
+          )
+        : place;
+    final sourceRow = await _client
+        .from('place_sources')
+        .select('external_id')
+        .eq('place_id', placeId)
+        .eq('provider', 'tourapi')
+        .limit(1)
+        .maybeSingle();
+    final tourMatch = await const TourApiService().findPlace(
+      name: canonical.name,
+      contentId: sourceRow?['external_id'] as String?,
+      latitude: canonical.latitude,
+      longitude: canonical.longitude,
+    );
+    final tourInfo = tourMatch == null ? null : _mapTourInfo(tourMatch);
+    final routeIds = routePlaceRows
+        .map(_asMap)
+        .map((row) => row['route_id'])
+        .whereType<String>()
+        .toSet()
+        .toList();
+    if (routeIds.isEmpty) {
+      return PlaceDetail(
+        place: canonical,
+        routes: const [],
+        tourInfo: tourInfo,
+      );
+    }
+    final rows = await _client
+        .from('routes')
+        .select(_summarySelect)
+        .inFilter('id', routeIds)
+        .eq('access_level', 'public')
+        .eq('is_download_copy', false)
+        .order('published_at', ascending: false);
+    final routes = await Future.wait(
+      (rows as List).map((row) => _mapRoute(_asMap(row), summary: true)),
+    );
+    return PlaceDetail(place: canonical, routes: routes, tourInfo: tourInfo);
+  }
+
+  static TourPlaceInfo _mapTourInfo(Map<String, dynamic> row) {
+    String? text(String key) {
+      final value = row[key]?.toString().trim();
+      return value == null || value.isEmpty ? null : value;
+    }
+
+    return TourPlaceInfo(
+      contentId: text('contentId') ?? '',
+      overview: text('overview'),
+      imageUrl: text('imageUrl'),
+      homepage: text('homepage'),
+      telephone: text('telephone'),
+      openingHours: text('openingHours'),
+      restDay: text('restDay'),
+      parking: text('parking'),
+      fee: text('fee'),
+    );
+  }
 
   @override
   Future<TravelRoute?> getSourceRouteById(String routeId) async {
@@ -316,7 +404,7 @@ class SupabaseRouteRepository implements RouteRepository {
         'place_provider': place.placeProvider,
         'external_place_id': place.externalPlaceId,
         'name': place.name.trim(),
-        'category': place.category.trim(),
+        'category': (place.sourceCategory ?? place.category).trim(),
         'order_index': placeIndex,
         'address': place.address,
         'visited_at': place.visitedAt?.toIso8601String(),
@@ -384,11 +472,11 @@ class SupabaseRouteRepository implements RouteRepository {
     required List<String> uploadedPaths,
   }) async {
     final file = XFile(localPath);
-    final bytes = await file.readAsBytes();
+    final bytes = await _imageSanitizer.removeMetadata(await file.readAsBytes());
     return _uploadBytes(
       bytes,
-      originalName: file.name,
-      mimeType: file.mimeType,
+      originalName: '${file.name.replaceFirst(RegExp(r'\.[^.]+$'), '')}.jpg',
+      mimeType: 'image/jpeg',
       routeId: routeId,
       uploadedPaths: uploadedPaths,
     );
@@ -455,6 +543,7 @@ class SupabaseRouteRepository implements RouteRepository {
             canonicalPlaceId: place['place_id'] as String?,
             name: place['name'] as String? ?? '',
             category: place['category'] as String? ?? '',
+            sourceCategory: place['source_category'] as String?,
             orderIndex: _asInt(place['order_index']),
             address: place['address'] as String?,
             latitude: _asDoubleOrNull(place['latitude']),
@@ -505,6 +594,7 @@ class SupabaseRouteRepository implements RouteRepository {
             canonicalPlaceId: place['place_id'] as String?,
             name: place['name'] as String? ?? '',
             category: place['category'] as String? ?? '',
+            sourceCategory: place['source_category'] as String?,
             orderIndex: _asInt(place['order_index']),
             address: place['address'] as String?,
             visitedAt: _asDate(place['visited_at']),

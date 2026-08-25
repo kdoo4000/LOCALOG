@@ -15,6 +15,7 @@ import '../../trip_planning/domain/travel_plan.dart';
 import '../data/route_repository_provider.dart';
 import '../domain/route_place.dart';
 import '../domain/travel_route.dart';
+import 'place_detail_screen.dart';
 import 'route_download_edit_screen.dart';
 import '../../trip_planning/presentation/plan_route_import_screen.dart';
 
@@ -252,7 +253,13 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                         ),
                         const SizedBox(height: 14),
                         for (final place in sortedPlaces) ...[
-                          _TimelinePlace(place: place),
+                          _TimelinePlace(
+                            place: place,
+                            onTap: () => Navigator.of(context).pushNamed(
+                              RouteNames.placeDetail,
+                              arguments: PlaceDetailArguments(place),
+                            ),
+                          ),
                           const SizedBox(height: 12),
                         ],
                         const SizedBox(height: 12),
@@ -597,15 +604,24 @@ String _authorInitial(String authorName) {
 }
 
 class _TimelinePlace extends StatelessWidget {
-  const _TimelinePlace({required this.place});
+  const _TimelinePlace({required this.place, required this.onTap});
 
   final RoutePlace place;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+    return Semantics(
+      button: true,
+      label: '${place.name} 장소 정보 보기',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
         CircleAvatar(
           radius: 17,
           backgroundColor: AppColors.sky,
@@ -714,7 +730,10 @@ class _TimelinePlace extends StatelessWidget {
             ),
           ),
         ),
-      ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -899,10 +918,10 @@ Future<Uint8List> _readRoutePhoto(String path) async {
 String _placeMetaText(BuildContext context, RoutePlace place) {
   final cost = place.estimatedCostWon;
   if (cost == null) {
-    return place.category;
+    return place.displayCategory;
   }
 
-  return '${place.category} · ${context.strings.estimatedCost} ₩$cost';
+  return '${place.displayCategory} · ${context.strings.estimatedCost} ₩$cost';
 }
 
 class _RouteMapPanel extends StatelessWidget {

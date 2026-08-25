@@ -25,7 +25,7 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
         id, source_log_id, source_log_title, source_author_name,
         title, city, estimated_duration_minutes,
         planned_route_places(
-          id, place_id, name, category, order_index, address,
+          id, place_id, name, category, source_category, order_index, address,
           latitude, longitude
         )
       )
@@ -174,7 +174,8 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
             'planned_route_id': routeId,
             'place_id': _uuidOrNull(places[index].canonicalPlaceId),
             'name': places[index].name.trim(),
-            'category': places[index].category.trim(),
+            'category':
+                (places[index].sourceCategory ?? places[index].category).trim(),
             'order_index': index,
             'address': places[index].address,
             'latitude': places[index].latitude,
@@ -187,7 +188,7 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
             id, source_log_id, source_log_title, source_author_name,
             title, city, estimated_duration_minutes,
             planned_route_places(
-              id, place_id, name, category, order_index, address,
+              id, place_id, name, category, source_category, order_index, address,
               latitude, longitude
             )
           ''')
@@ -216,7 +217,10 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
             {
               'place_id': route.places[index].canonicalPlaceId,
               'name': route.places[index].name,
-              'category': route.places[index].category,
+              'category':
+                  (route.places[index].sourceCategory ??
+                          route.places[index].category)
+                      .trim(),
               'order_index': index,
               'address': route.places[index].address,
               'latitude': route.places[index].latitude,
@@ -231,7 +235,7 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
           id, source_log_id, source_log_title, source_author_name,
           title, city, estimated_duration_minutes,
           planned_route_places(
-            id, place_id, name, category, order_index, address,
+            id, place_id, name, category, source_category, order_index, address,
             latitude, longitude
           )
         ''')
@@ -345,6 +349,7 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
             canonicalPlaceId: place['place_id'] as String?,
             name: place['name'] as String? ?? '',
             category: place['category'] as String? ?? '',
+            sourceCategory: place['source_category'] as String?,
             orderIndex: _asInt(place['order_index']),
             address: place['address'] as String?,
             latitude: _asDoubleOrNull(place['latitude']),

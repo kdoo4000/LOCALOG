@@ -37,6 +37,27 @@ class MockRouteRepository implements RouteRepository {
   }
 
   @override
+  Future<PlaceDetail> getPlaceDetail(RoutePlace place) async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    final routes = <TravelRoute>[
+      ..._routes,
+      ..._downloadedRoutesById.values.where(
+        (route) => route.isPublished && route.isPublic,
+      ),
+    ].where((route) {
+      return route.places.any((candidate) {
+        final sharedId = place.canonicalPlaceId;
+        if (sharedId != null && candidate.canonicalPlaceId != null) {
+          return candidate.canonicalPlaceId == sharedId;
+        }
+        return candidate.name.trim() == place.name.trim() &&
+            candidate.address?.trim() == place.address?.trim();
+      });
+    }).map(_withVote).toList();
+    return PlaceDetail(place: place, routes: routes);
+  }
+
+  @override
   Future<TravelRoute?> getSourceRouteById(String routeId) async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
     final bundledRoute = _findSourceRoute(routeId);

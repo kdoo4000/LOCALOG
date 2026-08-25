@@ -14,6 +14,7 @@ TravelRoute withoutCreatorMediaAndPersonalData(TravelRoute source) {
           canonicalPlaceId: place.canonicalPlaceId,
           placeProvider: place.placeProvider,
           externalPlaceId: place.externalPlaceId,
+          sourceCategory: place.sourceCategory,
           name: place.name,
           category: place.category,
           orderIndex: place.orderIndex,

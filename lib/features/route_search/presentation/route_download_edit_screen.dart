@@ -224,6 +224,7 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
           'custom-${DateTime.now().microsecondsSinceEpoch}',
       placeProvider: candidate.source,
       externalPlaceId: candidate.id,
+      sourceCategory: candidate.sourceCategory,
       name: candidate.displayName,
       category: category?.isNotEmpty == true ? category! : '장소',
       orderIndex: existing?.orderIndex ?? _places.length,
@@ -605,8 +606,8 @@ class _LockedPlaceSummary extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               address == null || address.isEmpty
-                  ? place.category
-                  : '${place.category} · $address',
+                  ? place.displayCategory
+                  : '${place.displayCategory} · $address',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
@@ -619,7 +620,7 @@ class _LockedPlaceSummary extends StatelessWidget {
 }
 
 String _placeSubtitle(BuildContext context, RoutePlace place) {
-  final parts = <String>[place.category];
+  final parts = <String>[place.displayCategory];
   if (place.memo != null && place.memo!.isNotEmpty) {
     parts.add(place.memo!);
   }

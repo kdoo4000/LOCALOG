@@ -153,7 +153,7 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(port, () => {
+server.listen(port, '127.0.0.1', () => {
   console.log(`Naver Maps proxy listening on http://localhost:${port}`);
 });
 
