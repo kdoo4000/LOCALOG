@@ -66,10 +66,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(DetailedRouteSearchScreen), findsOneWidget);
-    expect(find.byType(SearchBar), findsOneWidget);
-    expect(find.text('어떤 여행 로그를 찾고 있나요?'), findsOneWidget);
-    expect(find.text('어디로 떠날까요?'), findsOneWidget);
-    expect(find.text('코스를 얼마나 채울까요?'), findsOneWidget);
+    expect(find.byKey(const ValueKey('log-title-filter')), findsOneWidget);
+    expect(find.text('지역'), findsOneWidget);
+    expect(find.text('포함할 여행지'), findsOneWidget);
+    expect(find.text('태그'), findsOneWidget);
     expect(find.byType(ExpansionTile), findsNothing);
     expect(find.text('DETAILED SEARCH'), findsNothing);
     expect(find.text('확인'), findsNothing);

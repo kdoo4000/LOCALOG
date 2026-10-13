@@ -3,13 +3,17 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+
+import '../../core/widgets/app_dialog.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/l10n/app_language.dart';
 import '../../core/router/route_names.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/app_card.dart';
 import '../../core/widgets/premium_ui.dart';
+import '../../core/widgets/region_chip_wrap.dart';
 import '../../models/place_candidate.dart';
 import '../../models/photo_metadata.dart';
 import '../../services/exif_metadata_reader.dart';
@@ -20,6 +24,7 @@ import '../../services/photo_log_draft_store.dart';
 import '../route_search/data/route_repository_provider.dart';
 import '../route_search/domain/route_place.dart';
 import '../route_search/domain/travel_route.dart';
+import '../route_search/presentation/place_detail_screen.dart';
 import '../route_search/presentation/widgets/route_stop_edit_tile.dart';
 import '../route_search/presentation/region_picker_screen.dart';
 import '../trip_planning/data/travel_plan_repository_provider.dart';
@@ -53,6 +58,8 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
   String? _errorMessage;
   _RouteDraftResult? _savedDraft;
   bool _editingSavedDraft = false;
+  int _currentStep = 0;
+  _RouteDraftResult? _previewDraft;
   GlobalKey<_RouteDraftInlineEditorState> _editorKey = GlobalKey();
 
   @override
@@ -118,7 +125,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     if (replacesSavedDraft) {
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (context) => AppDialog(
           title: const Text('새 로그를 만들까요?'),
           content: const Text(
             '한 번에 하나의 로그만 작성할 수 있어요. '
@@ -169,9 +176,9 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
         } catch (error) {
           if (!mounted) return;
           setState(() => _isReading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('새 로그를 시작하지 못했습니다: $error')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('새 로그를 시작하지 못했습니다: $error')));
           return;
         }
       }
@@ -194,6 +201,8 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       setState(() {
         _entries = nextEntries;
         _selectedDateKey = firstGroupKey;
+        _currentStep = nextEntries.isEmpty ? 0 : 1;
+        _previewDraft = null;
         _isReading = false;
         if (!append) {
           _editorKey = GlobalKey();
@@ -219,6 +228,8 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
         _entries = const [];
         _selectedDateKey = null;
         _editingSavedDraft = false;
+        _currentStep = 0;
+        _previewDraft = null;
       });
       ScaffoldMessenger.of(
         context,
@@ -239,13 +250,15 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       _selectedDateKey = draft.entries.first.dateKey;
       _editorKey = GlobalKey();
       _editingSavedDraft = true;
+      _currentStep = 1;
+      _previewDraft = null;
     });
   }
 
   Future<void> _discardDraft() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => AppDialog(
         title: const Text('로그 작성을 취소할까요?'),
         content: const Text('선택한 사진과 편집한 내용이 모두 사라집니다.'),
         actions: [
@@ -276,6 +289,8 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
       _selectedDateKey = null;
       _savedDraft = null;
       _editingSavedDraft = false;
+      _currentStep = 0;
+      _previewDraft = null;
       _errorMessage = null;
     });
   }
@@ -284,6 +299,22 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     setState(() {
       _selectedDateKey = key;
       _editorKey = GlobalKey();
+    });
+  }
+
+  void _openPreview() {
+    final draft = _editorKey.currentState?._prepareReview();
+    if (draft == null) return;
+    setState(() {
+      _previewDraft = draft;
+      _currentStep = 2;
+    });
+  }
+
+  void _backToEditor() {
+    setState(() {
+      _currentStep = 1;
+      _previewDraft = null;
     });
   }
 
@@ -378,6 +409,8 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
         _selectedDateKey = null;
         _savedDraft = null;
         _editingSavedDraft = false;
+        _currentStep = 0;
+        _previewDraft = null;
         _isSavingRoute = false;
         _errorMessage = null;
       });
@@ -484,9 +517,15 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
                     child: OutlinedButton.icon(
                       onPressed: _isSavingRoute
                           ? null
+                          : _currentStep == 2
+                          ? _backToEditor
                           : () => _editorKey.currentState?._saveTemporary(),
-                      icon: const Icon(Icons.drafts_outlined),
-                      label: const Text('임시 저장'),
+                      icon: Icon(
+                        _currentStep == 2
+                            ? Icons.arrow_back_rounded
+                            : Icons.drafts_outlined,
+                      ),
+                      label: Text(_currentStep == 2 ? '이전' : '임시 저장'),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -494,14 +533,26 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
                     child: FilledButton.icon(
                       onPressed: _isSavingRoute
                           ? null
-                          : () => _editorKey.currentState?._save(),
+                          : _currentStep == 2
+                          ? () => _saveSelectedGroupAsRoute(_previewDraft!)
+                          : _openPreview,
                       icon: _isSavingRoute
                           ? const SizedBox.square(
                               dimension: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(Icons.save_outlined),
-                      label: Text(_isSavingRoute ? '저장 중' : '로그 저장'),
+                          : Icon(
+                              _currentStep == 2
+                                  ? Icons.save_outlined
+                                  : Icons.map_outlined,
+                            ),
+                      label: Text(
+                        _isSavingRoute
+                            ? '저장 중'
+                            : _currentStep == 2
+                            ? '로그 저장'
+                            : '지도 미리보기',
+                      ),
                     ),
                   ),
                 ],
@@ -545,6 +596,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
                         FilledButton.icon(
                           onPressed: _isReading ? null : () => _pickPhotos(),
                           style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(56),
                             backgroundColor: AppColors.white,
                             foregroundColor: AppColors.primaryBlue,
                           ),
@@ -573,60 +625,151 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
                     onDiscard: _discardDraft,
                   ),
                 ],
-                const SizedBox(height: 22),
+                if (_entries.isEmpty) const SizedBox(height: 24),
                 AppStepIndicator(
-                  steps: const ['사진 선택', '로그 편집', '저장'],
-                  currentIndex: _entries.isEmpty ? 0 : 1,
+                  steps: const ['사진 선택', '로그 편집', '미리보기'],
+                  currentIndex: _currentStep,
                 ),
                 const SizedBox(height: 22),
                 if (_errorMessage != null)
                   _MessagePanel(message: _errorMessage!),
-                if (_entries.isEmpty)
-                  const _EmptyState()
-                else ...[
-                  _SummaryPanel(entries: _entries),
-                  const SizedBox(height: 16),
-                  _DateSelector(
-                    groups: _dateGroups,
-                    selectedKey: selectedGroup?.key,
-                    onSelected: _selectDate,
-                  ),
-                  const SizedBox(height: 12),
-                  _SaveRoutePanel(
-                    editorKey: _editorKey,
-                    group: selectedGroup,
-                    onPlaceSelected: _selectPlace,
-                    onSaveDraft: _isSavingRoute
-                        ? null
-                        : _saveSelectedGroupAsRoute,
-                    onTemporarySave: _saveDraft,
-                    savedDraft: _editingSavedDraft ? _savedDraft : null,
-                    isReadingPhotos: _isReading,
-                    onAddPhotos: () => _pickPhotos(append: true),
-                    onDiscard: _discardDraft,
-                    plannedRoute: widget.plannedRoute,
-                  ),
-                  const SizedBox(height: 16),
-                  if (selectedGroup != null) ...[
-                    _MultiMapPanel(group: selectedGroup),
-                    const SizedBox(height: 16),
-                    ExpansionTile(
-                      tilePadding: const EdgeInsets.symmetric(horizontal: 4),
-                      childrenPadding: const EdgeInsets.only(bottom: 8),
-                      title: Text('사진 전체 보기 · ${selectedGroup.photos.length}장'),
+                if (_entries.isNotEmpty) ...[
+                  Offstage(
+                    offstage: _currentStep != 1,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _PhotoGrid(
+                        _StepHeader(
+                          title: '장소와 로그 정보 확인',
+                          description: '방문 장소와 순서를 확인하고 로그 정보를 입력하세요.',
+                        ),
+                        const SizedBox(height: 16),
+                        _SummaryPanel(entries: _entries),
+                        const SizedBox(height: 16),
+                        _DateSelector(
+                          groups: _dateGroups,
+                          selectedKey: selectedGroup?.key,
+                          onSelected: _selectDate,
+                        ),
+                        const SizedBox(height: 12),
+                        _SaveRoutePanel(
+                          editorKey: _editorKey,
                           group: selectedGroup,
-                          onPhotoTap: _showDetails,
+                          onPlaceSelected: _selectPlace,
+                          onTemporarySave: _saveDraft,
+                          savedDraft: _editingSavedDraft ? _savedDraft : null,
+                          isReadingPhotos: _isReading,
+                          onAddPhotos: () => _pickPhotos(append: true),
+                          onDiscard: _discardDraft,
+                          plannedRoute: widget.plannedRoute,
                         ),
                       ],
                     ),
-                  ],
+                  ),
+                  if (_previewDraft != null)
+                    Offstage(
+                      offstage: _currentStep != 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const _StepHeader(
+                            title: '저장 전 확인',
+                            description: '지도와 사진을 확인한 뒤 로그를 저장하세요.',
+                          ),
+                          const SizedBox(height: 16),
+                          _SummaryPanel(entries: _previewDraft!.entries),
+                          const SizedBox(height: 16),
+                          _MultiMapPanel(
+                            group: _PhotoDateGroup(
+                              key: selectedGroup?.key ?? '',
+                              label: selectedGroup?.label ?? '',
+                              photos: _previewDraft!.entries,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _PhotoGrid(
+                            group: _PhotoDateGroup(
+                              key: selectedGroup?.key ?? '',
+                              label: selectedGroup?.label ?? '',
+                              photos: _previewDraft!.entries,
+                            ),
+                            onPhotoTap: _showDetails,
+                          ),
+                          const SizedBox(height: 12),
+                          _PreviewLogSummary(draft: _previewDraft!),
+                        ],
+                      ),
+                    ),
                 ],
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _StepHeader extends StatelessWidget {
+  const _StepHeader({required this.title, required this.description});
+
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 6),
+        Text(
+          description,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+        ),
+      ],
+    );
+  }
+}
+
+class _PreviewLogSummary extends StatelessWidget {
+  const _PreviewLogSummary({required this.draft});
+
+  final _RouteDraftResult draft;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(draft.title, style: Theme.of(context).textTheme.titleLarge),
+          if (draft.description.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(draft.description),
+          ],
+          const SizedBox(height: 12),
+          RegionChipWrap(regions: draft.regions),
+          if (draft.tags.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final tag in draft.tags) Chip(label: Text('#$tag')),
+              ],
+            ),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            draft.visibility == RouteVisibility.public ? '전체 공개' : '나만 보기',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(color: AppColors.primaryBlue),
+          ),
+        ],
       ),
     );
   }
@@ -775,7 +918,6 @@ class _SaveRoutePanel extends StatelessWidget {
     required this.editorKey,
     required this.group,
     required this.onPlaceSelected,
-    required this.onSaveDraft,
     required this.onTemporarySave,
     required this.savedDraft,
     required this.isReadingPhotos,
@@ -787,7 +929,6 @@ class _SaveRoutePanel extends StatelessWidget {
   final GlobalKey<_RouteDraftInlineEditorState> editorKey;
   final _PhotoDateGroup? group;
   final void Function(String entryId, PlaceCandidate candidate) onPlaceSelected;
-  final ValueChanged<_RouteDraftResult>? onSaveDraft;
   final ValueChanged<_RouteDraftResult> onTemporarySave;
   final _RouteDraftResult? savedDraft;
   final bool isReadingPhotos;
@@ -856,7 +997,6 @@ class _SaveRoutePanel extends StatelessWidget {
             initialVisibility: savedDraft?.visibility ?? RouteVisibility.public,
             entries: group.photos,
             onPlaceSelected: onPlaceSelected,
-            onSave: onSaveDraft,
             onTemporarySave: onTemporarySave,
           ),
         ],
@@ -988,7 +1128,6 @@ class _RouteDraftInlineEditor extends StatefulWidget {
     required this.initialVisibility,
     required this.entries,
     required this.onPlaceSelected,
-    required this.onSave,
     required this.onTemporarySave,
   });
 
@@ -999,7 +1138,6 @@ class _RouteDraftInlineEditor extends StatefulWidget {
   final RouteVisibility initialVisibility;
   final List<_PhotoEntry> entries;
   final void Function(String entryId, PlaceCandidate candidate) onPlaceSelected;
-  final ValueChanged<_RouteDraftResult>? onSave;
   final ValueChanged<_RouteDraftResult> onTemporarySave;
 
   @override
@@ -1082,26 +1220,22 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
     });
   }
 
-  void _save() {
-    final onSave = widget.onSave;
-    if (onSave == null) {
-      return;
-    }
+  _RouteDraftResult? _prepareReview() {
     if (_entries.any((entry) => entry.selectedPlace == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.strings.selectAllPlacesBeforeSave)),
       );
-      return;
+      return null;
     }
 
     if (_regions.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('지역을 하나 이상 선택해 주세요.')));
-      return;
+      return null;
     }
     _addTag();
-    onSave(_buildDraft());
+    return _buildDraft();
   }
 
   void _saveTemporary() {
@@ -1338,10 +1472,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
               flex: 2,
               child: DropdownButtonFormField<RouteVisibility>(
                 initialValue: _visibility,
-                decoration: const InputDecoration(
-                  labelText: '공개 범위',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(labelText: '공개 범위'),
                 items: const [
                   DropdownMenuItem(
                     value: RouteVisibility.public,
@@ -1396,6 +1527,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
           onReorderItem: _reorderEntries,
           itemBuilder: (context, index) {
             final entry = _entries[index];
+            final selectedPlace = entry.selectedPlace;
 
             return Padding(
               key: ValueKey('route-draft-${entry.id}'),
@@ -1409,6 +1541,23 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
                         context.strings.photoStop(index),
                     subtitle:
                         '${entry.timeLabel} · ${entry.selectedPlace?.displayDetail ?? context.strings.notSelected}',
+                    onTap: selectedPlace == null
+                        ? null
+                        : () => openPlaceDetail(
+                            context,
+                            RoutePlace(
+                              id: selectedPlace.id,
+                              placeProvider: selectedPlace.source,
+                              externalPlaceId: selectedPlace.id,
+                              sourceCategory: selectedPlace.sourceCategory,
+                              name: selectedPlace.displayName,
+                              category: selectedPlace.category ?? '장소',
+                              orderIndex: index,
+                              address: selectedPlace.address,
+                              latitude: selectedPlace.latitude,
+                              longitude: selectedPlace.longitude,
+                            ),
+                          ),
                     leading: ClipRRect(
                       borderRadius: BorderRadius.circular(6),
                       child: SizedBox(
@@ -1937,7 +2086,6 @@ class _MessagePanel extends StatelessWidget {
           _MessageKey.placeSuggestionsUnavailable =>
             context.strings.placeSuggestionsUnavailable,
           _MessageKey.noGpsForDate => context.strings.noGpsForDate,
-          _MessageKey.emptyPhotoState => context.strings.emptyPhotoState,
           null => '',
         };
 
@@ -1958,16 +2106,6 @@ enum _MessageKey {
   noGpsForSuggestions,
   placeSuggestionsUnavailable,
   noGpsForDate,
-  emptyPhotoState,
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _MessagePanel(messageKey: _MessageKey.emptyPhotoState);
-  }
 }
 
 class _PhotoEntry {

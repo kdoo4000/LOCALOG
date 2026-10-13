@@ -118,3 +118,11 @@ LOCALOG는 여행지를 소비하는 방식보다, 누군가의 하루를 따라
 
 `android/key.properties.example`을 `android/key.properties`로 복사하고 운영용 upload keystore 정보를 입력합니다. `key.properties`와 keystore 파일은 Git에서 제외됩니다. 설정이 없으면 release 빌드는 실패하며 debug 키로 대체되지 않습니다.
 
+
+## 휴대폰 테스트용 Android 빌드
+
+Supabase와 지도 설정이 포함되도록 프로젝트 루트에서 다음 명령으로 빌드합니다. 설정 없이 빌드하면 로그인 화면에서 게스트 모드만 사용할 수 있습니다.
+
+    flutter build apk --release --dart-define-from-file=config/local.json
+
+빌드 후 `build/app/outputs/flutter-apk/app-release.apk`를 휴대폰에 설치합니다. `config/local.json`의 `SUPABASE_URL`과 `SUPABASE_PUBLISHABLE_KEY`가 필요하며, 설정 변경 후에는 다시 빌드해야 합니다.

@@ -17,7 +17,7 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
   );
 
   static const _planSelect = '''
-    id, title, region_name, start_date, end_date,
+    id, owner_id, title, region_name, start_date, end_date,
     travel_plan_regions(region_name, order_index),
     travel_plan_days(
       id, travel_date, day_index, completed_log_id,
@@ -48,7 +48,6 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
     final rows = await _client
         .from('travel_plans')
         .select(_planSelect)
-        .eq('owner_id', user.id)
         .order('start_date');
     return (rows as List).map((row) => _mapPlan(_asMap(row))).toList();
   }
@@ -61,7 +60,6 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
         .from('travel_plans')
         .select(_planSelect)
         .eq('id', planId)
-        .eq('owner_id', user.id)
         .maybeSingle();
     return row == null ? null : _mapPlan(_asMap(row));
   }
@@ -82,15 +80,17 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
       throw ArgumentError('하나 이상의 지역이 필요합니다.');
     }
     _user;
-    final planId = await _client.rpc(
-      'create_travel_plan',
-      params: {
-        'p_title': title.trim(),
-        'p_regions': normalizedRegions,
-        'p_start_date': _dateValue(startDate),
-        'p_end_date': _dateValue(endDate),
-      },
-    ) as String;
+    final planId =
+        await _client.rpc(
+              'create_travel_plan',
+              params: {
+                'p_title': title.trim(),
+                'p_regions': normalizedRegions,
+                'p_start_date': _dateValue(startDate),
+                'p_end_date': _dateValue(endDate),
+              },
+            )
+            as String;
     final saved = await getPlanById(planId);
     if (saved == null) throw StateError('여행 계획을 다시 불러오지 못했습니다.');
     _changes.add(null);
@@ -174,8 +174,8 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
             'planned_route_id': routeId,
             'place_id': _uuidOrNull(places[index].canonicalPlaceId),
             'name': places[index].name.trim(),
-            'category':
-                (places[index].sourceCategory ?? places[index].category).trim(),
+            'category': (places[index].sourceCategory ?? places[index].category)
+                .trim(),
             'order_index': index,
             'address': places[index].address,
             'latitude': places[index].latitude,
@@ -276,6 +276,17 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
   @override
   Future<void> deletePlan(String planId) async {
     final user = _user;
+    final expenses = await _client
+        .from('travel_expenses')
+        .select('receipt_path')
+        .eq('plan_id', planId);
+    final paths = [
+      for (final expense in expenses)
+        if (expense['receipt_path'] case final String path) path,
+    ];
+    if (paths.isNotEmpty) {
+      await _client.storage.from('travel-receipts').remove(paths);
+    }
     await _client
         .from('travel_plans')
         .delete()
@@ -298,6 +309,7 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
           );
     return TravelPlan(
       id: row['id'] as String,
+      ownerId: row['owner_id'] as String?,
       title: row['title'] as String? ?? '',
       regionName: row['region_name'] as String? ?? '',
       regions: regionRows

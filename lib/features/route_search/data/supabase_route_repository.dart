@@ -472,7 +472,9 @@ class SupabaseRouteRepository implements RouteRepository {
     required List<String> uploadedPaths,
   }) async {
     final file = XFile(localPath);
-    final bytes = await _imageSanitizer.removeMetadata(await file.readAsBytes());
+    final bytes = await _imageSanitizer.removeMetadata(
+      await file.readAsBytes(),
+    );
     return _uploadBytes(
       bytes,
       originalName: '${file.name.replaceFirst(RegExp(r'\.[^.]+$'), '')}.jpg',
@@ -650,6 +652,7 @@ class SupabaseRouteRepository implements RouteRepository {
       city: row['city'] as String? ?? '',
       regions: regions,
       authorName: author ?? 'LOCALOG 여행자',
+      ownerId: ownerId,
       places: places,
       tags: tags,
       upvoteRatio: _asDouble(row['upvote_ratio']),

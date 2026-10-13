@@ -82,8 +82,11 @@ void main() {
     await tester.tap(find.text('성수 카페거리'));
     await tester.pumpAndSettle();
 
-    final searchBar = tester.widget<SearchBar>(find.byType(SearchBar));
-    expect(searchBar.controller?.text, '성수 카페거리');
+    final titleField = tester.widget<TextFormField>(
+      find.byKey(const ValueKey('log-title-filter')),
+    );
+    expect(titleField.controller?.text, '성수 카페거리');
+    expect(find.text('조건에 맞는 로그 1개 보기'), findsOneWidget);
   });
 
   test('nearest active plan excludes past plans and calculates D-day', () {
@@ -121,10 +124,7 @@ void main() {
     expect(travelPlanDdayLabel(plan, DateTime(2026, 7, 20)), '여행 1일차');
     expect(travelPlanDdayLabel(plan, DateTime(2026, 7, 21)), '여행 2일차');
     expect(currentTravelPlanDayIndex(plan, DateTime(2026, 7, 21)), 1);
-    expect(
-      travelPlanHomeActionLabel(plan, DateTime(2026, 7, 21)),
-      '오늘의 일정 보기',
-    );
+    expect(travelPlanHomeActionLabel(plan, DateTime(2026, 7, 21)), '오늘의 일정 보기');
   });
 
   test('홈은 진행 중, 예정, 최근 종료 여행 순서로 대표 여행을 선택한다', () {

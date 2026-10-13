@@ -36,4 +36,40 @@ void main() {
     expect(card.margin, EdgeInsets.zero);
     expect(find.text('성수 카페'), findsOneWidget);
   });
+
+  testWidgets('place card opens detail without replacing edit action', (
+    tester,
+  ) async {
+    final languageController = AppLanguageController();
+    addTearDown(languageController.dispose);
+    var opened = 0;
+    var edited = 0;
+
+    await tester.pumpWidget(
+      AppLanguageScope(
+        controller: languageController,
+        child: MaterialApp(
+          home: Scaffold(
+            body: RouteStopEditTile(
+              index: 0,
+              title: '롯데월드 어드벤처',
+              subtitle: '서울 송파구',
+              onTap: () => opened++,
+              onEdit: () => edited++,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('롯데월드 어드벤처'));
+    await tester.pump();
+    expect(opened, 1);
+    expect(edited, 0);
+
+    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.pump();
+    expect(opened, 1);
+    expect(edited, 1);
+  });
 }

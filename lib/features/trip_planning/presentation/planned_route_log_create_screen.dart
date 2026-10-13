@@ -15,6 +15,7 @@ import '../../../services/original_media_picker.dart';
 import '../../route_search/data/route_repository_provider.dart';
 import '../../route_search/domain/route_place.dart';
 import '../../route_search/domain/travel_route.dart';
+import '../../route_search/presentation/place_detail_screen.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
 
@@ -258,20 +259,14 @@ class _PlannedRouteLogCreateScreenState
                 const SizedBox(height: 20),
                 TextField(
                   controller: _titleController,
-                  decoration: const InputDecoration(
-                    labelText: '로그 제목',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: '로그 제목'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _descriptionController,
                   minLines: 2,
                   maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: '로그 설명 (선택)',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: '로그 설명 (선택)'),
                 ),
                 const SizedBox(height: 20),
                 for (var index = 0; index < _places.length; index++) ...[
@@ -281,6 +276,7 @@ class _PlannedRouteLogCreateScreenState
                     photos: _photosByPlaceId[_places[index].id]!,
                     selectedCoverPath: _coverPhotoPath,
                     isReading: _readingPlaceId == _places[index].id,
+                    onOpenPlace: () => openPlaceDetail(context, _places[index]),
                     onAddPhotos: () => _addPhotos(_places[index]),
                     onSelectCover: (photo) =>
                         setState(() => _coverPhotoPath = photo.file.path),
@@ -292,10 +288,7 @@ class _PlannedRouteLogCreateScreenState
                 const SizedBox(height: 8),
                 DropdownButtonFormField<RouteVisibility>(
                   initialValue: _visibility,
-                  decoration: const InputDecoration(
-                    labelText: '공개 범위',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: '공개 범위'),
                   items: const [
                     DropdownMenuItem(
                       value: RouteVisibility.public,
@@ -330,6 +323,7 @@ class _PlacePhotoCard extends StatelessWidget {
     required this.photos,
     required this.selectedCoverPath,
     required this.isReading,
+    required this.onOpenPlace,
     required this.onAddPhotos,
     required this.onSelectCover,
     required this.onRemovePhoto,
@@ -340,123 +334,131 @@ class _PlacePhotoCard extends StatelessWidget {
   final List<_NodePhoto> photos;
   final String? selectedCoverPath;
   final bool isReading;
+  final VoidCallback onOpenPlace;
   final VoidCallback onAddPhotos;
   final ValueChanged<_NodePhoto> onSelectCover;
   final ValueChanged<_NodePhoto> onRemovePhoto;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 15,
-                backgroundColor: AppColors.primaryBlue,
-                foregroundColor: AppColors.white,
-                child: Text('${index + 1}'),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      place.name,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    if (place.address != null)
-                      Text(
-                        place.address!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.gray500,
-                        ),
-                      ),
-                  ],
+    return Semantics(
+      button: true,
+      label: '${place.name} 장소 정보 보기',
+      child: AppCard(
+        onTap: onOpenPlace,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 15,
+                  backgroundColor: AppColors.primaryBlue,
+                  foregroundColor: AppColors.white,
+                  child: Text('${index + 1}'),
                 ),
-              ),
-              OutlinedButton.icon(
-                onPressed: isReading ? null : onAddPhotos,
-                icon: isReading
-                    ? const SizedBox.square(
-                        dimension: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add_photo_alternate_outlined),
-                label: Text(photos.isEmpty ? '사진 추가' : '더 추가'),
-              ),
-            ],
-          ),
-          if (photos.isEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.yellow,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Text('이 장소에서 찍은 사진을 추가해 주세요.'),
-            ),
-          ] else ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 92,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: photos.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (context, photoIndex) {
-                  final photo = photos[photoIndex];
-                  final selected = photo.file.path == selectedCoverPath;
-                  return Semantics(
-                    button: true,
-                    selected: selected,
-                    label: '사진 ${photoIndex + 1} 대표 이미지로 선택',
-                    child: GestureDetector(
-                      onTap: () => onSelectCover(photo),
-                      child: Container(
-                        width: 92,
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? AppColors.primaryBlue
-                              : AppColors.gray200,
-                          borderRadius: BorderRadius.circular(12),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        place.name,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      if (place.address != null)
+                        Text(
+                          place.address!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppColors.gray500),
                         ),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(9),
-                              child: _XFileImage(file: photo.file),
-                            ),
-                            if (selected)
-                              const Positioned(
-                                left: 5,
-                                bottom: 5,
-                                child: Icon(
-                                  Icons.star,
-                                  size: 18,
-                                  color: AppColors.accentLime,
-                                ),
+                    ],
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: isReading ? null : onAddPhotos,
+                  icon: isReading
+                      ? const SizedBox.square(
+                          dimension: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add_photo_alternate_outlined),
+                  label: Text(photos.isEmpty ? '사진 추가' : '더 추가'),
+                ),
+              ],
+            ),
+            if (photos.isEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.yellow,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text('이 장소에서 찍은 사진을 추가해 주세요.'),
+              ),
+            ] else ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 92,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: photos.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (context, photoIndex) {
+                    final photo = photos[photoIndex];
+                    final selected = photo.file.path == selectedCoverPath;
+                    return Semantics(
+                      button: true,
+                      selected: selected,
+                      label: '사진 ${photoIndex + 1} 대표 이미지로 선택',
+                      child: InkWell(
+                        onTap: () => onSelectCover(photo),
+                        focusColor: AppColors.accentLime,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Ink(
+                          width: 92,
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? AppColors.primaryBlue
+                                : AppColors.gray200,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(9),
+                                child: _XFileImage(file: photo.file),
                               ),
-                            Positioned(
-                              right: 2,
-                              top: 2,
-                              child: Material(
-                                color: const Color(0xB3000000),
-                                shape: const CircleBorder(),
-                                child: InkWell(
-                                  customBorder: const CircleBorder(),
-                                  onTap: () => onRemovePhoto(photo),
-                                  child: const Padding(
-                                    padding: EdgeInsets.all(4),
-                                    child: Icon(
+                              if (selected)
+                                const Positioned(
+                                  left: 5,
+                                  bottom: 5,
+                                  child: Icon(
+                                    Icons.star,
+                                    size: 18,
+                                    color: AppColors.accentLime,
+                                  ),
+                                ),
+                              Positioned(
+                                right: 2,
+                                top: 2,
+                                child: Material(
+                                  color: const Color(0xB3000000),
+                                  shape: const CircleBorder(),
+                                  child: IconButton(
+                                    tooltip: '사진 ${photoIndex + 1} 삭제',
+                                    constraints: const BoxConstraints(
+                                      minWidth: 44,
+                                      minHeight: 44,
+                                    ),
+                                    onPressed: () => onRemovePhoto(photo),
+                                    icon: const Icon(
                                       Icons.close,
                                       size: 15,
                                       color: Colors.white,
@@ -464,24 +466,24 @@ class _PlacePhotoCard extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '사진 ${photos.length}장 · 사진을 누르면 대표 이미지로 설정',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.gray500),
-            ),
+              const SizedBox(height: 6),
+              Text(
+                '사진 ${photos.length}장 · 사진을 누르면 대표 이미지로 설정',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.gray500),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

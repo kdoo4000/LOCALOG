@@ -2,21 +2,30 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/app_dialog.dart';
+
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../profile/presentation/social_person_tile.dart';
 import '../../../core/widgets/premium_ui.dart';
 import '../../../core/widgets/region_chip_wrap.dart';
 import '../../../services/naver_static_map_service.dart';
+import '../../../services/supabase_initializer.dart';
 import '../../photo_location/naver_dynamic_map.dart';
 import '../../receipt_settlement/presentation/receipt_settlement_screen.dart';
 import '../../route_search/presentation/route_detail_screen.dart';
+import '../../route_search/presentation/place_detail_screen.dart';
+import '../../route_search/domain/route_place.dart';
 import '../../route_search/presentation/route_search_screen.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
 import 'planned_route_edit_screen.dart';
 import 'planned_route_log_create_screen.dart';
 import 'travel_plan_create_screen.dart';
+import 'trip_expenses_screen.dart';
+import 'trip_invite_screen.dart';
+import '../data/shared_trip_repository.dart';
 
 class TravelPlanDetailScreen extends StatefulWidget {
   const TravelPlanDetailScreen({
@@ -42,6 +51,7 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
   bool _loading = false;
   bool _deletingPlan = false;
   int _loadGeneration = 0;
+  Future<List<TripPerson>>? _membersFuture;
   late int _selectedDayIndex;
 
   @override
@@ -49,6 +59,9 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
     super.initState();
     _selectedDayIndex = widget.initialDayIndex;
     _plan = widget.initialPlan;
+    if (_plan?.ownerId != null) {
+      _membersFuture = SharedTripRepository.instance.members(widget.planId);
+    }
     _loading = _plan == null;
     if (_plan == null) {
       unawaited(_refreshPlan());
@@ -69,6 +82,9 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _plan = plan;
+        _membersFuture = plan?.ownerId == null
+            ? null
+            : SharedTripRepository.instance.members(widget.planId);
         _loadError = null;
         _loading = false;
       });
@@ -86,6 +102,9 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
     _loadGeneration += 1;
     setState(() {
       _plan = plan;
+      _membersFuture = plan.ownerId == null
+          ? null
+          : SharedTripRepository.instance.members(widget.planId);
       _loadError = null;
       _loading = false;
     });
@@ -115,7 +134,7 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
     final detailRoute = ModalRoute.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => AppDialog(
         title: const Text('여행 계획 삭제'),
         content: Text('“${plan.title}” 계획을 삭제할까요? 만들어진 로그는 삭제되지 않습니다.'),
         actions: [
@@ -185,7 +204,7 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
   ) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => AppDialog(
         title: const Text('계획에서 루트 제거'),
         content: const Text('복사한 루트만 제거되며 원본 로그에는 영향을 주지 않습니다.'),
         actions: [
@@ -208,6 +227,9 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final plan = _plan;
+    final isOwner =
+        plan?.ownerId == null ||
+        plan?.ownerId == supabaseClient.auth.currentUser?.id;
     return Scaffold(
       appBar: AppBar(
         title: Text(plan?.title ?? '여행 계획'),
@@ -218,7 +240,7 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
               onPressed: _deletingPlan ? null : () => _editPlan(plan),
               icon: const Icon(Icons.edit_outlined),
             ),
-          if (plan != null)
+          if (plan != null && isOwner)
             IconButton(
               tooltip: '계획 삭제',
               onPressed: _deletingPlan ? null : () => _deletePlan(plan),
@@ -254,7 +276,7 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
     final day = plan.days[_selectedDayIndex];
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
         children: [
           AppHeroCard(
             padding: const EdgeInsets.all(22),
@@ -288,25 +310,60 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => _showInviteNotice(context),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.white,
-                          foregroundColor: AppColors.primaryBlue,
+                    if (plan.ownerId == null ||
+                        plan.ownerId == supabaseClient.auth.currentUser?.id)
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: plan.ownerId == null
+                              ? () =>
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          '동행자 초대는 로그인 후 사용할 수 있어요.',
+                                        ),
+                                      ),
+                                    )
+                              : () async {
+                                  await Navigator.of(context).push<void>(
+                                    MaterialPageRoute(
+                                      builder: (_) => TripInviteScreen(
+                                        planId: plan.id,
+                                        title: plan.title,
+                                      ),
+                                    ),
+                                  );
+                                  if (mounted) {
+                                    setState(
+                                      () =>
+                                          _membersFuture = SharedTripRepository
+                                              .instance
+                                              .members(plan.id),
+                                    );
+                                  }
+                                },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.white,
+                            foregroundColor: AppColors.primaryBlue,
+                          ),
+                          icon: const Icon(Icons.person_add_alt_1_outlined),
+                          label: const Text('초대'),
                         ),
-                        icon: const Icon(Icons.person_add_alt_1_outlined),
-                        label: const Text('초대'),
                       ),
-                    ),
-                    const SizedBox(width: 10),
+                    if (plan.ownerId == null ||
+                        plan.ownerId == supabaseClient.auth.currentUser?.id)
+                      const SizedBox(width: 10),
                     Expanded(
                       child: FilledButton.icon(
                         onPressed: () => Navigator.of(context).push<void>(
                           MaterialPageRoute(
-                            builder: (_) => ReceiptSettlementScreen(
-                              travelTitle: plan.title,
-                            ),
+                            builder: (_) => plan.ownerId == null
+                                ? ReceiptSettlementScreen(
+                                    travelTitle: plan.title,
+                                  )
+                                : TripExpensesScreen(
+                                    planId: plan.id,
+                                    title: plan.title,
+                                  ),
                           ),
                         ),
                         style: FilledButton.styleFrom(
@@ -322,7 +379,41 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
+          if (_membersFuture != null) ...[
+            Text('동행자', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            FutureBuilder<List<TripPerson>>(
+              future: _membersFuture,
+              builder: (context, snapshot) => Column(
+                children: [
+                  if (snapshot.hasError)
+                    TextButton(
+                      onPressed: () => setState(() {
+                        _membersFuture = SharedTripRepository.instance.members(
+                          widget.planId,
+                        );
+                      }),
+                      child: const Text('동행자를 불러오지 못했어요. 다시 시도'),
+                    )
+                  else if (!snapshot.hasData)
+                    const LinearProgressIndicator(semanticsLabel: '동행자 불러오는 중')
+                  else if (snapshot.data!.isEmpty)
+                    const Text('아직 동행자가 없어요.'),
+                  for (final person in snapshot.data ?? const <TripPerson>[])
+                    SocialPersonTile(
+                      name: person.name,
+                      handle: person.handle,
+                      avatarPath: person.avatarPath,
+                      trailing: person.id == plan.ownerId
+                          ? const Text('방장')
+                          : null,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           SizedBox(
             height: 48,
             child: ListView.separated(
@@ -379,6 +470,7 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
             _PlannedRouteCard(
               day: day,
               route: day.plannedRoute!,
+              onPlaceTap: (place) => openPlaceDetail(context, place),
               onEdit: () => _editRoute(plan, day, day.plannedRoute!),
               onRemove: () => _removeRoute(plan, day, day.plannedRoute!),
               onOpenSource: day.plannedRoute!.sourceLogId == null
@@ -390,19 +482,23 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
                         showSourceRoute: true,
                       ),
                     ),
-              onCreateLog: () async {
-                final updatedPlan = await Navigator.of(context)
-                    .push<TravelPlan>(
-                      MaterialPageRoute(
-                        builder: (_) => PlannedRouteLogCreateScreen(
-                          route: day.plannedRoute!,
-                          day: day,
-                          regions: plan.effectiveRegions,
-                        ),
-                      ),
-                    );
-                if (updatedPlan != null) _showPlan(updatedPlan);
-              },
+              onCreateLog:
+                  plan.ownerId == null ||
+                      plan.ownerId == supabaseClient.auth.currentUser?.id
+                  ? () async {
+                      final updatedPlan = await Navigator.of(context)
+                          .push<TravelPlan>(
+                            MaterialPageRoute(
+                              builder: (_) => PlannedRouteLogCreateScreen(
+                                route: day.plannedRoute!,
+                                day: day,
+                                regions: plan.effectiveRegions,
+                              ),
+                            ),
+                          );
+                      if (updatedPlan != null) _showPlan(updatedPlan);
+                    }
+                  : null,
               onOpenCompletedLog: day.completedLogId == null
                   ? null
                   : () => Navigator.of(context).pushNamed(
@@ -411,35 +507,6 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
                     ),
             ),
         ],
-      ),
-    );
-  }
-
-  Future<void> _showInviteNotice(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('동행자 초대', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              const Text('동행자 초대는 아직 사용할 수 없어요. 다음 업데이트에서 제공할 예정입니다.'),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('확인'),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -499,6 +566,7 @@ class _PlannedRouteCard extends StatelessWidget {
     required this.onEdit,
     required this.onRemove,
     required this.onCreateLog,
+    required this.onPlaceTap,
     this.onOpenSource,
     this.onOpenCompletedLog,
   });
@@ -507,7 +575,8 @@ class _PlannedRouteCard extends StatelessWidget {
   final PlannedRoute route;
   final VoidCallback onEdit;
   final VoidCallback onRemove;
-  final VoidCallback onCreateLog;
+  final VoidCallback? onCreateLog;
+  final ValueChanged<RoutePlace> onPlaceTap;
   final VoidCallback? onOpenSource;
   final VoidCallback? onOpenCompletedLog;
 
@@ -569,7 +638,7 @@ class _PlannedRouteCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      '@${route.sourceAuthorName}의 원본 로그를 참고했어요',
+                      '${route.sourceAuthorName}의 원본 로그',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.primaryBlue,
                         fontWeight: FontWeight.w800,
@@ -583,58 +652,72 @@ class _PlannedRouteCard extends StatelessWidget {
           ],
           const SizedBox(height: 18),
           for (var index = 0; index < sortedPlaces.length; index++) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 13,
-                  backgroundColor: AppColors.sky,
-                  child: Text(
-                    '${index + 1}',
-                    style: const TextStyle(
-                      color: AppColors.primaryBlue,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
+            Semantics(
+              button: true,
+              label: '${sortedPlaces[index].name} 장소 정보 보기',
+              child: InkWell(
+                onTap: () => onPlaceTap(sortedPlaces[index]),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        sortedPlaces[index].name,
-                        style: const TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                      if (sortedPlaces[index].address != null)
-                        Text(
-                          sortedPlaces[index].address!,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppColors.gray500),
+                      CircleAvatar(
+                        radius: 13,
+                        backgroundColor: AppColors.sky,
+                        child: Text(
+                          '${index + 1}',
+                          style: const TextStyle(
+                            color: AppColors.primaryBlue,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              sortedPlaces[index].name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (sortedPlaces[index].address != null)
+                              Text(
+                                sortedPlaces[index].address!,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: AppColors.gray500),
+                              ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
             if (index != sortedPlaces.length - 1) const SizedBox(height: 12),
           ],
           const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: onOpenCompletedLog == null
-                ? FilledButton.icon(
-                    onPressed: onCreateLog,
-                    icon: const Icon(Icons.add_a_photo_outlined),
-                    label: const Text('사진을 추가해 로그 만들기'),
-                  )
-                : FilledButton.icon(
-                    onPressed: onOpenCompletedLog,
-                    icon: const Icon(Icons.auto_stories_outlined),
-                    label: const Text('완성된 로그 보기'),
-                  ),
-          ),
+          if (onOpenCompletedLog != null || onCreateLog != null)
+            SizedBox(
+              width: double.infinity,
+              child: onOpenCompletedLog == null
+                  ? FilledButton.icon(
+                      onPressed: onCreateLog,
+                      icon: const Icon(Icons.add_a_photo_outlined),
+                      label: const Text('사진을 추가해 로그 만들기'),
+                    )
+                  : FilledButton.icon(
+                      onPressed: onOpenCompletedLog,
+                      icon: const Icon(Icons.auto_stories_outlined),
+                      label: const Text('완성된 로그 보기'),
+                    ),
+            ),
         ],
       ),
     );

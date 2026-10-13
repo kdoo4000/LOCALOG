@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/premium_ui.dart';
 import '../../../models/place_candidate.dart';
 import '../../route_search/domain/route_place.dart';
+import '../../route_search/presentation/place_detail_screen.dart';
 import '../../route_search/presentation/widgets/route_stop_edit_tile.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
@@ -166,18 +167,15 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
         ),
       ),
       body: SafeArea(
-        child: Column(
+        child: ListView(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
               child: Column(
                 children: [
                   TextField(
                     controller: _titleController,
-                    decoration: const InputDecoration(
-                      labelText: '루트 이름',
-                      border: OutlineInputBorder(),
-                    ),
+                    decoration: const InputDecoration(labelText: '루트 이름'),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
@@ -205,66 +203,64 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
                 ),
               ),
             if (_places.isEmpty)
-              Expanded(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.add_location_alt_outlined,
-                          size: 48,
-                          color: AppColors.primaryBlue,
-                        ),
-                        const SizedBox(height: 12),
-                        const Text('방문할 장소를 순서대로 추가해 주세요.'),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: _addPlace,
-                          icon: const Icon(Icons.search),
-                          label: const Text('첫 장소 검색'),
-                        ),
-                      ],
-                    ),
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.add_location_alt_outlined,
+                        size: 48,
+                        color: AppColors.primaryBlue,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('방문할 장소를 순서대로 추가해 주세요.'),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _addPlace,
+                        icon: const Icon(Icons.search),
+                        label: const Text('첫 장소 검색'),
+                      ),
+                    ],
                   ),
                 ),
               )
             else
-              Expanded(
-                child: ReorderableListView.builder(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-                  buildDefaultDragHandles: false,
-                  itemCount: _places.length,
-                  onReorderItem: _reorder,
-                  itemBuilder: (context, index) {
-                    final place = _places[index];
-                    return Padding(
-                      key: ValueKey('planned-place-${place.id}'),
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: RouteStopDismissible(
-                        dismissKey: ValueKey('planned-dismiss-${place.id}'),
-                        enabled: _places.length > 1,
-                        onDismissed: () => setState(
-                          () => _places.removeWhere(
-                            (item) => item.id == place.id,
-                          ),
-                        ),
-                        child: ReorderableDelayedDragStartListener(
+              ReorderableListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
+                buildDefaultDragHandles: false,
+                itemCount: _places.length,
+                onReorderItem: _reorder,
+                itemBuilder: (context, index) {
+                  final place = _places[index];
+                  return Padding(
+                    key: ValueKey('planned-place-${place.id}'),
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: RouteStopDismissible(
+                      dismissKey: ValueKey('planned-dismiss-${place.id}'),
+                      enabled: _places.length > 1,
+                      onDismissed: () => setState(
+                        () =>
+                            _places.removeWhere((item) => item.id == place.id),
+                      ),
+                      child: ReorderableDelayedDragStartListener(
+                        index: index,
+                        child: RouteStopEditTile(
                           index: index,
-                          child: RouteStopEditTile(
-                            index: index,
-                            title: place.name,
-                            subtitle: place.address ?? place.displayCategory,
-                            onChoosePlace: () => _changePlace(place),
-                            placeSelected: true,
-                            showDragHandle: false,
-                          ),
+                          title: place.name,
+                          subtitle: place.address ?? place.displayCategory,
+                          onTap: () => openPlaceDetail(context, place),
+                          onChoosePlace: () => _changePlace(place),
+                          placeSelected: true,
+                          showDragHandle: false,
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                },
               ),
           ],
         ),

@@ -3,6 +3,7 @@ import '../../route_search/domain/route_place.dart';
 class TravelPlan {
   const TravelPlan({
     required this.id,
+    this.ownerId,
     required this.title,
     required this.regionName,
     this.regions = const [],
@@ -12,6 +13,7 @@ class TravelPlan {
   });
 
   final String id;
+  final String? ownerId;
   final String title;
   final String regionName;
   final List<String> regions;
@@ -35,6 +37,7 @@ class TravelPlan {
   }) {
     return TravelPlan(
       id: id ?? this.id,
+      ownerId: ownerId,
       title: title ?? this.title,
       regionName: regionName ?? this.regionName,
       regions: regions ?? this.regions,

@@ -74,7 +74,7 @@ class AppStrings {
   String shortcutComing(String label) => isKo
       ? '$label 화면은 다음 단계에서 연결할게요.'
       : '$label will be connected in the next step.';
-  String get monthlyRecommend => isKo ? '이번 달 로컬 추천' : 'Local picks this month';
+  String get monthlyRecommend => isKo ? '최근 공개 로그' : 'Recently shared logs';
   String get shortcutRouteSearch => isKo ? '로그 찾기' : 'Find logs';
   String get shortcutScanReceipt => isKo ? '영수증 정산' : 'Split receipt';
   String get shortcutUploadRoute => isKo ? '로그 만들기' : 'Create log';
@@ -140,17 +140,16 @@ class AppStrings {
   String get photoTitle =>
       isKo ? '여행 사진으로\n로그를 만들어 보세요' : 'Create a log from your travel photos';
   String get photoSubtitle => isKo
-      ? '사진 메타데이터를 읽어 방문 장소와 순서를 분석합니다.'
-      : 'Read photo metadata, sort stops by time, and review places on a map.';
+      ? '사진의 촬영 정보를 바탕으로 방문 장소와 순서를 정리합니다.'
+      : 'Use photo details to organize visited places in time order.';
   String get choosePhotos => isKo ? '여행 사진 업로드' : 'Upload trip photos';
   String get readingPhotos => isKo ? '사진 읽는 중' : 'Reading photos';
-  String photoReadFailed(Object error) => isKo
-      ? '사진 메타데이터를 읽지 못했어요. $error'
-      : 'Could not read photo metadata. $error';
+  String photoReadFailed(Object error) =>
+      isKo ? '사진 정보를 읽지 못했어요. $error' : 'Could not read photo details. $error';
   String get selectedPhotos => isKo ? '생성된 방문 장소' : 'Generated stops';
   String get photos => isKo ? '사진' : 'Photos';
-  String get withGps => isKo ? 'GPS 있음' : 'With GPS';
-  String get withoutGps => isKo ? 'GPS 없음' : 'Without GPS';
+  String get withGps => isKo ? '위치 정보 있음' : 'Location available';
+  String get withoutGps => isKo ? '위치 정보 없음' : 'No location';
   String get createRoute => isKo ? '로그 만들기' : 'Create log';
   String get selectPhotoDateToCreateRoute =>
       isKo ? '로그로 만들 날짜를 선택하세요.' : 'Select a photo date to create a log.';
@@ -179,8 +178,8 @@ class AppStrings {
       isKo ? '로그에는 최소 한 개의 지점이 필요해요.' : 'A log needs at least one stop.';
   String get savingRoute => isKo ? '로그 저장 중' : 'Saving log';
   String get chooseRoutablePhotosFirst => isKo
-      ? 'GPS가 있거나 장소가 선택된 사진을 먼저 선택하세요.'
-      : 'Choose photos with GPS or selected places first.';
+      ? '위치 정보가 있거나 장소가 선택된 사진을 먼저 선택하세요.'
+      : 'Choose photos with location details or selected places first.';
   String get savedPhotoRouteToProfile =>
       isKo ? '사진 로그를 프로필에 저장했어요.' : 'Saved photo log to Profile.';
   String saveRouteFailed(Object error) =>
@@ -201,13 +200,13 @@ class AppStrings {
       ? '$timeLabel에 촬영한 사진입니다. 파일: $fileName'
       : 'Taken at $timeLabel from $fileName.';
   String get timelineSuffix => isKo ? '타임라인' : 'timeline';
-  String get dynamicMapSuffix => isKo ? '동적 지도' : 'dynamic map';
+  String get dynamicMapSuffix => isKo ? '지도 미리보기' : 'Map preview';
   String markerCount(int count) => isKo
-      ? '$count개의 마커를 촬영 시간순으로 연결했어요.'
-      : '$count marker(s), connected in taken-time order.';
+      ? '지도에 장소 $count곳을 촬영 시간순으로 연결했어요.'
+      : '$count place(s) connected in photo order.';
   String get noGpsForDate => isKo
-      ? '이 날짜에는 GPS 메타데이터가 없어요.'
-      : 'No GPS metadata is available for this date.';
+      ? '이 날짜의 사진에는 위치 정보가 없어요.'
+      : 'These photos do not include location details.';
   String get emptyPhotoState => isKo
       ? '여행 사진을 선택하면 방문 장소와 로그를 자동으로 정리해요.'
       : 'Choose photos to build a date-grouped log and map.';
@@ -221,8 +220,8 @@ class AppStrings {
   String get none => isKo ? '없음' : 'None';
   String get notSelected => isKo ? '선택 안 됨' : 'Not selected';
   String get noGpsForSuggestions => isKo
-      ? '장소 추천에 사용할 GPS 메타데이터가 없어요.'
-      : 'No GPS metadata is available for place suggestions.';
+      ? '장소 추천에 사용할 위치 정보가 없어요.'
+      : 'No location details are available for place suggestions.';
   String get placeSuggestionsUnavailable => isKo
       ? '이 사진에서는 장소 추천을 사용할 수 없어요.'
       : 'Place suggestions are not available for this photo.';
@@ -253,9 +252,8 @@ class AppStrings {
       : 'No coordinates are available for this log yet.';
   String get mapLoadFailed =>
       isKo ? '지도를 불러오지 못했어요.' : 'Could not load the map.';
-  String get naverDynamicMapKeyMissing => isKo
-      ? '네이버 동적 지도 키가 설정되지 않았어요.'
-      : 'Naver Dynamic Map key is not configured.';
+  String get naverDynamicMapKeyMissing =>
+      isKo ? '지도 기능을 사용할 수 없어요.' : 'Map preview is unavailable.';
   String get editMyRoute => isKo ? '수정하기' : 'Edit';
   String get downloadAndCustomize =>
       isKo ? '이 루트로 여행 계획하기' : 'Plan with this route';

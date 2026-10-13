@@ -9,6 +9,7 @@ import '../domain/route_download_template.dart';
 import '../domain/route_place.dart';
 import '../domain/travel_route.dart';
 import '../../trip_planning/presentation/place_search_map_screen.dart';
+import 'place_detail_screen.dart';
 import 'widgets/route_stop_edit_tile.dart';
 
 class RouteDownloadEditScreen extends StatefulWidget {
@@ -190,9 +191,7 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
 
   Future<void> _showEditPlaceDialog(RoutePlace place) async {
     final updatedPlace = await Navigator.of(context).push<RoutePlace>(
-      MaterialPageRoute(
-        builder: (_) => _PlaceDetailsEditScreen(place: place),
-      ),
+      MaterialPageRoute(builder: (_) => _PlaceDetailsEditScreen(place: place)),
     );
 
     if (updatedPlace == null || !mounted) {
@@ -219,9 +218,7 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
   }) {
     final category = candidate.category?.trim();
     return RoutePlace(
-      id:
-          existing?.id ??
-          'custom-${DateTime.now().microsecondsSinceEpoch}',
+      id: existing?.id ?? 'custom-${DateTime.now().microsecondsSinceEpoch}',
       placeProvider: candidate.source,
       externalPlaceId: candidate.id,
       sourceCategory: candidate.sourceCategory,
@@ -321,7 +318,10 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                         Text(
                           strings.customizeYourRouteSubtitle,
                           style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: AppColors.textSecondary, height: 1.45),
+                              ?.copyWith(
+                                color: AppColors.textSecondary,
+                                height: 1.45,
+                              ),
                         ),
                         if (widget.createNewCopy) ...[
                           const SizedBox(height: 12),
@@ -386,7 +386,6 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                             initialValue: _visibility,
                             decoration: const InputDecoration(
                               labelText: '공개 범위',
-                              border: OutlineInputBorder(),
                             ),
                             items: const [
                               DropdownMenuItem(
@@ -452,6 +451,8 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                                     index: index,
                                     title: place.name,
                                     subtitle: _placeSubtitle(context, place),
+                                    onTap: () =>
+                                        openPlaceDetail(context, place),
                                     onEdit: () => _showEditPlaceDialog(place),
                                     onChoosePlace: () => _changePlace(place),
                                     placeSelected: true,

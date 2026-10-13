@@ -151,8 +151,9 @@ class _PlaceSearchMapScreenState extends State<PlaceSearchMapScreen> {
     final selectedIndex = _selected == null
         ? null
         : located.indexWhere((candidate) => candidate.id == _selected!.id);
-    final normalizedSelectedIndex =
-        selectedIndex != null && selectedIndex >= 0 ? selectedIndex : null;
+    final normalizedSelectedIndex = selectedIndex != null && selectedIndex >= 0
+        ? selectedIndex
+        : null;
     final mapHeight = (MediaQuery.sizeOf(context).height * .38).clamp(
       240.0,
       380.0,
@@ -207,61 +208,65 @@ class _PlaceSearchMapScreenState extends State<PlaceSearchMapScreen> {
                 },
               ),
             ),
-            SizedBox(
-              height: mapHeight,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (located.isEmpty)
-                    Container(
-                      color: AppColors.gray100,
-                      alignment: Alignment.center,
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        _controller.text.trim().length < 2
-                            ? '장소를 검색하면 지도에서 위치를 확인할 수 있어요.'
-                            : _searching
-                            ? '지도에 검색 결과를 표시하는 중입니다.'
-                            : '지도에 표시할 위치가 없습니다.',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: AppColors.gray500),
+            Flexible(
+              flex: 3,
+              child: SizedBox(
+                height: mapHeight,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (located.isEmpty)
+                      Container(
+                        color: AppColors.gray100,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          _controller.text.trim().length < 2
+                              ? '장소를 검색하면 지도에서 위치를 확인할 수 있어요.'
+                              : _searching
+                              ? '지도에 검색 결과를 표시하는 중입니다.'
+                              : '지도에 표시할 위치가 없습니다.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: AppColors.gray500),
+                        ),
+                      )
+                    else
+                      NaverDynamicMap(
+                        points: [
+                          for (final candidate in located)
+                            MapPoint(
+                              latitude: candidate.latitude!,
+                              longitude: candidate.longitude!,
+                            ),
+                        ],
+                        height: mapHeight,
+                        connectPoints: false,
+                        selectedIndex: normalizedSelectedIndex,
+                        onPointTap: (index) => _selectCandidate(located[index]),
+                        onCameraIdle: (center) {
+                          _mapCenter = center;
+                          if (!_searching &&
+                              _controller.text.trim().length >= 2) {
+                            setState(() => _showSearchAreaButton = true);
+                          }
+                        },
                       ),
-                    )
-                  else
-                    NaverDynamicMap(
-                      points: [
-                        for (final candidate in located)
-                          MapPoint(
-                            latitude: candidate.latitude!,
-                            longitude: candidate.longitude!,
+                    if (_showSearchAreaButton && located.isNotEmpty)
+                      Align(
+                        alignment: Alignment.topCenter,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: FilledButton.icon(
+                            onPressed: _searching
+                                ? null
+                                : () => _search(useMapCenter: true),
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: const Text('이 지역에서 검색'),
                           ),
-                      ],
-                      height: mapHeight,
-                      connectPoints: false,
-                      selectedIndex: normalizedSelectedIndex,
-                      onPointTap: (index) => _selectCandidate(located[index]),
-                      onCameraIdle: (center) {
-                        _mapCenter = center;
-                        if (!_searching && _controller.text.trim().length >= 2) {
-                          setState(() => _showSearchAreaButton = true);
-                        }
-                      },
-                    ),
-                  if (_showSearchAreaButton && located.isNotEmpty)
-                    Align(
-                      alignment: Alignment.topCenter,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: FilledButton.icon(
-                          onPressed: _searching
-                              ? null
-                              : () => _search(useMapCenter: true),
-                          icon: const Icon(Icons.refresh, size: 18),
-                          label: const Text('이 지역에서 검색'),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
             if (_message != null)
@@ -276,6 +281,7 @@ class _PlaceSearchMapScreenState extends State<PlaceSearchMapScreen> {
                 child: Text(_message!),
               ),
             Expanded(
+              flex: 2,
               child: _candidates.isEmpty
                   ? const SizedBox.shrink()
                   : ListView.separated(

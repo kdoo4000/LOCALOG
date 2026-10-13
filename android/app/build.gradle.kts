@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.util.Base64
 
 plugins {
     id("com.android.application")
@@ -20,6 +21,21 @@ if (releaseRequested && !keystorePropertiesFile.exists()) {
         "Release signing is not configured. Copy android/key.properties.example " +
             "to android/key.properties and set the release keystore values."
     )
+}
+if (releaseRequested) {
+    val dartDefines = (project.findProperty("dart-defines") as? String)
+        .orEmpty().split(",").filter { it.isNotBlank() }.associate {
+            val decoded = String(Base64.getDecoder().decode(it), Charsets.UTF_8)
+            decoded.substringBefore("=") to decoded.substringAfter("=", "")
+        }
+    if (listOf("SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY").any {
+        dartDefines[it].isNullOrBlank()
+    }) {
+        throw GradleException(
+            "Release backend configuration is missing. Build with " +
+                "flutter build apk --release --dart-define-from-file=config/local.json"
+        )
+    }
 }
 
 android {

@@ -7,10 +7,13 @@ import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/premium_ui.dart';
 import '../../../core/widgets/region_chip_wrap.dart';
+import '../../../services/supabase_initializer.dart';
+import '../data/shared_trip_repository.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
 import 'travel_plan_create_screen.dart';
 import 'travel_plan_detail_screen.dart';
+import 'trip_code_screen.dart';
 
 class TravelPlanScreen extends StatefulWidget {
   const TravelPlanScreen({super.key});
@@ -23,6 +26,7 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
   final _repository = travelPlanRepository;
   StreamSubscription<void>? _subscription;
   List<TravelPlan> _plans = const [];
+  List<TripInvitation> _invitations = const [];
   Object? _loadError;
   bool _loading = true;
   int _loadGeneration = 0;
@@ -46,9 +50,13 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
     final generation = ++_loadGeneration;
     try {
       final plans = await _repository.getPlans();
+      final invitations = hasSupabaseSession
+          ? await SharedTripRepository.instance.invitations()
+          : <TripInvitation>[];
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _plans = plans;
+        _invitations = invitations;
         _loadError = null;
         _loading = false;
       });
@@ -90,6 +98,43 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
     if (mounted) await _refreshPlans();
   }
 
+  Future<void> _answerInvite(TripInvitation invite, bool accept) async {
+    try {
+      await SharedTripRepository.instance.answerInvitation(
+        invite.planId,
+        accept,
+      );
+      await _refreshPlans();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('초대를 처리하지 못했어요: $error')));
+      }
+    }
+  }
+
+  Future<void> _joinWithCode() async {
+    if (!hasSupabaseSession) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('로그인 후 초대 코드를 사용할 수 있어요.')));
+      return;
+    }
+    final planId = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const JoinTripCodeScreen()),
+    );
+    if (planId == null || !mounted) return;
+    await _refreshPlans();
+    if (mounted) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => TravelPlanDetailScreen(planId: planId),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final today = DateUtils.dateOnly(DateTime.now());
@@ -127,12 +172,6 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
                               '내 여행',
                               style: Theme.of(context).textTheme.headlineMedium,
                             ),
-                            const SizedBox(height: 5),
-                            Text(
-                              '계획부터 정산, 여행 로그까지 한곳에서 관리해요.',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: AppColors.gray500),
-                            ),
                           ],
                         ),
                       ),
@@ -144,6 +183,54 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.mail_outline),
+                    title: const Text('초대 코드 입력'),
+                    onTap: _joinWithCode,
+                  ),
+                  const SizedBox(height: 24),
+                  if (_invitations.isNotEmpty) ...[
+                    Text(
+                      '받은 초대',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    for (final invite in _invitations)
+                      AppCard(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              invite.title,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () =>
+                                        _answerInvite(invite, false),
+                                    child: const Text('거절'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: FilledButton(
+                                    onPressed: () =>
+                                        _answerInvite(invite, true),
+                                    child: const Text('참여'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 24),
+                  ],
                   if (_plans.isNotEmpty) ...[
                     AppMetricStrip(
                       items: [
