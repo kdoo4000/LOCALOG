@@ -56,3 +56,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 node_modules
+AGENTS.md
+.codex/config.toml
+tmp/route-detail-deployed-main.dart.js
