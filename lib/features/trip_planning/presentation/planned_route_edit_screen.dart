@@ -51,6 +51,11 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
   }
 
   void _reorder(int oldIndex, int newIndex) {
+    if (_places[oldIndex].isAccommodation) return;
+    final first = _places.first.accommodationRole == 'start' ? 1 : 0;
+    final last =
+        _places.length - (_places.last.accommodationRole == 'end' ? 2 : 1);
+    newIndex = newIndex.clamp(first, last);
     setState(() {
       final place = _places.removeAt(oldIndex);
       _places.insert(newIndex, place);
@@ -102,7 +107,10 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
     );
     if (candidate == null || !mounted) return;
     setState(() {
-      _places.add(
+      _places.insert(
+        _places.isNotEmpty && _places.last.accommodationRole == 'end'
+            ? _places.length - 1
+            : _places.length,
         RoutePlace(
           id: 'planned-place-${DateTime.now().microsecondsSinceEpoch}',
           placeProvider: candidate.source,
@@ -232,6 +240,7 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
                 buildDefaultDragHandles: false,
+                proxyDecorator: (child, index, animation) => child,
                 itemCount: _places.length,
                 onReorderItem: _reorder,
                 itemBuilder: (context, index) {
@@ -241,19 +250,27 @@ class _PlannedRouteEditScreenState extends State<PlannedRouteEditScreen> {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: RouteStopDismissible(
                       dismissKey: ValueKey('planned-dismiss-${place.id}'),
-                      enabled: _places.length > 1,
+                      enabled: _places.length > 1 && !place.isAccommodation,
                       onDismissed: () => setState(
                         () =>
                             _places.removeWhere((item) => item.id == place.id),
                       ),
                       child: ReorderableDelayedDragStartListener(
                         index: index,
+                        enabled: !place.isAccommodation,
                         child: RouteStopEditTile(
                           index: index,
                           title: place.name,
-                          subtitle: place.address ?? place.displayCategory,
+                          subtitle:
+                              '${place.accommodationRole == 'start'
+                                  ? '숙소 출발 · '
+                                  : place.accommodationRole == 'end'
+                                  ? '숙소 도착 · '
+                                  : ''}${place.address ?? place.displayCategory}',
                           onTap: () => openPlaceDetail(context, place),
-                          onChoosePlace: () => _changePlace(place),
+                          onChoosePlace: place.isAccommodation
+                              ? null
+                              : () => _changePlace(place),
                           placeSelected: true,
                           showDragHandle: false,
                         ),

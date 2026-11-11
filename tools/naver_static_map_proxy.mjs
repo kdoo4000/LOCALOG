@@ -194,7 +194,7 @@ async function handlePlaceSearch(requestUrl, response) {
     return;
   }
 
-  const items = await fetchLocalSearchItems(query, { display: 10 });
+  const items = await fetchLocalSearchItems(query, { display: 10, sort: 'random' });
   const candidates = rankKeywordSearchItems(items, query, origin)
     .slice(0, 8)
     .map((item) => buildPlaceCandidateJson(item, 'search'));
@@ -277,12 +277,12 @@ function buildPlaceCandidateJson(item, prefix) {
   };
 }
 
-async function fetchLocalSearchItems(query, { display = 5 } = {}) {
+async function fetchLocalSearchItems(query, { display = 5, sort = 'comment' } = {}) {
   const url = new URL('https://openapi.naver.com/v1/search/local.json');
   url.searchParams.set('query', query);
   url.searchParams.set('display', String(display));
   url.searchParams.set('start', '1');
-  url.searchParams.set('sort', 'comment');
+  url.searchParams.set('sort', sort);
 
   const response = await fetch(url, {
     headers: {

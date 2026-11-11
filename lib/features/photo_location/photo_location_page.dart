@@ -275,7 +275,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     );
     if (confirmed != true || !mounted) return;
     try {
-      await _draftStore.delete();
+      if (_savedDraft != null) await _draftStore.delete();
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -299,6 +299,22 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
     setState(() {
       _selectedDateKey = key;
       _editorKey = GlobalKey();
+    });
+  }
+
+  void _removePhoto(_PhotoEntry entry) {
+    if (_entries.length <= 1) {
+      unawaited(_discardDraft());
+      return;
+    }
+    final removesDate = _selectedGroup?.photos.length == 1;
+    setState(() {
+      _entries = _entries.where((item) => item.id != entry.id).toList();
+      if (removesDate) {
+        _selectedDateKey = _entries.first.dateKey;
+        _editorKey = GlobalKey();
+      }
+      _previewDraft = null;
     });
   }
 
@@ -656,6 +672,7 @@ class _PhotoLocationPageState extends State<PhotoLocationPage> {
                           editorKey: _editorKey,
                           group: selectedGroup,
                           onPlaceSelected: _selectPlace,
+                          onPhotoRemoved: _removePhoto,
                           onTemporarySave: _saveDraft,
                           savedDraft: _editingSavedDraft ? _savedDraft : null,
                           isReadingPhotos: _isReading,
@@ -918,6 +935,7 @@ class _SaveRoutePanel extends StatelessWidget {
     required this.editorKey,
     required this.group,
     required this.onPlaceSelected,
+    required this.onPhotoRemoved,
     required this.onTemporarySave,
     required this.savedDraft,
     required this.isReadingPhotos,
@@ -929,6 +947,7 @@ class _SaveRoutePanel extends StatelessWidget {
   final GlobalKey<_RouteDraftInlineEditorState> editorKey;
   final _PhotoDateGroup? group;
   final void Function(String entryId, PlaceCandidate candidate) onPlaceSelected;
+  final ValueChanged<_PhotoEntry> onPhotoRemoved;
   final ValueChanged<_RouteDraftResult> onTemporarySave;
   final _RouteDraftResult? savedDraft;
   final bool isReadingPhotos;
@@ -940,6 +959,7 @@ class _SaveRoutePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final group = this.group;
     final photoCount = group?.photos.length ?? 0;
+    final date = group?.photos.firstOrNull?.metadata.takenAt ?? DateTime.now();
     return _Panel(
       title: context.strings.createRoute,
       children: [
@@ -981,10 +1001,7 @@ class _SaveRoutePanel extends StatelessWidget {
             key: editorKey,
             initialTitle:
                 savedDraft?.title ??
-                plannedRoute?.title ??
-                context.strings.photoRouteTitle(
-                  _displayGroupLabel(context, group),
-                ),
+                date.toIso8601String().substring(0, 10).replaceAll('-', '.'),
             initialDescription: savedDraft?.description ?? '',
             initialRegions:
                 savedDraft?.regions ??
@@ -997,6 +1014,7 @@ class _SaveRoutePanel extends StatelessWidget {
             initialVisibility: savedDraft?.visibility ?? RouteVisibility.public,
             entries: group.photos,
             onPlaceSelected: onPlaceSelected,
+            onPhotoRemoved: onPhotoRemoved,
             onTemporarySave: onTemporarySave,
           ),
         ],
@@ -1128,6 +1146,7 @@ class _RouteDraftInlineEditor extends StatefulWidget {
     required this.initialVisibility,
     required this.entries,
     required this.onPlaceSelected,
+    required this.onPhotoRemoved,
     required this.onTemporarySave,
   });
 
@@ -1138,6 +1157,7 @@ class _RouteDraftInlineEditor extends StatefulWidget {
   final RouteVisibility initialVisibility;
   final List<_PhotoEntry> entries;
   final void Function(String entryId, PlaceCandidate candidate) onPlaceSelected;
+  final ValueChanged<_PhotoEntry> onPhotoRemoved;
   final ValueChanged<_RouteDraftResult> onTemporarySave;
 
   @override
@@ -1193,7 +1213,10 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
           entry.copyWith(
             selectedPlace: latestEntriesById[entry.id]!.selectedPlace,
           ),
+      for (final entry in widget.entries)
+        if (!_entries.any((item) => item.id == entry.id)) entry,
     ];
+    _applySuggestedRegion();
   }
 
   void _reorderEntries(int oldIndex, int newIndex) {
@@ -1205,9 +1228,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
 
   void _removeEntry(_PhotoEntry entry) {
     if (_entries.length <= 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.strings.atLeastOneStopRequired)),
-      );
+      widget.onPhotoRemoved(entry);
       return;
     }
 
@@ -1218,6 +1239,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
       }
       _applySuggestedRegion();
     });
+    widget.onPhotoRemoved(entry);
   }
 
   _RouteDraftResult? _prepareReview() {
@@ -1397,7 +1419,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
                           ),
                           if (selected)
                             const Align(
-                              alignment: Alignment.topRight,
+                              alignment: Alignment.bottomLeft,
                               child: Padding(
                                 padding: EdgeInsets.all(5),
                                 child: CircleAvatar(
@@ -1411,6 +1433,19 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
                                 ),
                               ),
                             ),
+                          Align(
+                            alignment: Alignment.topRight,
+                            child: IconButton(
+                              tooltip: '사진 삭제',
+                              onPressed: () => _removeEntry(entry),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.black54,
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size(48, 48),
+                              ),
+                              icon: const Icon(Icons.close, size: 18),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1442,7 +1477,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
         RegionSelectionField(
           regions: _regions,
           onTap: _selectRegion,
-          emptyText: '시·도와 시·군·구 선택',
+          emptyText: '지역 선택',
           helperText: '사진 속 장소가 속한 모든 지역을 자동 선택해요.',
         ),
         const SizedBox(height: 12),
@@ -1523,6 +1558,7 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
           primary: false,
           physics: const NeverScrollableScrollPhysics(),
           buildDefaultDragHandles: false,
+          proxyDecorator: (child, index, animation) => child,
           itemCount: _entries.length,
           onReorderItem: _reorderEntries,
           itemBuilder: (context, index) {
@@ -1540,7 +1576,8 @@ class _RouteDraftInlineEditorState extends State<_RouteDraftInlineEditor> {
                         entry.selectedPlace?.displayName ??
                         context.strings.photoStop(index),
                     subtitle:
-                        '${entry.timeLabel} · ${entry.selectedPlace?.displayDetail ?? context.strings.notSelected}',
+                        entry.selectedPlace?.displayDetail ??
+                        context.strings.notSelected,
                     onTap: selectedPlace == null
                         ? null
                         : () => openPlaceDetail(
@@ -1669,33 +1706,6 @@ class _PhotoTile extends StatelessWidget {
                   ),
                 ),
               ),
-            Positioned(
-              left: 4,
-              right: 4,
-              bottom: 4,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: const Color(0x8F000000),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 2,
-                  ),
-                  child: Text(
-                    entry.timeLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ),
             if (!entry.metadata.hasLocation)
               const Positioned(
                 top: 4,
@@ -2167,15 +2177,6 @@ class _PhotoEntry {
     }
 
     return '${takenAt.year}.${_two(takenAt.month)}.${_two(takenAt.day)}';
-  }
-
-  String get timeLabel {
-    final takenAt = metadata.takenAt;
-    if (takenAt == null) {
-      return '--:--';
-    }
-
-    return '${_two(takenAt.hour)}:${_two(takenAt.minute)}';
   }
 }
 

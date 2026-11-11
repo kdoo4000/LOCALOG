@@ -172,7 +172,11 @@ class _PlaceHero extends StatelessWidget {
         children: [
           if (url != null && url.isNotEmpty)
             Image.network(
-              url,
+              url.replaceFirst(
+                'http://tong.visitkorea.or.kr/',
+                'https://tong.visitkorea.or.kr/',
+              ),
+              webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) => const _PlaceHeroFallback(),
             )

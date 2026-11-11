@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/app_dialog.dart';
+import '../../../models/place_candidate.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
@@ -21,6 +22,7 @@ import '../../route_search/presentation/route_search_screen.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
 import 'planned_route_edit_screen.dart';
+import 'place_search_map_screen.dart';
 import 'planned_route_log_create_screen.dart';
 import 'travel_plan_create_screen.dart';
 import 'trip_expenses_screen.dart';
@@ -50,6 +52,7 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
   Object? _loadError;
   bool _loading = false;
   bool _deletingPlan = false;
+  bool _savingAccommodation = false;
   int _loadGeneration = 0;
   Future<List<TripPerson>>? _membersFuture;
   late int _selectedDayIndex;
@@ -182,6 +185,43 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
       MaterialPageRoute(builder: (_) => TravelPlanCreateScreen(plan: plan)),
     );
     if (updated != null) _showPlan(updated);
+  }
+
+  Future<void> _selectAccommodation(TravelPlan plan, TravelPlanDay day) async {
+    final place = await Navigator.of(context).push<PlaceCandidate>(
+      MaterialPageRoute(
+        builder: (_) => PlaceSearchMapScreen(
+          title: '숙소 검색',
+          initialQuery: '${plan.effectiveRegions.first.split(' > ').last} 숙소',
+          initialLatitude: day.accommodation?.latitude,
+          initialLongitude: day.accommodation?.longitude,
+        ),
+      ),
+    );
+    if (place != null && mounted) await _setAccommodation(day, place);
+  }
+
+  Future<void> _setAccommodation(
+    TravelPlanDay day,
+    PlaceCandidate? place,
+  ) async {
+    if (_savingAccommodation) return;
+    setState(() => _savingAccommodation = true);
+    try {
+      final plan = await _repository.setAccommodation(
+        planDayId: day.id,
+        accommodation: place,
+      );
+      _showPlan(plan);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('숙소를 저장하지 못했습니다: $error')));
+      }
+    } finally {
+      if (mounted) setState(() => _savingAccommodation = false);
+    }
   }
 
   Future<void> _editRoute(
@@ -438,7 +478,52 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 12),
-          if (day.plannedRoute == null)
+          if (day.dayIndex < plan.days.length - 1) ...[
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '이날 머무를 숙소',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  if (day.accommodation case final accommodation?)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.hotel_outlined),
+                      title: Text(accommodation.displayName),
+                      subtitle: Text(accommodation.address),
+                      onTap: _savingAccommodation
+                          ? null
+                          : () => _selectAccommodation(plan, day),
+                      trailing: IconButton(
+                        tooltip: '숙소 해제',
+                        onPressed: _savingAccommodation
+                            ? null
+                            : () => _setAccommodation(day, null),
+                        icon: const Icon(Icons.close),
+                      ),
+                    )
+                  else
+                    OutlinedButton.icon(
+                      onPressed: _savingAccommodation
+                          ? null
+                          : () => _selectAccommodation(plan, day),
+                      icon: const Icon(Icons.hotel_outlined),
+                      label: const Text('숙소 선택'),
+                    ),
+                  if (_savingAccommodation)
+                    const LinearProgressIndicator(semanticsLabel: '숙소 저장 중'),
+                  const SizedBox(height: 8),
+                  const Text('이날 루트의 마지막과 다음 날 루트의 처음에 자동으로 추가돼요.'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (day.plannedRoute == null ||
+              day.plannedRoute!.places.every((place) => place.isAccommodation))
             _EmptyDay(
               onFindLog: () async {
                 final updatedPlan = await Navigator.of(context)
@@ -465,8 +550,8 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
                   _showPlan(_replaceDayRoute(plan, day.id, created));
                 }
               },
-            )
-          else
+            ),
+          if (day.plannedRoute?.places.isNotEmpty == true)
             _PlannedRouteCard(
               day: day,
               route: day.plannedRoute!,
@@ -686,6 +771,12 @@ class _PlannedRouteCard extends StatelessWidget {
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
+                            if (sortedPlaces[index].isAccommodation)
+                              Text(
+                                sortedPlaces[index].accommodationRole == 'start'
+                                    ? '숙소에서 출발'
+                                    : '숙소 도착',
+                              ),
                             if (sortedPlaces[index].address != null)
                               Text(
                                 sortedPlaces[index].address!,

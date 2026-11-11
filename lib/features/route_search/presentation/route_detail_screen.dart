@@ -248,6 +248,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                     authorHandle: snapshot.data?.authorHandle,
                   ),
                   Container(
+                    key: const ValueKey('route-detail-body'),
                     decoration: const BoxDecoration(
                       color: AppColors.gray50,
                       borderRadius: BorderRadius.vertical(
@@ -504,7 +505,6 @@ class _DetailHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final strings = context.strings;
     final upvote = '${(route.upvoteRatio * 100).round()}%';
     const tagColors = [AppColors.sky, AppColors.yellow, AppColors.mint];
     final coverPath = route.coverImageUrl;
@@ -513,14 +513,19 @@ class _DetailHero extends StatelessWidget {
         .toSet()
         .toList();
     final topPadding = MediaQuery.paddingOf(context).top;
+    final scrollPosition = Scrollable.of(context).position;
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 330),
+      constraints: BoxConstraints(
+        minHeight: MediaQuery.sizeOf(context).height * .78,
+      ),
       child: SizedBox(
         width: double.infinity,
         child: Stack(
+          clipBehavior: Clip.none,
           children: [
             Positioned.fill(
+              bottom: -30,
               child: Semantics(
                 button: routePhotos.isNotEmpty,
                 label: routePhotos.isEmpty ? '루트 대표 이미지' : '루트 사진 전체 화면으로 보기',
@@ -530,22 +535,21 @@ class _DetailHero extends StatelessWidget {
                     onTap: routePhotos.isEmpty
                         ? null
                         : () => _openPhotoViewer(context, routePhotos, 0),
-                    child: coverPath != null
-                        ? _StoredRoutePhoto(path: coverPath)
-                        : const ColoredBox(color: AppColors.primaryBlue),
-                  ),
-                ),
-              ),
-            ),
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xB3000000), Color(0x99000000)],
-                      stops: [0, 0.7],
+                    child: ClipRect(
+                      child: AnimatedBuilder(
+                        animation: scrollPosition,
+                        builder: (context, child) => Transform.translate(
+                          offset: Offset(
+                            0,
+                            scrollPosition.pixels.clamp(0.0, double.infinity) *
+                                .5,
+                          ),
+                          child: child,
+                        ),
+                        child: coverPath != null
+                            ? _StoredRoutePhoto(path: coverPath)
+                            : const ColoredBox(color: AppColors.primaryBlue),
+                      ),
                     ),
                   ),
                 ),
@@ -581,6 +585,9 @@ class _DetailHero extends StatelessWidget {
                       color: AppColors.white,
                       fontWeight: FontWeight.w700,
                       height: 1.12,
+                      shadows: const [
+                        Shadow(color: Colors.black, blurRadius: 8),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -610,11 +617,14 @@ class _DetailHero extends StatelessWidget {
                                   ),
                                 ),
                           child: Text(
-                            '${authorHandle == null ? route.authorName : '@$authorHandle'} · ${strings.durationLabel(route.estimatedDurationMinutes)} · ${route.places.length}곳',
+                            '${authorHandle == null ? route.authorName : '@$authorHandle'} · ${route.places.length}곳',
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
                                   color: AppColors.white,
                                   fontWeight: FontWeight.w800,
+                                  shadows: const [
+                                    Shadow(color: Colors.black, blurRadius: 6),
+                                  ],
                                 ),
                           ),
                         ),

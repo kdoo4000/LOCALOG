@@ -51,6 +51,9 @@ class _PlannedRouteLogCreateScreenState
   String? _readingPlaceId;
   bool _saving = false;
 
+  int get _photoCount =>
+      _photosByPlaceId.values.fold(0, (count, photos) => count + photos.length);
+
   List<RoutePlace> get _places =>
       [...widget.route.places]
         ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
@@ -58,7 +61,12 @@ class _PlannedRouteLogCreateScreenState
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.route.title);
+    _titleController = TextEditingController(
+      text: widget.day.date
+          .toIso8601String()
+          .substring(0, 10)
+          .replaceAll('-', '.'),
+    );
     _descriptionController = TextEditingController();
     _photosByPlaceId = {
       for (final place in widget.route.places) place.id: <_NodePhoto>[],
@@ -129,15 +137,10 @@ class _PlannedRouteLogCreateScreenState
   }
 
   Future<void> _save() async {
-    final missingPlaces = _places
-        .where((place) => _photosByPlaceId[place.id]!.isEmpty)
-        .toList();
-    if (missingPlaces.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('모든 장소에 사진을 추가해 주세요. (${missingPlaces.length}곳 남음)'),
-        ),
-      );
+    if (_photoCount == 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('사진을 1장 이상 추가해 주세요.')));
       return;
     }
     if (_titleController.text.trim().isEmpty) {
@@ -191,15 +194,14 @@ class _PlannedRouteLogCreateScreenState
 
   @override
   Widget build(BuildContext context) {
-    final missingCount = _places
-        .where((place) => _photosByPlaceId[place.id]!.isEmpty)
-        .length;
-    final completedCount = _places.length - missingCount;
+    final photoCount = _photoCount;
     return Scaffold(
       appBar: AppBar(title: const Text('장소별 사진 추가')),
       bottomNavigationBar: AppStickyActionBar(
         child: FilledButton.icon(
-          onPressed: _saving || missingCount > 0 ? null : _save,
+          onPressed: _saving || _readingPlaceId != null || photoCount == 0
+              ? null
+              : _save,
           icon: _saving
               ? const SizedBox.square(
                   dimension: 18,
@@ -209,9 +211,9 @@ class _PlannedRouteLogCreateScreenState
           label: Text(
             _saving
                 ? '로그 저장 중...'
-                : missingCount == 0
+                : photoCount > 0
                 ? '로그 만들기'
-                : '사진이 필요한 장소 $missingCount곳',
+                : '사진을 1장 이상 추가해 주세요',
           ),
         ),
       ),
@@ -229,32 +231,18 @@ class _PlannedRouteLogCreateScreenState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '각 장소에 해당하는 사진을 한 장 이상 추가하면 루트 순서 그대로 로그가 만들어집니다.',
+                  '원하는 장소에 사진을 추가해 주세요. 전체에서 한 장 이상이면 사진 없는 장소도 루트 순서대로 로그에 포함됩니다.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: LinearProgressIndicator(
-                        value: _places.isEmpty
-                            ? 0
-                            : completedCount / _places.length,
-                        minHeight: 7,
-                        borderRadius: BorderRadius.circular(AppRadii.pill),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      '$completedCount/${_places.length}곳 완료',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
+                Text(
+                  '등록한 사진 $photoCount장',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 TextField(
@@ -391,14 +379,11 @@ class _PlacePhotoCard extends StatelessWidget {
             ),
             if (photos.isEmpty) ...[
               const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.yellow,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text('이 장소에서 찍은 사진을 추가해 주세요.'),
+              Text(
+                '사진 없이도 이 장소는 로그에 포함돼요.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.gray500),
               ),
             ] else ...[
               const SizedBox(height: 12),
@@ -542,6 +527,12 @@ TravelRoute buildLogFromPlannedRoute({
       .toList();
   final sortedPlaces = [...route.places]
     ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+  final photos = sortedPlaces
+      .expand(
+        (place) => photosByPlaceId[place.id] ?? const <PlannedNodePhoto>[],
+      )
+      .toList();
+  if (photos.isEmpty) throw ArgumentError('로그에는 사진이 한 장 이상 필요합니다.');
   return TravelRoute(
     id: 'planned-log-${DateTime.now().microsecondsSinceEpoch}',
     title: title,
@@ -572,7 +563,7 @@ TravelRoute buildLogFromPlannedRoute({
     upvoteRatio: 0,
     downloadCount: 0,
     estimatedDurationMinutes: route.estimatedDurationMinutes,
-    coverImageUrl: coverPhotoPath,
+    coverImageUrl: coverPhotoPath ?? photos.first.path,
     isDownloaded: true,
     isCreatedByCurrentUser: true,
     visibility: visibility,

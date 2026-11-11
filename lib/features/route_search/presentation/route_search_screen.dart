@@ -60,18 +60,9 @@ bool _sameSearchPlace(RoutePlace a, RoutePlace b) {
           (b.address?.trim().toLowerCase() ?? '');
 }
 
-enum _DurationFilter { any, short, halfDay, fullDay }
-
 enum _StopFilter { any, compact, balanced, rich }
 
-enum _RouteSort { recommended, popular, shortest }
-
-String _durationFilterLabel(_DurationFilter filter) => switch (filter) {
-  _DurationFilter.any => '시간 무관',
-  _DurationFilter.short => '2시간 이내',
-  _DurationFilter.halfDay => '반나절',
-  _DurationFilter.fullDay => '하루',
-};
+enum _RouteSort { recommended, popular }
 
 String _stopFilterLabel(_StopFilter filter) => switch (filter) {
   _StopFilter.any => '코스 밀도 무관',
@@ -263,7 +254,6 @@ class _DetailedRouteSearchScreenState extends State<DetailedRouteSearchScreen> {
   final Map<String, String> _selectedTags = {};
   List<String> _selectedRegions = [];
   final Map<String, RoutePlace> _selectedPlaces = {};
-  _DurationFilter _durationFilter = _DurationFilter.any;
   _StopFilter _stopFilter = _StopFilter.any;
 
   @override
@@ -345,16 +335,6 @@ class _DetailedRouteSearchScreenState extends State<DetailedRouteSearchScreen> {
       return false;
     }
 
-    final durationMatches = switch (_durationFilter) {
-      _DurationFilter.any => true,
-      _DurationFilter.short => route.estimatedDurationMinutes <= 120,
-      _DurationFilter.halfDay =>
-        route.estimatedDurationMinutes > 120 &&
-            route.estimatedDurationMinutes <= 240,
-      _DurationFilter.fullDay => route.estimatedDurationMinutes > 240,
-    };
-    if (!durationMatches) return false;
-
     return switch (_stopFilter) {
       _StopFilter.any => true,
       _StopFilter.compact => route.places.length <= 3,
@@ -368,7 +348,6 @@ class _DetailedRouteSearchScreenState extends State<DetailedRouteSearchScreen> {
     return (_keyword.trim().isNotEmpty ? 1 : 0) +
         _selectedRegions.length +
         _selectedPlaces.length +
-        (_durationFilter != _DurationFilter.any ? 1 : 0) +
         (_stopFilter != _StopFilter.any ? 1 : 0) +
         _selectedTags.length;
   }
@@ -449,7 +428,6 @@ class _DetailedRouteSearchScreenState extends State<DetailedRouteSearchScreen> {
       _selectedTags.clear();
       _selectedRegions = [];
       _selectedPlaces.clear();
-      _durationFilter = _DurationFilter.any;
       _stopFilter = _StopFilter.any;
     });
   }
@@ -485,8 +463,6 @@ class _DetailedRouteSearchScreenState extends State<DetailedRouteSearchScreen> {
       if (_keyword.trim().isNotEmpty) '“${_keyword.trim()}”',
       ..._selectedRegions,
       for (final place in _selectedPlaces.values) '포함: ${place.name}',
-      if (_durationFilter != _DurationFilter.any)
-        _durationFilterLabel(_durationFilter),
       if (_stopFilter != _StopFilter.any) _stopFilterLabel(_stopFilter),
       for (final tag in _selectedTags.values) '#$tag',
     ];
@@ -582,26 +558,6 @@ class _DetailedRouteSearchScreenState extends State<DetailedRouteSearchScreen> {
                     const Text(
                       '지역은 선택한 곳 중 하나, 여행지·태그는 선택한 항목을 모두 포함하는 로그를 찾습니다.',
                       style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 24),
-                    _FilterSection(
-                      title: '소요 시간',
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final option in _DurationFilter.values.skip(1))
-                            ChoiceChip(
-                              label: Text(_durationFilterLabel(option)),
-                              selected: _durationFilter == option,
-                              onSelected: (selected) => setState(
-                                () => _durationFilter = selected
-                                    ? option
-                                    : _DurationFilter.any,
-                              ),
-                            ),
-                        ],
-                      ),
                     ),
                     const SizedBox(height: 24),
                     _FilterSection(
@@ -937,11 +893,6 @@ class _DetailedRouteResultsScreenState
         routes.sort((a, b) => b.upvoteRatio.compareTo(a.upvoteRatio));
       case _RouteSort.popular:
         routes.sort((a, b) => b.downloadCount.compareTo(a.downloadCount));
-      case _RouteSort.shortest:
-        routes.sort(
-          (a, b) =>
-              a.estimatedDurationMinutes.compareTo(b.estimatedDurationMinutes),
-        );
     }
     return routes;
   }
@@ -991,10 +942,6 @@ class _DetailedRouteResultsScreenState
                         DropdownMenuItem(
                           value: _RouteSort.popular,
                           child: Text('인기순'),
-                        ),
-                        DropdownMenuItem(
-                          value: _RouteSort.shortest,
-                          child: Text('짧은 순'),
                         ),
                       ],
                       onChanged: (value) {

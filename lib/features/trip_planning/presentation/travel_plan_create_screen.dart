@@ -220,6 +220,8 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _selectDates,
                 ),
+                const SizedBox(height: 12),
+                const Text('숙소는 계획을 만든 뒤 날짜별로 선택할 수 있어요.'),
                 const SizedBox(height: 28),
               ],
             ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/l10n/app_language.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -17,9 +16,6 @@ class RouteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final upvote = '${(route.upvoteRatio * 100).round()}%';
-    final duration = context.strings.durationLabel(
-      route.estimatedDurationMinutes,
-    );
     final cityInitial = route.city.isEmpty ? '?' : route.city.substring(0, 1);
 
     return Center(
@@ -74,7 +70,7 @@ class RouteCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        '${isSupabaseConfigured ? '추천 $upvote · ' : ''}${route.places.length}곳 · $duration',
+                        '${isSupabaseConfigured ? '추천 $upvote · ' : ''}${route.places.length}곳',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelMedium

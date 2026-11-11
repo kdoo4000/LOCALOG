@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../models/place_candidate.dart';
 
 import '../../../services/supabase_initializer.dart';
 import '../../route_search/domain/route_place.dart';
@@ -20,13 +21,13 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
     id, owner_id, title, region_name, start_date, end_date,
     travel_plan_regions(region_name, order_index),
     travel_plan_days(
-      id, travel_date, day_index, completed_log_id,
+      id, travel_date, day_index, completed_log_id, accommodation,
       planned_routes(
         id, source_log_id, source_log_title, source_author_name,
         title, city, estimated_duration_minutes,
         planned_route_places(
           id, place_id, name, category, source_category, order_index, address,
-          latitude, longitude
+          latitude, longitude, accommodation_role
         )
       )
     )
@@ -144,6 +145,27 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
   }
 
   @override
+  Future<TravelPlan> setAccommodation({
+    required String planDayId,
+    required PlaceCandidate? accommodation,
+  }) async {
+    _user;
+    final planId =
+        await _client.rpc(
+              'set_plan_day_accommodation',
+              params: {
+                'p_plan_day_id': planDayId,
+                'p_accommodation': accommodation?.toJson(),
+              },
+            )
+            as String;
+    final plan = await getPlanById(planId);
+    if (plan == null) throw StateError('여행 계획을 다시 불러오지 못했습니다.');
+    _changes.add(null);
+    return plan;
+  }
+
+  @override
   Future<PlannedRoute> createPlannedRoute({
     required String planDayId,
     required String title,
@@ -156,50 +178,32 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
       throw ArgumentError('루트 이름, 지역, 한 곳 이상의 장소가 필요합니다.');
     }
 
-    final row = await _client
+    final routeId =
+        await _client.rpc(
+              'create_planned_route',
+              params: {
+                'p_plan_day_id': planDayId,
+                'p_title': title.trim(),
+                'p_city': city.trim(),
+                'p_estimated_duration_minutes': estimatedDurationMinutes,
+                'p_places': _placePayload(places),
+              },
+            )
+            as String;
+    final saved = await _client
         .from('planned_routes')
-        .insert({
-          'plan_day_id': planDayId,
-          'title': title.trim(),
-          'city': city.trim(),
-          'estimated_duration_minutes': estimatedDurationMinutes,
-        })
-        .select('id')
-        .single();
-    final routeId = row['id'] as String;
-    try {
-      await _client.from('planned_route_places').insert([
-        for (var index = 0; index < places.length; index++)
-          {
-            'planned_route_id': routeId,
-            'place_id': _uuidOrNull(places[index].canonicalPlaceId),
-            'name': places[index].name.trim(),
-            'category': (places[index].sourceCategory ?? places[index].category)
-                .trim(),
-            'order_index': index,
-            'address': places[index].address,
-            'latitude': places[index].latitude,
-            'longitude': places[index].longitude,
-          },
-      ]);
-      final saved = await _client
-          .from('planned_routes')
-          .select('''
+        .select('''
             id, source_log_id, source_log_title, source_author_name,
             title, city, estimated_duration_minutes,
             planned_route_places(
               id, place_id, name, category, source_category, order_index, address,
-              latitude, longitude
+              latitude, longitude, accommodation_role
             )
           ''')
-          .eq('id', routeId)
-          .single();
-      _changes.add(null);
-      return _mapPlannedRoute(_asMap(saved));
-    } catch (_) {
-      await _client.from('planned_routes').delete().eq('id', routeId);
-      rethrow;
-    }
+        .eq('id', routeId)
+        .single();
+    _changes.add(null);
+    return _mapPlannedRoute(_asMap(saved));
   }
 
   @override
@@ -212,21 +216,7 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
         'p_title': route.title.trim(),
         'p_city': route.city.trim(),
         'p_estimated_duration_minutes': route.estimatedDurationMinutes,
-        'p_places': [
-          for (var index = 0; index < route.places.length; index++)
-            {
-              'place_id': route.places[index].canonicalPlaceId,
-              'name': route.places[index].name,
-              'category':
-                  (route.places[index].sourceCategory ??
-                          route.places[index].category)
-                      .trim(),
-              'order_index': index,
-              'address': route.places[index].address,
-              'latitude': route.places[index].latitude,
-              'longitude': route.places[index].longitude,
-            },
-        ],
+        'p_places': _placePayload(route.places),
       },
     );
     final row = await _client
@@ -236,7 +226,7 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
           title, city, estimated_duration_minutes,
           planned_route_places(
             id, place_id, name, category, source_category, order_index, address,
-            latitude, longitude
+            latitude, longitude, accommodation_role
           )
         ''')
         .eq('id', route.id)
@@ -325,6 +315,9 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
             date: _parseDate(day['travel_date']),
             dayIndex: _asInt(day['day_index']),
             completedLogId: day['completed_log_id'] as String?,
+            accommodation: day['accommodation'] == null
+                ? null
+                : PlaceCandidate.fromJson(_asMap(day['accommodation'])),
             plannedRoute: _plannedRouteFromRelation(day['planned_routes']),
           ),
       ],
@@ -366,6 +359,7 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
             address: place['address'] as String?,
             latitude: _asDoubleOrNull(place['latitude']),
             longitude: _asDoubleOrNull(place['longitude']),
+            accommodationRole: place['accommodation_role'] as String?,
           ),
       ],
     );
@@ -375,6 +369,27 @@ class SupabaseTravelPlanRepository implements TravelPlanRepository {
       '${value.year.toString().padLeft(4, '0')}-'
       '${value.month.toString().padLeft(2, '0')}-'
       '${value.day.toString().padLeft(2, '0')}';
+
+  static List<Map<String, dynamic>> _placePayload(
+    List<RoutePlace> routePlaces,
+  ) {
+    final places = routePlaces
+        .where((place) => !place.isAccommodation)
+        .toList();
+    return [
+      for (var index = 0; index < places.length; index++)
+        {
+          'place_id': _uuidOrNull(places[index].canonicalPlaceId),
+          'name': places[index].name.trim(),
+          'category': (places[index].sourceCategory ?? places[index].category)
+              .trim(),
+          'order_index': index,
+          'address': places[index].address,
+          'latitude': places[index].latitude,
+          'longitude': places[index].longitude,
+        },
+    ];
+  }
 
   static DateTime _parseDate(dynamic value) {
     final parsed = DateTime.parse(value.toString());

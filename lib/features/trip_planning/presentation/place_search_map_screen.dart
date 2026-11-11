@@ -15,11 +15,15 @@ class PlaceSearchMapScreen extends StatefulWidget {
     this.initialLatitude,
     this.initialLongitude,
     this.placeCandidateService = const PlaceCandidateService(),
+    this.initialQuery,
+    this.title = '장소 검색',
   });
 
   final double? initialLatitude;
   final double? initialLongitude;
   final PlaceCandidateService placeCandidateService;
+  final String? initialQuery;
+  final String title;
 
   bool get hasInitialLocation {
     final latitude = initialLatitude;
@@ -56,6 +60,12 @@ class _PlaceSearchMapScreenState extends State<PlaceSearchMapScreen> {
         latitude: widget.initialLatitude!,
         longitude: widget.initialLongitude!,
       );
+    }
+    final query = widget.initialQuery?.trim() ?? '';
+    if (query.isNotEmpty) {
+      _controller.text = query;
+      unawaited(_search(useMapCenter: false));
+    } else if (widget.hasInitialLocation) {
       unawaited(_loadNearbyCandidates());
     }
   }
@@ -159,7 +169,7 @@ class _PlaceSearchMapScreenState extends State<PlaceSearchMapScreen> {
       380.0,
     );
     return Scaffold(
-      appBar: AppBar(title: const Text('장소 검색')),
+      appBar: AppBar(title: Text(widget.title)),
       bottomNavigationBar: AppStickyActionBar(
         child: FilledButton(
           onPressed: _selected == null

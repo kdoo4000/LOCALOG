@@ -184,8 +184,6 @@ class AppStrings {
       isKo ? '사진 로그를 프로필에 저장했어요.' : 'Saved photo log to Profile.';
   String saveRouteFailed(Object error) =>
       isKo ? '로그를 저장하지 못했어요. $error' : 'Could not save log. $error';
-  String photoRouteTitle(String dateLabel) =>
-      isKo ? '사진 로그 - $dateLabel' : 'Photo log - $dateLabel';
   String photoRouteDescription(int count) => isKo
       ? '$count개의 사진 지점으로 만든 개인 로그입니다.'
       : 'A personal log created from $count photo stop(s).';
@@ -196,14 +194,11 @@ class AppStrings {
   String photoStop(int index) =>
       isKo ? '사진 지점 ${index + 1}' : 'Photo stop ${index + 1}';
   String get photoSpot => isKo ? '사진 명소' : 'Photo spot';
-  String takenAtFromFile(String timeLabel, String fileName) => isKo
-      ? '$timeLabel에 촬영한 사진입니다. 파일: $fileName'
-      : 'Taken at $timeLabel from $fileName.';
-  String get timelineSuffix => isKo ? '타임라인' : 'timeline';
+  String get timelineSuffix => isKo ? '방문 순서' : 'visit order';
   String get dynamicMapSuffix => isKo ? '지도 미리보기' : 'Map preview';
   String markerCount(int count) => isKo
-      ? '지도에 장소 $count곳을 촬영 시간순으로 연결했어요.'
-      : '$count place(s) connected in photo order.';
+      ? '지도에 장소 $count곳을 방문 순서대로 연결했어요.'
+      : '$count place(s) connected in visit order.';
   String get noGpsForDate => isKo
       ? '이 날짜의 사진에는 위치 정보가 없어요.'
       : 'These photos do not include location details.';
@@ -212,7 +207,6 @@ class AppStrings {
       : 'Choose photos to build a date-grouped log and map.';
   String get photoDetails => isKo ? '사진 정보' : 'Photo details';
   String get file => isKo ? '파일' : 'File';
-  String get takenAt => isKo ? '촬영 시간' : 'Taken at';
   String get latitude => isKo ? '위도' : 'Latitude';
   String get longitude => isKo ? '경도' : 'Longitude';
   String get camera => isKo ? '카메라' : 'Camera';
@@ -244,7 +238,7 @@ class AppStrings {
   String get routeDetailTitle => isKo ? '로그 상세' : 'Log Detail';
   String get routeNotFound => isKo ? '로그를 찾을 수 없어요.' : 'Log not found.';
   String get routeSaved => isKo ? '로그를 저장했어요.' : 'Log saved.';
-  String get visitTimeline => isKo ? '방문 타임라인' : 'Visit timeline';
+  String get visitTimeline => isKo ? '방문 순서' : 'Visit order';
   String get routeMap => isKo ? '로그 지도' : 'Log map';
   String routeStopCount(int count) => isKo ? '$count곳' : '$count stops';
   String get noRouteMapPoints => isKo
@@ -260,23 +254,6 @@ class AppStrings {
   String get savedRoute => isKo ? '저장된 로그' : 'Saved log';
   String authorRoute(String authorName) =>
       isKo ? '@$authorName의 로그' : '@$authorName\'s log';
-  String get duration => isKo ? '소요 시간' : 'Duration';
-  String durationLabel(int minutes) {
-    if (minutes < 60) {
-      return isKo ? '$minutes분' : '${minutes}m';
-    }
-
-    final hours = minutes ~/ 60;
-    final remainingMinutes = minutes % 60;
-    if (remainingMinutes == 0) {
-      return isKo ? '$hours시간' : '${hours}h';
-    }
-
-    return isKo
-        ? '$hours시간 $remainingMinutes분'
-        : '${hours}h ${remainingMinutes}m';
-  }
-
   String get upvote => isKo ? '추천' : 'Upvote';
   String get downvote => isKo ? '비추천' : 'Downvote';
   String get routeVoteTitle =>

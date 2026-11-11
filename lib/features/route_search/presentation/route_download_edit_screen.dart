@@ -430,6 +430,7 @@ class _RouteDownloadEditScreenState extends State<RouteDownloadEditScreen> {
                           primary: false,
                           physics: const NeverScrollableScrollPhysics(),
                           buildDefaultDragHandles: false,
+                          proxyDecorator: (child, index, animation) => child,
                           itemCount: _places.length,
                           onReorderItem: _reorderPlaces,
                           itemBuilder: (context, index) {
