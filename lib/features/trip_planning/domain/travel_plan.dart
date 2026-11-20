@@ -1,8 +1,10 @@
 import '../../route_search/domain/route_place.dart';
+import '../../../models/place_candidate.dart';
 
 class TravelPlan {
   const TravelPlan({
     required this.id,
+    this.ownerId,
     required this.title,
     required this.regionName,
     this.regions = const [],
@@ -12,6 +14,7 @@ class TravelPlan {
   });
 
   final String id;
+  final String? ownerId;
   final String title;
   final String regionName;
   final List<String> regions;
@@ -35,6 +38,7 @@ class TravelPlan {
   }) {
     return TravelPlan(
       id: id ?? this.id,
+      ownerId: ownerId,
       title: title ?? this.title,
       regionName: regionName ?? this.regionName,
       regions: regions ?? this.regions,
@@ -52,6 +56,7 @@ class TravelPlanDay {
     required this.dayIndex,
     this.plannedRoute,
     this.completedLogId,
+    this.accommodation,
   });
 
   final String id;
@@ -59,6 +64,7 @@ class TravelPlanDay {
   final int dayIndex;
   final PlannedRoute? plannedRoute;
   final String? completedLogId;
+  final PlaceCandidate? accommodation;
 
   TravelPlanDay copyWith({
     String? id,
@@ -66,6 +72,7 @@ class TravelPlanDay {
     int? dayIndex,
     Object? plannedRoute = _keepValue,
     Object? completedLogId = _keepValue,
+    Object? accommodation = _keepValue,
   }) {
     return TravelPlanDay(
       id: id ?? this.id,
@@ -77,6 +84,9 @@ class TravelPlanDay {
       completedLogId: identical(completedLogId, _keepValue)
           ? this.completedLogId
           : completedLogId as String?,
+      accommodation: identical(accommodation, _keepValue)
+          ? this.accommodation
+          : accommodation as PlaceCandidate?,
     );
   }
 }

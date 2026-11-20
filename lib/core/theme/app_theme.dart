@@ -67,11 +67,13 @@ abstract final class AppTheme {
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
-          ),
+          )
+          .apply(fontFamily: 'Pretendard'),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.gray50,
         foregroundColor: AppColors.ink,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
           color: AppColors.ink,
@@ -82,41 +84,53 @@ abstract final class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(56),
+          minimumSize: const Size(64, 56),
           backgroundColor: AppColors.primaryBlue,
           foregroundColor: AppColors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadii.control),
           ),
-          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+          textStyle: const TextStyle(
+            fontFamily: 'Pretendard',
+            fontWeight: FontWeight.w700,
+          ),
           animationDuration: const Duration(milliseconds: 180),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
+          minimumSize: const Size(64, 56),
           foregroundColor: AppColors.ink,
-          side: const BorderSide(color: AppColors.gray200),
+          side: const BorderSide(color: AppColors.gray500),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadii.control),
           ),
-          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+          textStyle: const TextStyle(
+            fontFamily: 'Pretendard',
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.white,
+        fillColor: AppColors.surfaceElevated,
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+        floatingLabelStyle: const TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
-          vertical: 14,
+          vertical: 16,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadii.control),
-          borderSide: const BorderSide(color: AppColors.gray200),
+          borderSide: const BorderSide(color: AppColors.gray500),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadii.control),
-          borderSide: const BorderSide(color: AppColors.gray200),
+          borderSide: const BorderSide(color: AppColors.gray500),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadii.control),
@@ -159,10 +173,12 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.circular(AppRadii.pill),
         ),
         labelStyle: const TextStyle(
+          fontFamily: 'Pretendard',
           color: AppColors.ink,
           fontWeight: FontWeight.w700,
         ),
         secondaryLabelStyle: const TextStyle(
+          fontFamily: 'Pretendard',
           color: AppColors.primaryBlue,
           fontWeight: FontWeight.w800,
         ),
@@ -174,6 +190,29 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.card),
           side: const BorderSide(color: AppColors.borderSubtle),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.surfaceElevated,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadii.feature),
+        ),
+        titleTextStyle: const TextStyle(
+          fontFamily: 'Pretendard',
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.surfaceElevated,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadii.feature),
+          ),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -196,6 +235,14 @@ abstract final class AppTheme {
                 ? AppColors.primaryBlueDark
                 : AppColors.gray500,
           ),
+        ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: AppColors.primaryBlue,
+        foregroundColor: AppColors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadii.card),
         ),
       ),
     );

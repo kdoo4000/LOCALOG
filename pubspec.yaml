@@ -39,11 +39,17 @@ dependencies:
   google_mlkit_text_recognition: ^0.16.0
   exif: ^3.3.0
   http: ^1.6.0
+  crypto: ^3.0.7
   url_launcher: ^6.3.2
   flutter_naver_map: ^1.4.4
   flutter_svg: ^2.3.0
   supabase_flutter: ^2.16.0
   path_provider: ^2.1.6
+  web: ^1.1.1
+  share_plus: ^13.3.0
+  shared_preferences: ^2.5.5
+  kakao_flutter_sdk_share: 2.1.0
+  app_links: ^7.2.1
 
 dev_dependencies:
   flutter_test:
@@ -68,6 +74,8 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/kakao_login.svg
+    - assets/kakao_symbol.svg
     - assets/localog_logo.png
     - assets/localog_logo.svg
     - assets/localog_text.svg

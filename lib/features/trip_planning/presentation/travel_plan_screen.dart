@@ -7,10 +7,13 @@ import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/premium_ui.dart';
 import '../../../core/widgets/region_chip_wrap.dart';
+import '../../../services/supabase_initializer.dart';
+import '../data/shared_trip_repository.dart';
 import '../data/travel_plan_repository_provider.dart';
 import '../domain/travel_plan.dart';
 import 'travel_plan_create_screen.dart';
 import 'travel_plan_detail_screen.dart';
+import 'trip_friends_screen.dart';
 
 class TravelPlanScreen extends StatefulWidget {
   const TravelPlanScreen({super.key});
@@ -23,9 +26,11 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
   final _repository = travelPlanRepository;
   StreamSubscription<void>? _subscription;
   List<TravelPlan> _plans = const [];
+  List<TripInvitation> _invitations = const [];
   Object? _loadError;
   bool _loading = true;
   int _loadGeneration = 0;
+  _TripStatus? _filter;
 
   @override
   void initState() {
@@ -46,9 +51,13 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
     final generation = ++_loadGeneration;
     try {
       final plans = await _repository.getPlans();
+      final invitations = hasSupabaseSession
+          ? await SharedTripRepository.instance.invitations()
+          : <TripInvitation>[];
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _plans = plans;
+        _invitations = invitations;
         _loadError = null;
         _loading = false;
       });
@@ -70,6 +79,7 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
     ]..sort((a, b) => a.startDate.compareTo(b.startDate));
     setState(() {
       _plans = plans;
+      _filter = null;
       _loadError = null;
       _loading = false;
     });
@@ -90,6 +100,22 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
     if (mounted) await _refreshPlans();
   }
 
+  Future<void> _answerInvite(TripInvitation invite, bool accept) async {
+    try {
+      await SharedTripRepository.instance.answerInvitation(
+        invite.planId,
+        accept,
+      );
+      await _refreshPlans();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('초대를 처리하지 못했어요: $error')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final today = DateUtils.dateOnly(DateTime.now());
@@ -104,6 +130,12 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
             .where((plan) => _tripStatus(plan, today) == _TripStatus.completed)
             .toList()
           ..sort((a, b) => b.endDate.compareTo(a.endDate));
+    final filterEmpty = switch (_filter) {
+      _TripStatus.ongoing => ongoing.isEmpty,
+      _TripStatus.upcoming => upcoming.isEmpty,
+      _TripStatus.completed => completed.isEmpty,
+      null => false,
+    };
     return Scaffold(
       body: SafeArea(
         child: Align(
@@ -127,15 +159,19 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
                               '내 여행',
                               style: Theme.of(context).textTheme.headlineMedium,
                             ),
-                            const SizedBox(height: 5),
-                            Text(
-                              '계획부터 정산, 여행 로그까지 한곳에서 관리해요.',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: AppColors.gray500),
-                            ),
                           ],
                         ),
                       ),
+                      IconButton(
+                        tooltip: '친구',
+                        icon: const Icon(Icons.people_outline),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const TripFriendsScreen(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       IconButton.filled(
                         tooltip: '새 여행',
                         onPressed: _createPlan,
@@ -144,8 +180,54 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
+                  if (_invitations.isNotEmpty) ...[
+                    Text(
+                      '받은 초대',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    for (final invite in _invitations)
+                      AppCard(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              invite.title,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () =>
+                                        _answerInvite(invite, false),
+                                    child: const Text('거절'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: FilledButton(
+                                    onPressed: () =>
+                                        _answerInvite(invite, true),
+                                    child: const Text('참여'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 24),
+                  ],
                   if (_plans.isNotEmpty) ...[
                     AppMetricStrip(
+                      selectedIndex: _filter?.index,
+                      onSelected: (index) => setState(() {
+                        final status = _TripStatus.values[index];
+                        _filter = _filter == status ? null : status;
+                      }),
                       items: [
                         (label: '여행 중', value: '${ongoing.length}'),
                         (label: '예정', value: '${upcoming.length}'),
@@ -168,11 +250,29 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
                       actionLabel: '첫 여행 만들기',
                       onAction: _createPlan,
                     )
+                  else if (filterEmpty)
+                    _PlanMessage(
+                      message: switch (_filter) {
+                        _TripStatus.ongoing => '진행 중인 여행이 없어요.',
+                        _TripStatus.upcoming => '예정된 여행이 없어요.',
+                        _ => '완료된 여행이 없어요.',
+                      },
+                      actionLabel: '전체 여행 보기',
+                      onAction: () => setState(() => _filter = null),
+                    )
                   else
                     _TripSections(
-                      ongoing: ongoing,
-                      upcoming: upcoming,
-                      completed: completed,
+                      ongoing: _filter == null || _filter == _TripStatus.ongoing
+                          ? ongoing
+                          : [],
+                      upcoming:
+                          _filter == null || _filter == _TripStatus.upcoming
+                          ? upcoming
+                          : [],
+                      completed:
+                          _filter == null || _filter == _TripStatus.completed
+                          ? completed
+                          : [],
                       onOpen: (plan) async {
                         await Navigator.of(context).push<void>(
                           MaterialPageRoute(
@@ -212,31 +312,28 @@ class _TripSections extends StatelessWidget {
     required this.completed,
     required this.onOpen,
   });
-
   final List<TravelPlan> ongoing;
   final List<TravelPlan> upcoming;
   final List<TravelPlan> completed;
   final ValueChanged<TravelPlan> onOpen;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (ongoing.isNotEmpty)
-          _TripGroup(title: '진행 중인 여행', plans: ongoing, onOpen: onOpen),
-        if (upcoming.isNotEmpty) ...[
-          if (ongoing.isNotEmpty) const SizedBox(height: 28),
-          _TripGroup(title: '예정된 여행', plans: upcoming, onOpen: onOpen),
-        ],
-        if (completed.isNotEmpty) ...[
-          if (ongoing.isNotEmpty || upcoming.isNotEmpty)
-            const SizedBox(height: 28),
-          _TripGroup(title: '지난 여행', plans: completed, onOpen: onOpen),
-        ],
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (ongoing.isNotEmpty)
+        _TripGroup(title: '진행 중인 여행', plans: ongoing, onOpen: onOpen),
+      if (upcoming.isNotEmpty) ...[
+        if (ongoing.isNotEmpty) const SizedBox(height: 28),
+        _TripGroup(title: '예정된 여행', plans: upcoming, onOpen: onOpen),
       ],
-    );
-  }
+      if (completed.isNotEmpty) ...[
+        if (ongoing.isNotEmpty || upcoming.isNotEmpty)
+          const SizedBox(height: 28),
+        _TripGroup(title: '지난 여행', plans: completed, onOpen: onOpen),
+      ],
+    ],
+  );
 }
 
 class _TripGroup extends StatelessWidget {

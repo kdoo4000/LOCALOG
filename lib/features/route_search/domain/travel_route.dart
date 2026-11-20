@@ -9,6 +9,7 @@ class TravelRoute {
     required this.description,
     required this.city,
     required this.authorName,
+    this.ownerId,
     required this.places,
     required this.tags,
     required this.upvoteRatio,
@@ -33,6 +34,7 @@ class TravelRoute {
   final String description;
   final String city;
   final String authorName;
+  final String? ownerId;
   final List<RoutePlace> places;
   final List<String> tags;
   final double upvoteRatio;
@@ -64,6 +66,7 @@ class TravelRoute {
     String? description,
     String? city,
     String? authorName,
+    String? ownerId,
     List<RoutePlace>? places,
     List<String>? tags,
     double? upvoteRatio,
@@ -88,6 +91,7 @@ class TravelRoute {
       description: description ?? this.description,
       city: city ?? this.city,
       authorName: authorName ?? this.authorName,
+      ownerId: ownerId ?? this.ownerId,
       places: places ?? this.places,
       tags: tags ?? this.tags,
       upvoteRatio: upvoteRatio ?? this.upvoteRatio,

@@ -1,5 +1,6 @@
 import '../../route_search/domain/route_place.dart';
 import '../domain/travel_plan.dart';
+import '../../../models/place_candidate.dart';
 
 abstract class TravelPlanRepository {
   Stream<void> get plansChanged;
@@ -26,6 +27,11 @@ abstract class TravelPlanRepository {
   Future<TravelPlan> copyLogRouteToDay({
     required String logId,
     required String planDayId,
+  });
+
+  Future<TravelPlan> setAccommodation({
+    required String planDayId,
+    required PlaceCandidate? accommodation,
   });
 
   Future<PlannedRoute> createPlannedRoute({

@@ -81,9 +81,16 @@ const _provinceAliases = <String, List<String>>{
 };
 
 class RegionPickerScreen extends StatefulWidget {
-  const RegionPickerScreen({super.key, this.initialRegions = const []});
+  const RegionPickerScreen({
+    super.key,
+    this.initialRegions = const [],
+    this.confirmationLabel = '다음',
+    this.allowEmptySelection = false,
+  });
 
   final List<String> initialRegions;
+  final String confirmationLabel;
+  final bool allowEmptySelection;
 
   @override
   State<RegionPickerScreen> createState() => _RegionPickerScreenState();
@@ -220,7 +227,7 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
               alignment: Alignment.centerLeft,
               child: _selectedRegions.isEmpty
                   ? const Text(
-                      '방문할 지역을 선택해 주세요.',
+                      '지역을 선택해 주세요.',
                       style: TextStyle(color: AppColors.gray500),
                     )
                   : SizedBox(
@@ -387,8 +394,12 @@ class _RegionPickerScreenState extends State<RegionPickerScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: _selectedRegions.isEmpty ? null : _complete,
-                  child: const Text('다음'),
+                  key: const ValueKey('apply-region-selection'),
+                  onPressed:
+                      _selectedRegions.isEmpty && !widget.allowEmptySelection
+                      ? null
+                      : _complete,
+                  child: Text(widget.confirmationLabel),
                 ),
               ),
             ),

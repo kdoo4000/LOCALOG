@@ -5,6 +5,23 @@ import '../theme/app_tokens.dart';
 
 enum AppHeroVisual { journey, profile, photos, settlement, calendar }
 
+class AppPageBody extends StatelessWidget {
+  const AppPageBody({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    top: false,
+    child: Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: AppLayout.readingWidth),
+        child: child,
+      ),
+    ),
+  );
+}
+
 class AppHeroCard extends StatelessWidget {
   const AppHeroCard({
     super.key,
@@ -42,84 +59,51 @@ class AppHeroCard extends StatelessWidget {
   List<Widget> _decorations() {
     return switch (visual) {
       AppHeroVisual.journey => [
-        const _HeroOrb(right: -54, top: -72, size: 190),
-        const _HeroRing(right: 22, bottom: -70, size: 130),
+        Positioned(
+          right: -54,
+          top: -72,
+          child: Container(
+            width: 190,
+            height: 190,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.white.withValues(alpha: .08),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 22,
+          bottom: -70,
+          child: Container(
+            width: 130,
+            height: 130,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.accentLime.withValues(alpha: .35),
+                width: 24,
+              ),
+            ),
+          ),
+        ),
       ],
-      AppHeroVisual.profile => [
-        const _HeroOrb(left: -70, bottom: -90, size: 200),
-        const _HeroRing(right: -20, top: -42, size: 118),
-      ],
+      AppHeroVisual.profile => [],
       AppHeroVisual.photos => [
         const _HeroFrame(right: -18, top: 24, angle: .09),
         const _HeroFrame(right: 34, top: -36, angle: -.08),
       ],
-      AppHeroVisual.settlement => [
-        const _HeroReceiptLines(),
-        const _HeroOrb(right: -76, bottom: -94, size: 210),
-      ],
-      AppHeroVisual.calendar => [
-        const _HeroCalendarMark(),
-        const _HeroOrb(left: -82, bottom: -104, size: 210),
-      ],
+      AppHeroVisual.settlement => [const _HeroReceiptLines()],
+      AppHeroVisual.calendar => [const _HeroCalendarMark()],
     };
   }
 }
 
-class _HeroOrb extends StatelessWidget {
-  const _HeroOrb({this.left, this.right, this.top, this.bottom, required this.size});
-
-  final double? left;
-  final double? right;
-  final double? top;
-  final double? bottom;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => Positioned(
-    left: left,
-    right: right,
-    top: top,
-    bottom: bottom,
-    child: Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.white.withValues(alpha: .08),
-      ),
-    ),
-  );
-}
-
-class _HeroRing extends StatelessWidget {
-  const _HeroRing({this.right, this.top, this.bottom, required this.size});
-
-  final double? right;
-  final double? top;
-  final double? bottom;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => Positioned(
-    right: right,
-    top: top,
-    bottom: bottom,
-    child: Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: AppColors.accentLime.withValues(alpha: .35),
-          width: 24,
-        ),
-      ),
-    ),
-  );
-}
-
 class _HeroFrame extends StatelessWidget {
-  const _HeroFrame({required this.right, required this.top, required this.angle});
+  const _HeroFrame({
+    required this.right,
+    required this.top,
+    required this.angle,
+  });
 
   final double right;
   final double top;
@@ -299,9 +283,38 @@ class AppStepIndicator extends StatelessWidget {
 }
 
 class AppMetricStrip extends StatelessWidget {
-  const AppMetricStrip({super.key, required this.items});
+  const AppMetricStrip({
+    super.key,
+    required this.items,
+    this.onSelected,
+    this.selectedIndex,
+  });
 
   final List<({String label, String value})> items;
+  final ValueChanged<int>? onSelected;
+  final int? selectedIndex;
+
+  Widget _interactive(int index, Widget child) {
+    if (onSelected == null) return child;
+    return Semantics(
+      button: true,
+      selected: selectedIndex == index,
+      child: Material(
+        color: selectedIndex == index
+            ? AppColors.primaryBlueSoft
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => onSelected!(index),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(padding: const EdgeInsets.all(6), child: child),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -312,36 +325,79 @@ class AppMetricStrip extends StatelessWidget {
         border: Border.all(color: AppColors.borderSubtle),
         borderRadius: BorderRadius.circular(AppRadii.card),
       ),
-      child: Row(
-        children: [
-          for (var index = 0; index < items.length; index++) ...[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    items[index].label,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    items[index].value,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontFeatures: const [FontFeature.tabularFigures()],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final scale = MediaQuery.textScalerOf(context).scale(1);
+          if (constraints.maxWidth / items.length < 84 * scale) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var index = 0; index < items.length; index++) ...[
+                  if (index > 0) const SizedBox(height: 16),
+                  _interactive(
+                    index,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          items[index].label,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          items[index].value,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            ),
-            if (index != items.length - 1)
-              const SizedBox(
-                height: 34,
-                child: VerticalDivider(color: AppColors.borderSubtle),
-              ),
-          ],
-        ],
+              ],
+            );
+          }
+          return Row(
+            children: [
+              for (var index = 0; index < items.length; index++) ...[
+                Expanded(
+                  child: _interactive(
+                    index,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          items[index].label,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          items[index].value,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (index != items.length - 1)
+                  const SizedBox(
+                    height: 34,
+                    child: VerticalDivider(color: AppColors.borderSubtle),
+                  ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -374,7 +430,7 @@ class AppStickyActionBar extends StatelessWidget {
             ),
           ],
         ),
-        child: child,
+        child: SizedBox(width: double.infinity, child: child),
       ),
     );
   }

@@ -1,0 +1,210 @@
+[
+  {
+    "text": "상품 명",
+    "left": 292.0,
+    "top": 337.0,
+    "right": 412.0,
+    "bottom": 383.0,
+    "confidence": 0.6328125,
+    "angle": -10.568697929382324,
+    "words": [
+      {
+        "text": "상품",
+        "left": 292.0,
+        "top": 343.0,
+        "right": 381.0,
+        "bottom": 383.0,
+        "confidence": 0.69140625
+      },
+      {
+        "text": "명",
+        "left": 391.0,
+        "top": 337.0,
+        "right": 412.0,
+        "bottom": 364.0,
+        "confidence": 0.515625
+      }
+    ]
+  },
+  {
+    "text": "x 육우육회",
+    "left": 259.0,
+    "top": 392.0,
+    "right": 367.0,
+    "bottom": 434.0,
+    "confidence": 0.49609375,
+    "angle": -11.146071434020996,
+    "words": [
+      {
+        "text": "x",
+        "left": 259.0,
+        "top": 410.0,
+        "right": 276.0,
+        "bottom": 434.0,
+        "confidence": 0.11328125
+      },
+      {
+        "text": "육우육회",
+        "left": 279.0,
+        "top": 392.0,
+        "right": 367.0,
+        "bottom": 430.0,
+        "confidence": 0.591796875
+      }
+    ]
+  },
+  {
+    "text": "합계금 액",
+    "left": 250.0,
+    "top": 433.0,
+    "right": 397.0,
+    "bottom": 484.0,
+    "confidence": 0.5361328125,
+    "angle": -9.944418907165527,
+    "words": [
+      {
+        "text": "합계금",
+        "left": 250.0,
+        "top": 439.0,
+        "right": 365.0,
+        "bottom": 484.0,
+        "confidence": 0.4791666567325592
+      },
+      {
+        "text": "액",
+        "left": 381.0,
+        "top": 433.0,
+        "right": 397.0,
+        "bottom": 460.0,
+        "confidence": 0.70703125
+      }
+    ]
+  },
+  {
+    "text": "단가 수량",
+    "left": 489.0,
+    "top": 300.0,
+    "right": 636.0,
+    "bottom": 348.0,
+    "confidence": 0.765625,
+    "angle": -8.499279022216797,
+    "words": [
+      {
+        "text": "단가",
+        "left": 489.0,
+        "top": 309.0,
+        "right": 579.0,
+        "bottom": 348.0,
+        "confidence": 0.80078125
+      },
+      {
+        "text": "수량",
+        "left": 584.0,
+        "top": 300.0,
+        "right": 636.0,
+        "bottom": 333.0,
+        "confidence": 0.73046875
+      }
+    ]
+  },
+  {
+    "text": "10, 000",
+    "left": 490.0,
+    "top": 360.0,
+    "right": 563.0,
+    "bottom": 394.0,
+    "confidence": 0.8294270634651184,
+    "angle": -9.462320327758789,
+    "words": [
+      {
+        "text": "10,",
+        "left": 490.0,
+        "top": 367.0,
+        "right": 518.0,
+        "bottom": 394.0,
+        "confidence": 0.7981770634651184
+      },
+      {
+        "text": "000",
+        "left": 523.0,
+        "top": 360.0,
+        "right": 563.0,
+        "bottom": 388.0,
+        "confidence": 0.8606770634651184
+      }
+    ]
+  },
+  {
+    "text": "금액",
+    "left": 705.0,
+    "top": 285.0,
+    "right": 769.0,
+    "bottom": 314.0,
+    "confidence": 0.78125,
+    "angle": -2.820580005645752,
+    "words": [
+      {
+        "text": "금액",
+        "left": 705.0,
+        "top": 285.0,
+        "right": 769.0,
+        "bottom": 314.0,
+        "confidence": 0.78125
+      }
+    ]
+  },
+  {
+    "text": "20, 000",
+    "left": 694.0,
+    "top": 331.0,
+    "right": 778.0,
+    "bottom": 364.0,
+    "confidence": 0.9108073115348816,
+    "angle": -7.6970014572143555,
+    "words": [
+      {
+        "text": "20,",
+        "left": 694.0,
+        "top": 338.0,
+        "right": 727.0,
+        "bottom": 364.0,
+        "confidence": 0.90625
+      },
+      {
+        "text": "000",
+        "left": 735.0,
+        "top": 331.0,
+        "right": 778.0,
+        "bottom": 358.0,
+        "confidence": 0.9153645634651184
+      }
+    ]
+  },
+  {
+    "text": "20, 000",
+    "left": 699.0,
+    "top": 384.0,
+    "right": 782.0,
+    "bottom": 417.0,
+    "confidence": 0.8515625,
+    "angle": -7.709951400756836,
+    "words": [
+      {
+        "text": "20,",
+        "left": 699.0,
+        "top": 390.0,
+        "right": 733.0,
+        "bottom": 417.0,
+        "confidence": 0.8580729365348816
+      },
+      {
+        "text": "000",
+        "left": 741.0,
+        "top": 383.0,
+        "right": 782.0,
+        "bottom": 411.0,
+        "confidence": 0.8450520634651184
+      }
+    ]
+  }
+]

@@ -6,47 +6,63 @@ import '../../../core/l10n/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/premium_ui.dart';
+import '../../../core/widgets/region_chip_wrap.dart';
 import '../../trip_planning/domain/travel_plan.dart';
 import '../data/route_repository_provider.dart';
 import '../domain/travel_route.dart';
+import '../domain/route_place.dart';
+import 'region_picker_screen.dart';
 import 'route_detail_screen.dart';
 import 'widgets/route_card.dart';
 
 bool routeMatchesRegionSearch(TravelRoute route, String query) {
-  final normalizedQuery = query.trim().toLowerCase();
+  final normalizedQuery = compactRegionLabel(
+    query.replaceFirst(RegExp(r'\s*>\s*전체$'), ''),
+  ).trim().toLowerCase();
   if (normalizedQuery.isEmpty) return true;
 
-  final queryParts = normalizedQuery
-      .split(RegExp(r'\s*>\s*'))
-      .map((part) => part.trim())
-      .where((part) => part.isNotEmpty)
-      .toList(growable: false);
-  if (queryParts.length != 2 || queryParts.last != '전체') {
-    return route.effectiveRegions.any(
-      (region) => region.toLowerCase().contains(normalizedQuery),
-    );
-  }
-
-  final province = queryParts.first;
-  return route.effectiveRegions.any((region) {
-    final normalizedRegion = region.trim().toLowerCase();
-    return normalizedRegion == province ||
-        normalizedRegion.startsWith('$province >');
-  });
+  return [
+    ...route.effectiveRegions,
+    ...inferRegionsFromAddresses(
+      route.places.map((place) => place.address ?? ''),
+    ),
+  ].any(
+    (region) =>
+        compactRegionLabel(region).toLowerCase().contains(normalizedQuery),
+  );
 }
 
-enum _DurationFilter { any, short, halfDay, fullDay }
+String _placeSearchKey(RoutePlace place) {
+  if (place.canonicalPlaceId?.isNotEmpty == true) {
+    return 'place:${place.canonicalPlaceId}';
+  }
+  if (place.externalPlaceId?.isNotEmpty == true &&
+      place.placeProvider?.isNotEmpty == true) {
+    return 'external:${place.placeProvider}:${place.externalPlaceId}';
+  }
+  return 'name:${place.name.trim().toLowerCase()}|${place.address?.trim().toLowerCase() ?? ''}';
+}
+
+bool _sameSearchPlace(RoutePlace a, RoutePlace b) {
+  if (a.canonicalPlaceId?.isNotEmpty == true &&
+      b.canonicalPlaceId?.isNotEmpty == true) {
+    return a.canonicalPlaceId == b.canonicalPlaceId;
+  }
+  if (a.externalPlaceId?.isNotEmpty == true &&
+      b.externalPlaceId?.isNotEmpty == true &&
+      a.placeProvider?.isNotEmpty == true &&
+      b.placeProvider?.isNotEmpty == true) {
+    return a.placeProvider == b.placeProvider &&
+        a.externalPlaceId == b.externalPlaceId;
+  }
+  return a.name.trim().toLowerCase() == b.name.trim().toLowerCase() &&
+      (a.address?.trim().toLowerCase() ?? '') ==
+          (b.address?.trim().toLowerCase() ?? '');
+}
 
 enum _StopFilter { any, compact, balanced, rich }
 
-enum _RouteSort { recommended, popular, shortest }
-
-String _durationFilterLabel(_DurationFilter filter) => switch (filter) {
-  _DurationFilter.any => '시간 무관',
-  _DurationFilter.short => '2시간 이내',
-  _DurationFilter.halfDay => '반나절',
-  _DurationFilter.fullDay => '하루',
-};
+enum _RouteSort { recommended, popular }
 
 String _stopFilterLabel(_StopFilter filter) => switch (filter) {
   _StopFilter.any => '코스 밀도 무관',
@@ -159,8 +175,6 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const _SearchEyebrow(label: 'FIND YOUR ROUTE'),
-                          const SizedBox(height: 14),
                           Text(
                             widget.targetPlanDayId == null
                                 ? '어떤 여행을 찾고 있나요?'
@@ -170,7 +184,7 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '지역, 소요 시간, 방문 장소 수와 관심사를 조합해 검색할 수 있어요.',
+                            '로그 제목, 지역, 포함할 여행지와 태그를 조합해 검색할 수 있어요.',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
                                   color: AppColors.white.withValues(alpha: .76),
@@ -191,19 +205,15 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    const AppSectionHeader(
-                      title: '추천 로그',
-                      description: '검색 전 둘러보기 좋은 로그를 먼저 보여드려요.',
-                    ),
+                    const AppSectionHeader(title: '추천 로그'),
                     const SizedBox(height: 12),
                     if (snapshot.hasError)
                       _SearchMessage(
                         icon: Icons.wifi_off_rounded,
                         title: '추천 로그를 불러오지 못했습니다.',
                         actionLabel: '다시 시도',
-                        onAction: () => setState(
-                          () => _routesFuture = _loadRoutes(),
-                        ),
+                        onAction: () =>
+                            setState(() => _routesFuture = _loadRoutes()),
                       )
                     else if (!snapshot.hasData)
                       const _RouteResultsSkeleton()
@@ -235,16 +245,15 @@ class DetailedRouteSearchScreen extends StatefulWidget {
       _DetailedRouteSearchScreenState();
 }
 
-class _DetailedRouteSearchScreenState
-    extends State<DetailedRouteSearchScreen> {
+class _DetailedRouteSearchScreenState extends State<DetailedRouteSearchScreen> {
   final _repository = routeRepository;
   late Future<List<TravelRoute>> _routesFuture;
   StreamSubscription<void>? _routesSubscription;
   late final TextEditingController _searchController;
   late String _keyword;
-  final Set<String> _selectedTagKeys = {};
-  String? _selectedRegion;
-  _DurationFilter _durationFilter = _DurationFilter.any;
+  final Map<String, String> _selectedTags = {};
+  List<String> _selectedRegions = [];
+  final Map<String, RoutePlace> _selectedPlaces = {};
   _StopFilter _stopFilter = _StopFilter.any;
 
   @override
@@ -284,7 +293,10 @@ class _DetailedRouteSearchScreenState
   }
 
   String _tagKey(AppStrings strings, String tag) {
-    return strings.searchAliases(tag).first;
+    final aliases = strings.searchAliases(
+      tag.trim().replaceFirst(RegExp(r'^#'), ''),
+    )..sort();
+    return aliases.isEmpty ? '' : aliases.first;
   }
 
   bool _matchesKeyword(AppStrings strings, TravelRoute route) {
@@ -294,49 +306,34 @@ class _DetailedRouteSearchScreenState
     }
 
     final aliases = strings.searchAliases(keyword);
-    return aliases.any(
-      (term) =>
-          route.title.toLowerCase().contains(term) ||
-          routeMatchesRegionSearch(route, term) ||
-          route.description.toLowerCase().contains(term) ||
-          route.tags.any((tag) => tag.toLowerCase().contains(term)) ||
-          route.places.any(
-            (place) =>
-                place.name.toLowerCase().contains(term) ||
-                (place.address?.toLowerCase().contains(term) ?? false),
-          ),
-    );
+    return aliases.any((term) => route.title.toLowerCase().contains(term));
   }
 
   bool _matchesSelectedTags(AppStrings strings, TravelRoute route) {
-    if (_selectedTagKeys.isEmpty) {
+    if (_selectedTags.isEmpty) {
       return true;
     }
 
-    return _selectedTagKeys.every((selectedTag) {
+    return _selectedTags.keys.every((selectedTag) {
       return route.tags.any((routeTag) {
-        final aliases = strings.searchAliases(routeTag);
-        return aliases.contains(selectedTag) ||
-            aliases.any((alias) => alias.contains(selectedTag));
+        return _tagKey(strings, routeTag) == selectedTag;
       });
     });
   }
 
   bool _matchesDetails(TravelRoute route) {
-    final region = _selectedRegion;
-    if (region != null && !routeMatchesRegionSearch(route, region)) {
+    if (_selectedRegions.isNotEmpty &&
+        !_selectedRegions.any(
+          (region) => routeMatchesRegionSearch(route, region),
+        )) {
       return false;
     }
-
-    final durationMatches = switch (_durationFilter) {
-      _DurationFilter.any => true,
-      _DurationFilter.short => route.estimatedDurationMinutes <= 120,
-      _DurationFilter.halfDay =>
-        route.estimatedDurationMinutes > 120 &&
-            route.estimatedDurationMinutes <= 240,
-      _DurationFilter.fullDay => route.estimatedDurationMinutes > 240,
-    };
-    if (!durationMatches) return false;
+    if (!_selectedPlaces.values.every(
+      (selected) =>
+          route.places.any((place) => _sameSearchPlace(selected, place)),
+    )) {
+      return false;
+    }
 
     return switch (_stopFilter) {
       _StopFilter.any => true,
@@ -349,30 +346,88 @@ class _DetailedRouteSearchScreenState
 
   int get _activeFilterCount {
     return (_keyword.trim().isNotEmpty ? 1 : 0) +
-        (_selectedRegion != null ? 1 : 0) +
-        (_durationFilter != _DurationFilter.any ? 1 : 0) +
+        _selectedRegions.length +
+        _selectedPlaces.length +
         (_stopFilter != _StopFilter.any ? 1 : 0) +
-        _selectedTagKeys.length;
+        _selectedTags.length;
   }
 
-  void _toggleTag(AppStrings strings, String tag) {
-    final tagKey = _tagKey(strings, tag);
-    setState(() {
-      if (_selectedTagKeys.contains(tagKey)) {
-        _selectedTagKeys.remove(tagKey);
-      } else {
-        _selectedTagKeys.add(tagKey);
-      }
-    });
+  Future<void> _selectRegions() async {
+    final selected = await Navigator.of(context).push<List<String>>(
+      MaterialPageRoute(
+        builder: (_) => RegionPickerScreen(
+          initialRegions: _selectedRegions,
+          confirmationLabel: '적용',
+          allowEmptySelection: true,
+        ),
+      ),
+    );
+    if (selected != null && mounted) {
+      setState(() => _selectedRegions = selected);
+    }
+  }
+
+  Future<void> _selectPlaces(Map<String, RoutePlace> options) async {
+    final selected = await Navigator.of(context).push<Set<String>>(
+      MaterialPageRoute(
+        builder: (_) => _SearchConditionPicker(
+          title: '포함할 여행지 선택',
+          hint: '여행지 이름 또는 주소 검색',
+          options: [
+            for (final entry in options.entries)
+              (
+                id: entry.key,
+                label: entry.value.name,
+                subtitle: entry.value.address ?? entry.value.displayCategory,
+              ),
+          ],
+          initialSelection: _selectedPlaces.keys.toSet(),
+        ),
+      ),
+    );
+    if (selected != null && mounted) {
+      setState(() {
+        _selectedPlaces
+          ..clear()
+          ..addEntries(
+            options.entries.where((entry) => selected.contains(entry.key)),
+          );
+      });
+    }
+  }
+
+  Future<void> _selectTags(Map<String, String> options) async {
+    final selected = await Navigator.of(context).push<Set<String>>(
+      MaterialPageRoute(
+        builder: (_) => _SearchConditionPicker(
+          title: '태그 선택',
+          hint: '태그 검색',
+          options: [
+            for (final entry in options.entries)
+              (id: entry.key, label: entry.value, subtitle: null),
+          ],
+          initialSelection: _selectedTags.keys.toSet(),
+        ),
+      ),
+    );
+    if (selected != null && mounted) {
+      setState(() {
+        _selectedTags
+          ..clear()
+          ..addEntries(
+            options.entries.where((entry) => selected.contains(entry.key)),
+          );
+      });
+    }
   }
 
   void _clearFilters() {
     _searchController.clear();
     setState(() {
       _keyword = '';
-      _selectedTagKeys.clear();
-      _selectedRegion = null;
-      _durationFilter = _DurationFilter.any;
+      _selectedTags.clear();
+      _selectedRegions = [];
+      _selectedPlaces.clear();
       _stopFilter = _StopFilter.any;
     });
   }
@@ -406,18 +461,48 @@ class _DetailedRouteSearchScreenState
   List<String> _filterLabels(AppStrings strings) {
     return [
       if (_keyword.trim().isNotEmpty) '“${_keyword.trim()}”',
-      ?_selectedRegion,
-      if (_durationFilter != _DurationFilter.any)
-        _durationFilterLabel(_durationFilter),
+      ..._selectedRegions,
+      for (final place in _selectedPlaces.values) '포함: ${place.name}',
       if (_stopFilter != _StopFilter.any) _stopFilterLabel(_stopFilter),
-      for (final tag in strings.searchTags)
-        if (_selectedTagKeys.contains(strings.searchAliases(tag).first)) tag,
+      for (final tag in _selectedTags.values) '#$tag',
     ];
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final filters =
+        <({String id, String label, IconData icon, VoidCallback remove})>[
+          for (final region in _selectedRegions)
+            (
+              id: 'region-$region',
+              label: compactRegionLabel(region),
+              icon: Icons.location_on_outlined,
+              remove: () => setState(() => _selectedRegions.remove(region)),
+            ),
+          for (final entry in _selectedPlaces.entries)
+            (
+              id: 'place-${entry.key}',
+              label: entry.value.name,
+              icon: Icons.place_outlined,
+              remove: () => setState(() => _selectedPlaces.remove(entry.key)),
+            ),
+          for (final entry in _selectedTags.entries)
+            (
+              id: 'tag-${entry.key}',
+              label: '#${entry.value}',
+              icon: Icons.sell_outlined,
+              remove: () => setState(() => _selectedTags.remove(entry.key)),
+            ),
+          if (_stopFilter != _StopFilter.any)
+            (
+              id: 'stops',
+              label: _stopFilterLabel(_stopFilter),
+              icon: Icons.route_outlined,
+              remove: () => setState(() => _stopFilter = _StopFilter.any),
+            ),
+        ];
 
     return Scaffold(
       appBar: AppBar(
@@ -431,43 +516,185 @@ class _DetailedRouteSearchScreenState
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: AppLayout.contentWidth),
+            constraints: const BoxConstraints(maxWidth: AppLayout.readingWidth),
             child: FutureBuilder<List<TravelRoute>>(
               future: _routesFuture,
               builder: (context, snapshot) {
                 final routes = snapshot.data ?? const <TravelRoute>[];
-                final regionOptions = routes
-                    .expand((route) => route.effectiveRegions)
-                    .map((region) => region.split(' > ').first.trim())
-                    .where((region) => region.isNotEmpty)
-                    .toSet()
-                    .take(8)
-                    .toList();
+                final placeOptions = <String, RoutePlace>{
+                  for (final route in routes)
+                    for (final place in route.places)
+                      _placeSearchKey(place): place,
+                  ..._selectedPlaces,
+                };
+                final tagOptions = <String, String>{
+                  for (final route in routes)
+                    for (final tag in route.tags)
+                      if (tag.trim().replaceFirst(RegExp(r'^#'), '').isNotEmpty)
+                        _tagKey(strings, tag): tag.trim().replaceFirst(
+                          RegExp(r'^#'),
+                          '',
+                        ),
+                  ..._selectedTags,
+                };
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
                   children: [
-                    _DetailedSearchPanel(
-                      searchController: _searchController,
-                      keyword: _keyword,
-                      regionOptions: regionOptions,
-                      selectedRegion: _selectedRegion,
-                      durationFilter: _durationFilter,
-                      stopFilter: _stopFilter,
-                      selectedTagKeys: _selectedTagKeys,
-                      onKeywordChanged: (value) => setState(() {
-                        _keyword = value;
-                      }),
-                      onRegionSelected: (value) => setState(() {
-                        _selectedRegion = value;
-                      }),
-                      onDurationSelected: (value) => setState(() {
-                        _durationFilter = value;
-                      }),
-                      onStopSelected: (value) => setState(() {
-                        _stopFilter = value;
-                      }),
-                      onTagSelected: (tag) => _toggleTag(strings, tag),
+                    TextFormField(
+                      key: const ValueKey('log-title-filter'),
+                      controller: _searchController,
+                      decoration: const InputDecoration(
+                        labelText: '로그 제목',
+                        hintText: '예: 성수 카페거리',
+                      ),
+                      onChanged: (value) => setState(() => _keyword = value),
                     ),
+                    Builder(
+                      builder: (context) {
+                        final summary = filters.isEmpty
+                            ? const SizedBox(width: double.infinity)
+                            : Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '선택한 조건 ${filters.length}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelMedium
+                                          ?.copyWith(
+                                            color: AppColors.textSecondary,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        for (final filter in filters)
+                                          TweenAnimationBuilder<double>(
+                                            key: ValueKey(filter.id),
+                                            tween: Tween(begin: 0, end: 1),
+                                            duration: reduceMotion
+                                                ? Duration.zero
+                                                : AppMotion.standard,
+                                            curve: AppMotion.curve,
+                                            builder: (context, value, child) =>
+                                                Opacity(
+                                                  opacity: value,
+                                                  child: Transform.translate(
+                                                    offset: Offset(
+                                                      0,
+                                                      4 * (1 - value),
+                                                    ),
+                                                    child: child,
+                                                  ),
+                                                ),
+                                            child: InputChip(
+                                              avatar: Icon(
+                                                filter.icon,
+                                                size: 18,
+                                                color: AppColors.primaryBlue,
+                                              ),
+                                              label: Text(
+                                                filter.label,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              backgroundColor:
+                                                  AppColors.primaryBlueSoft,
+                                              selectedColor:
+                                                  AppColors.primaryBlueSoft,
+                                              selected: true,
+                                              showCheckmark: false,
+                                              onSelected: (_) =>
+                                                  filter.remove(),
+                                              side: BorderSide.none,
+                                              deleteIconColor:
+                                                  AppColors.primaryBlueDark,
+                                              deleteButtonTooltipMessage:
+                                                  '${filter.label} 조건 삭제',
+                                              onDeleted: filter.remove,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                        return reduceMotion
+                            ? summary
+                            : AnimatedSize(
+                                duration: AppMotion.quick,
+                                curve: AppMotion.curve,
+                                alignment: Alignment.topLeft,
+                                child: summary,
+                              );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    _SearchSelectionField(
+                      title: '지역',
+                      actionKey: 'select-search-regions',
+                      selectionCount: _selectedRegions.length,
+                      onTap: _selectRegions,
+                    ),
+                    const SizedBox(height: 24),
+                    _SearchSelectionField(
+                      title: '포함할 여행지',
+                      actionKey: 'select-search-places',
+                      selectionCount: _selectedPlaces.length,
+                      onTap: snapshot.hasData
+                          ? () => _selectPlaces(placeOptions)
+                          : null,
+                    ),
+                    const SizedBox(height: 24),
+                    _SearchSelectionField(
+                      title: '태그',
+                      actionKey: 'select-search-tags',
+                      selectionCount: _selectedTags.length,
+                      onTap: snapshot.hasData
+                          ? () => _selectTags(tagOptions)
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      '지역은 선택한 곳 중 하나, 여행지·태그는 선택한 항목을 모두 포함하는 로그를 찾습니다.',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 24),
+                    _FilterSection(
+                      title: '방문 장소 수',
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final option in _StopFilter.values.skip(1))
+                            ChoiceChip(
+                              label: Text(_stopFilterLabel(option)),
+                              selected: _stopFilter == option,
+                              onSelected: (selected) => setState(
+                                () => _stopFilter = selected
+                                    ? option
+                                    : _StopFilter.any,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (snapshot.hasError) ...[
+                      const SizedBox(height: 24),
+                      const Text(
+                        '검색할 로그를 불러오지 못했어요.',
+                        style: TextStyle(color: AppColors.error),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            setState(() => _routesFuture = _loadRoutes()),
+                        child: const Text('다시 시도'),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                   ],
                 );
@@ -486,16 +713,14 @@ class _DetailedRouteSearchScreenState
             return Container(
               decoration: const BoxDecoration(
                 color: AppColors.surface,
-                border: Border(
-                  top: BorderSide(color: AppColors.borderSubtle),
-                ),
+                border: Border(top: BorderSide(color: AppColors.borderSubtle)),
               ),
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
               child: Center(
                 heightFactor: 1,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(
-                    maxWidth: AppLayout.contentWidth,
+                    maxWidth: AppLayout.readingWidth - 48,
                   ),
                   child: SizedBox(
                     width: double.infinity,
@@ -527,203 +752,195 @@ class _DetailedRouteSearchScreenState
   }
 }
 
-class _SearchEyebrow extends StatelessWidget {
-  const _SearchEyebrow({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.accentLime,
-        borderRadius: BorderRadius.circular(AppRadii.pill),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: AppColors.ink,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          letterSpacing: .8,
-        ),
-      ),
-    );
-  }
-}
-
-class _DetailedSearchPanel extends StatelessWidget {
-  const _DetailedSearchPanel({
-    required this.searchController,
-    required this.keyword,
-    required this.regionOptions,
-    required this.selectedRegion,
-    required this.durationFilter,
-    required this.stopFilter,
-    required this.selectedTagKeys,
-    required this.onKeywordChanged,
-    required this.onRegionSelected,
-    required this.onDurationSelected,
-    required this.onStopSelected,
-    required this.onTagSelected,
+class _SearchSelectionField extends StatelessWidget {
+  const _SearchSelectionField({
+    required this.title,
+    required this.actionKey,
+    required this.selectionCount,
+    required this.onTap,
   });
 
-  final TextEditingController searchController;
-  final String keyword;
-  final List<String> regionOptions;
-  final String? selectedRegion;
-  final _DurationFilter durationFilter;
-  final _StopFilter stopFilter;
-  final Set<String> selectedTagKeys;
-  final ValueChanged<String> onKeywordChanged;
-  final ValueChanged<String?> onRegionSelected;
-  final ValueChanged<_DurationFilter> onDurationSelected;
-  final ValueChanged<_StopFilter> onStopSelected;
-  final ValueChanged<String> onTagSelected;
+  final String title;
+  final String actionKey;
+  final int selectionCount;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => _FilterSection(
+    title: title,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton(
+          key: ValueKey(actionKey),
+          onPressed: onTap,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  selectionCount == 0
+                      ? '$title 선택'
+                      : '$title 변경 · $selectionCount개 선택',
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _SearchConditionPicker extends StatefulWidget {
+  const _SearchConditionPicker({
+    required this.title,
+    required this.hint,
+    required this.options,
+    required this.initialSelection,
+  });
+
+  final String title;
+  final String hint;
+  final List<({String id, String label, String? subtitle})> options;
+  final Set<String> initialSelection;
+
+  @override
+  State<_SearchConditionPicker> createState() => _SearchConditionPickerState();
+}
+
+class _SearchConditionPickerState extends State<_SearchConditionPicker> {
+  late final Set<String> _selected = {...widget.initialSelection};
+  final _query = TextEditingController();
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final strings = context.strings;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '어떤 여행 로그를 찾고 있나요?',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 10),
-        SearchBar(
-          controller: searchController,
-          hintText: '성수 카페, 부산 야경, 제주 맛집',
-          leading: const Icon(Icons.search_rounded),
-          trailing: [
-            if (keyword.isNotEmpty)
-              IconButton(
-                tooltip: '검색어 지우기',
-                onPressed: () {
-                  searchController.clear();
-                  onKeywordChanged('');
-                },
-                icon: const Icon(Icons.close_rounded),
-              ),
-          ],
-          onChanged: onKeywordChanged,
-        ),
-        if (selectedRegion != null ||
-            durationFilter != _DurationFilter.any ||
-            stopFilter != _StopFilter.any ||
-            selectedTagKeys.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (selectedRegion != null)
-                InputChip(
-                  label: Text(selectedRegion!),
-                  onDeleted: () => onRegionSelected(null),
-                ),
-              if (durationFilter != _DurationFilter.any)
-                InputChip(
-                  label: Text(_durationFilterLabel(durationFilter)),
-                  onDeleted: () => onDurationSelected(_DurationFilter.any),
-                ),
-              if (stopFilter != _StopFilter.any)
-                InputChip(
-                  label: Text(_stopFilterLabel(stopFilter)),
-                  onDeleted: () => onStopSelected(_StopFilter.any),
-                ),
-              for (final tag in strings.searchTags)
-                if (selectedTagKeys.contains(strings.searchAliases(tag).first))
-                  InputChip(
-                    label: Text(tag),
-                    onDeleted: () => onTagSelected(tag),
-                  ),
-            ],
-          ),
+    final query = _query.text
+        .trim()
+        .replaceFirst(RegExp(r'^#'), '')
+        .toLowerCase();
+    final options =
+        widget.options
+            .where(
+              (option) =>
+                  option.label.toLowerCase().contains(query) ||
+                  (option.subtitle?.toLowerCase().contains(query) ?? false),
+            )
+            .toList()
+          ..sort((a, b) => a.label.compareTo(b.label));
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.title),
+        actions: [
+          if (_selected.isNotEmpty)
+            TextButton(
+              onPressed: () => setState(_selected.clear),
+              child: const Text('초기화'),
+            ),
         ],
-        const SizedBox(height: 32),
-              _FilterSection(
-                title: '어디로 떠날까요?',
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final region in regionOptions)
-                      ChoiceChip(
-                        label: Text(region),
-                        selected: selectedRegion == region,
-                        onSelected: (selected) =>
-                            onRegionSelected(selected ? region : null),
-                      ),
-                  ],
+      ),
+      body: AppPageBody(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+              child: TextField(
+                key: const ValueKey('condition-picker-query'),
+                controller: _query,
+                decoration: InputDecoration(
+                  hintText: widget.hint,
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _query.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '검색어 지우기',
+                          onPressed: () => setState(_query.clear),
+                          icon: const Icon(Icons.close),
+                        ),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            if (_selected.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${_selected.length}개 선택',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
                 ),
               ),
-              const SizedBox(height: 32),
-              _FilterSection(
-                title: '얼마나 둘러볼까요?',
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final option in _DurationFilter.values.skip(1))
-                      ChoiceChip(
-                        label: Text(_durationFilterLabel(option)),
-                        selected: durationFilter == option,
-                        onSelected: (selected) => onDurationSelected(
-                          selected ? option : _DurationFilter.any,
+            Expanded(
+              child: options.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          query.isEmpty
+                              ? '검색 가능한 로그에 등록된 항목이 없어요.'
+                              : '검색 결과가 없어요. 다른 이름으로 검색해 주세요.',
                         ),
                       ),
-                  ],
-                ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+                      itemCount: options.length,
+                      itemBuilder: (context, index) {
+                        final option = options[index];
+                        return CheckboxListTile(
+                          value: _selected.contains(option.id),
+                          title: Text(option.label),
+                          subtitle: option.subtitle == null
+                              ? null
+                              : Text(option.subtitle!),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          onChanged: (selected) => setState(() {
+                            if (selected == true) {
+                              _selected.add(option.id);
+                            } else {
+                              _selected.remove(option.id);
+                            }
+                          }),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: AppStickyActionBar(
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: AppLayout.readingWidth - 48,
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const ValueKey('apply-search-condition'),
+                onPressed: () =>
+                    Navigator.of(context).pop(Set<String>.of(_selected)),
+                child: Text('선택 ${_selected.length}개 적용'),
               ),
-              const SizedBox(height: 32),
-              _FilterSection(
-                title: '코스를 얼마나 채울까요?',
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final option in _StopFilter.values.skip(1))
-                      ChoiceChip(
-                        label: Text(_stopFilterLabel(option)),
-                        selected: stopFilter == option,
-                        onSelected: (selected) => onStopSelected(
-                          selected ? option : _StopFilter.any,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-              _FilterSection(
-                title: '어떤 여행을 원하나요?',
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final tag in strings.searchTags)
-                      FilterChip(
-                        label: Text(tag),
-                        selected: selectedTagKeys.contains(
-                          strings.searchAliases(tag).first,
-                        ),
-                        onSelected: (_) => onTagSelected(tag),
-                      ),
-                  ],
-                ),
-              ),
-      ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
 class _FilterSection extends StatelessWidget {
-  const _FilterSection({
-    required this.title,
-    required this.child,
-  });
+  const _FilterSection({required this.title, required this.child});
 
   final String title;
   final Widget child;
@@ -768,12 +985,6 @@ class _DetailedRouteResultsScreenState
         routes.sort((a, b) => b.upvoteRatio.compareTo(a.upvoteRatio));
       case _RouteSort.popular:
         routes.sort((a, b) => b.downloadCount.compareTo(a.downloadCount));
-      case _RouteSort.shortest:
-        routes.sort(
-          (a, b) => a.estimatedDurationMinutes.compareTo(
-            b.estimatedDurationMinutes,
-          ),
-        );
     }
     return routes;
   }
@@ -809,7 +1020,7 @@ class _DetailedRouteResultsScreenState
                 AppSectionHeader(
                   title: '조건에 맞는 로그 ${routes.length}개',
                   description: widget.filterLabels.isEmpty
-                      ? '전체 로그를 추천 순서로 보여드려요.'
+                      ? null
                       : widget.filterLabels.join(' · '),
                   trailing: DropdownButtonHideUnderline(
                     child: DropdownButton<_RouteSort>(
@@ -823,10 +1034,6 @@ class _DetailedRouteResultsScreenState
                         DropdownMenuItem(
                           value: _RouteSort.popular,
                           child: Text('인기순'),
-                        ),
-                        DropdownMenuItem(
-                          value: _RouteSort.shortest,
-                          child: Text('짧은 순'),
                         ),
                       ],
                       onChanged: (value) {
@@ -865,7 +1072,8 @@ class _RouteResults extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 760) {
+        if (constraints.maxWidth < 760 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.2) {
           return Column(
             children: [
               for (final route in routes) ...[

@@ -113,8 +113,3 @@ LOCALOG는 여행지를 소비하는 방식보다, 누군가의 하루를 따라
 
 - **Profile**
   다운로드한 루트, 업로드한 루트, 설정을 관리하는 화면입니다.
-
-## Android 릴리스 서명
-
-`android/key.properties.example`을 `android/key.properties`로 복사하고 운영용 upload keystore 정보를 입력합니다. `key.properties`와 keystore 파일은 Git에서 제외됩니다. 설정이 없으면 release 빌드는 실패하며 debug 키로 대체되지 않습니다.
-

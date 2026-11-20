@@ -12,8 +12,8 @@ class PlaceCandidate {
   });
 
   factory PlaceCandidate.fromJson(Map<String, dynamic> json) {
-    final sourceCategory = json['sourceCategory'] as String? ??
-        json['category'] as String?;
+    final sourceCategory =
+        json['sourceCategory'] as String? ?? json['category'] as String?;
     return PlaceCandidate(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
@@ -36,6 +36,17 @@ class PlaceCandidate {
   final int? distanceMeters;
   final double? latitude;
   final double? longitude;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': displayName,
+    'address': address,
+    'source': source,
+    'category': category,
+    'sourceCategory': sourceCategory,
+    'latitude': latitude,
+    'longitude': longitude,
+  };
 
   bool get hasLocation =>
       latitude != null &&

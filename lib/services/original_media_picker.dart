@@ -8,7 +8,7 @@ class OriginalMediaPicker {
   static const _channel = MethodChannel('localog/original_media_picker');
 
   Future<List<XFile>> pickImages() async {
-    if (defaultTargetPlatform != TargetPlatform.android) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       return const [];
     }
 

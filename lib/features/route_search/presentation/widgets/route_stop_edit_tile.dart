@@ -73,6 +73,7 @@ class RouteStopEditTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.onRemove,
+    this.onTap,
     this.leading,
     this.onChoosePlace,
     this.onEdit,
@@ -87,6 +88,7 @@ class RouteStopEditTile extends StatelessWidget {
   final VoidCallback? onChoosePlace;
   final VoidCallback? onEdit;
   final VoidCallback? onRemove;
+  final VoidCallback? onTap;
   final bool placeSelected;
   final bool showDragHandle;
 
@@ -95,6 +97,7 @@ class RouteStopEditTile extends StatelessWidget {
     return AppCard(
       margin: EdgeInsets.zero,
       padding: const EdgeInsets.all(10),
+      onTap: onTap,
       child: Row(
         children: [
           Stack(

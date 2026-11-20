@@ -83,6 +83,21 @@ class SupabaseRouteRepository implements RouteRepository {
   @override
   Future<TravelRoute?> getRouteById(String routeId) => _fetchRoute(routeId);
 
+  Future<List<TravelRoute>> getPublicRoutesForUser(String userId) async {
+    final rows = await _client
+        .from('routes')
+        .select(_summarySelect)
+        .eq('owner_id', userId)
+        .eq('access_level', 'public')
+        .eq('is_download_copy', false)
+        .order('published_at', ascending: false)
+        .order('id', ascending: false)
+        .limit(30);
+    return Future.wait(
+      rows.map((row) => _mapRoute(_asMap(row), summary: true)),
+    );
+  }
+
   @override
   Future<PlaceDetail> getPlaceDetail(RoutePlace place) async {
     final placeId = place.canonicalPlaceId;
@@ -472,7 +487,9 @@ class SupabaseRouteRepository implements RouteRepository {
     required List<String> uploadedPaths,
   }) async {
     final file = XFile(localPath);
-    final bytes = await _imageSanitizer.removeMetadata(await file.readAsBytes());
+    final bytes = await _imageSanitizer.removeMetadata(
+      await file.readAsBytes(),
+    );
     return _uploadBytes(
       bytes,
       originalName: '${file.name.replaceFirst(RegExp(r'\.[^.]+$'), '')}.jpg',
@@ -650,6 +667,7 @@ class SupabaseRouteRepository implements RouteRepository {
       city: row['city'] as String? ?? '',
       regions: regions,
       authorName: author ?? 'LOCALOG 여행자',
+      ownerId: ownerId,
       places: places,
       tags: tags,
       upvoteRatio: _asDouble(row['upvote_ratio']),

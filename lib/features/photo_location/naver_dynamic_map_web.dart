@@ -137,7 +137,7 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
       js_util.callMethod(event, 'addListener', [
         _map,
         'idle',
-        js_util.allowInterop(() {
+        js_util.allowInterop(([Object? event]) {
           final callback = widget.onCameraIdle;
           final map = _map;
           if (callback == null || map == null || !mounted) return;
@@ -305,7 +305,7 @@ class _NaverDynamicMapState extends State<NaverDynamicMap> {
       js_util.callMethod(event, 'addListener', [
         marker,
         'click',
-        js_util.allowInterop(() => widget.onPointTap?.call(index)),
+        js_util.allowInterop(([Object? event]) => widget.onPointTap?.call(index)),
       ]);
     }
   }

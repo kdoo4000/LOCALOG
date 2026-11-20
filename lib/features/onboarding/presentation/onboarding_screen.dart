@@ -109,7 +109,7 @@ class OnboardingScreen extends StatelessWidget {
                         context,
                       ).pushReplacementNamed(RouteNames.login);
                     },
-                    child: const Text('시작하기'),
+                    child: const Text('로그인·회원가입'),
                   ),
                   const SizedBox(height: 12),
                   TextButton(

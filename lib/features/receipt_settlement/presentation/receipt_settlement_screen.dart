@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../../../core/widgets/app_dialog.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -20,23 +22,22 @@ class ReceiptSettlementScreen extends StatefulWidget {
 }
 
 class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
-  static const _people = [
-    _Person('나', Color(0xFF2457F5)),
-    _Person('민지', Color(0xFFE65D8D)),
-    _Person('준호', Color(0xFF00A78E)),
-    _Person('서연', Color(0xFFFF8A3D)),
-  ];
+  final _people = <_Person>[_Person('나', Color(0xFF2457F5))];
 
   final _imagePicker = ImagePicker();
   final _ocr = ReceiptOcrService();
-  final Set<String> _selectedTravelers = {'나', '민지', '준호', '서연'};
+  final Set<String> _selectedTravelers = {'나'};
   final Map<String, Set<String>> _itemPeople = {};
   List<ReceiptItemDraft> _items = [];
+  List<ReceiptItemDraft> _detailItems = [];
+  ReceiptItemDraft? _totalItem;
   Uint8List? _receiptBytes;
   String _rawText = '';
+  List<String> _reviewNotes = [];
   String? _errorMessage;
   int? _receiptTotal;
   bool _isScanning = false;
+  bool _reviewed = false;
 
   @override
   void dispose() {
@@ -49,12 +50,106 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
   int get _itemSum => _items.fold(0, (sum, item) => sum + item.amount);
+  bool get _usingTotal => _items.length == 1 && _items.single.isReceiptTotal;
+
+  void _toggleTotalMode() {
+    if (_receiptTotal == null) return;
+    setState(() {
+      _reviewed = false;
+      if (_usingTotal) {
+        _totalItem = _items.single;
+        _items = _detailItems;
+      } else {
+        _detailItems = _items;
+        _items = [
+          _totalItem?.copyWith(amount: _receiptTotal!) ??
+              ReceiptItemDraft(
+                id: 'receipt-total',
+                name:
+                    ReceiptScanResult(
+                      items: const [],
+                      rawText: _rawText,
+                    ).merchantName ??
+                    '업소명 확인',
+                quantity: 1,
+                amount: _receiptTotal!,
+                isReceiptTotal: true,
+                category: ReceiptCategory.suggest(
+                  _rawText.split('\n').take(8).join(' '),
+                  wholeReceipt: true,
+                ),
+              ),
+        ];
+        _itemPeople.putIfAbsent(
+          'receipt-total',
+          () => Set<String>.from(_selectedTravelers),
+        );
+      }
+      _errorMessage = null;
+    });
+  }
+
   bool get _hasTotalMismatch =>
       _receiptTotal != null && _items.isNotEmpty && _receiptTotal != _itemSum;
 
+  bool get _canSettle =>
+      !_isScanning &&
+      _items.isNotEmpty &&
+      _itemSum >= 0 &&
+      !_hasTotalMismatch &&
+      (_receiptBytes == null || (_reviewed && _receiptTotal != null)) &&
+      _items.every((item) => _itemPeople[item.id]?.isNotEmpty ?? false);
+
+  Future<void> _editTotal() async {
+    var totalText = _receiptTotal?.toString() ?? '';
+    final formKey = GlobalKey<FormState>();
+    final total = await showDialog<int>(
+      context: context,
+      builder: (context) => AppDialog(
+        title: const Text('사진의 최종 결제 금액'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            initialValue: totalText,
+            onChanged: (value) => totalText = value,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: '총액', suffixText: '원'),
+            validator: (value) =>
+                (int.tryParse((value ?? '').replaceAll(',', '')) ?? -1) < 0
+                ? '0 이상의 정수 금액을 입력해 주세요.'
+                : null,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(
+                  context,
+                  int.parse(totalText.replaceAll(',', '')),
+                );
+              }
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || total == null) return;
+    setState(() {
+      _receiptTotal = total;
+      if (_usingTotal) _items = [_items.single.copyWith(amount: total)];
+      _reviewed = false;
+    });
+  }
+
   Future<void> _chooseReceiptSource() async {
     if (!_supportsOnDeviceOcr) {
-      setState(() => _errorMessage = '영수증 OCR은 Android와 iOS에서 사용할 수 있어요.');
+      setState(() => _errorMessage = '영수증 글자 인식은 Android와 iOS에서 사용할 수 있어요.');
       return;
     }
     final source = await showModalBottomSheet<ImageSource>(
@@ -82,11 +177,7 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
       ),
     );
     if (source == null || !mounted) return;
-    final image = await _imagePicker.pickImage(
-      source: source,
-      maxWidth: 2000,
-      imageQuality: 92,
-    );
+    final image = await _imagePicker.pickImage(source: source);
     if (image == null || !mounted) return;
     await _scanReceipt(image);
   }
@@ -95,6 +186,15 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
     setState(() {
       _isScanning = true;
       _errorMessage = null;
+      _reviewed = false;
+      _items = [];
+      _detailItems = [];
+      _totalItem = null;
+      _itemPeople.clear();
+      _receiptTotal = null;
+      _rawText = '';
+      _reviewNotes = [];
+      _receiptBytes = null;
     });
     try {
       final bytes = await image.readAsBytes();
@@ -105,6 +205,7 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
       if (!mounted) return;
       setState(() {
         _rawText = result.rawText;
+        _reviewNotes = result.reviewNotes;
         _receiptTotal = result.totalAmount;
         _items = result.items;
         _itemPeople
@@ -114,8 +215,8 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
               (item) => MapEntry(item.id, Set<String>.from(_selectedTravelers)),
             ),
           );
-        if (result.items.isEmpty) {
-          _errorMessage = '품목을 찾지 못했어요. 인식 원문을 확인하고 직접 추가해 주세요.';
+        if (result.items.isEmpty && result.totalAmount == null) {
+          _errorMessage = '품목을 읽지 못했어요. 다시 촬영하거나 직접 추가해 주세요.';
         }
       });
     } catch (error, stackTrace) {
@@ -123,8 +224,7 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         setState(
-          () => _errorMessage =
-              '영수증 OCR을 실행했지만 실패했어요. 오류: $error',
+          () => _errorMessage = '영수증을 읽지 못했어요. 선명하게 다시 촬영하거나 품목을 직접 입력해 주세요.',
         );
       }
     } finally {
@@ -134,6 +234,7 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
 
   void _toggleTraveler(_Person person, bool selected) {
     setState(() {
+      _reviewed = false;
       if (selected) {
         _selectedTravelers.add(person.name);
       } else {
@@ -142,6 +243,66 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
           people.remove(person.name);
         }
       }
+    });
+  }
+
+  Future<void> _addTraveler() async {
+    var enteredName = '';
+    final form = GlobalKey<FormState>();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AppDialog(
+        title: const Text('정산 참여자 추가'),
+        content: Form(
+          key: form,
+          child: TextFormField(
+            onSaved: (value) => enteredName = value!.trim(),
+            autofocus: true,
+            maxLength: 30,
+            decoration: const InputDecoration(labelText: '이름'),
+            validator: (value) {
+              final name = value?.trim() ?? '';
+              if (name.isEmpty) return '이름을 입력해 주세요.';
+              if (_people.any((person) => person.name == name)) {
+                return '이미 추가한 이름입니다.';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (form.currentState!.validate()) {
+                form.currentState!.save();
+                Navigator.pop(context, enteredName);
+              }
+            },
+            child: const Text('추가'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || !mounted) return;
+    setState(() {
+      _people.add(_Person(name, AppColors.primaryBlue));
+      _selectedTravelers.add(name);
+      _reviewed = false;
+    });
+  }
+
+  void _removeTraveler(_Person person) {
+    setState(() {
+      _people.remove(person);
+      _selectedTravelers.remove(person.name);
+      for (final names in _itemPeople.values) {
+        names.remove(person.name);
+      }
+      _reviewed = false;
     });
   }
 
@@ -212,6 +373,7 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
     );
     if (result == null || !mounted) return;
     setState(() {
+      _reviewed = false;
       final index = _items.indexWhere((item) => item.id == result.id);
       if (index == -1) {
         _items = [..._items, result];
@@ -219,12 +381,14 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
       } else {
         _items = [..._items]..[index] = result;
       }
+      if (result.isReceiptTotal) _receiptTotal = result.amount;
       _errorMessage = null;
     });
   }
 
   void _deleteItem(ReceiptItemDraft item) {
     setState(() {
+      _reviewed = false;
       _items = _items.where((candidate) => candidate.id != item.id).toList();
       _itemPeople.remove(item.id);
     });
@@ -232,6 +396,7 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
 
   String _won(int amount) => _formatWon(amount);
   String _perPerson(ReceiptItemDraft item) {
+    if (!_canSettle) return '확인 전';
     final count = _itemPeople[item.id]?.length ?? 0;
     return count == 0 ? '나눌 사람 선택' : '1인 ${_won(item.amount ~/ count)}';
   }
@@ -241,7 +406,7 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
     for (final item in _items) {
       final names = _itemPeople[item.id]?.toList() ?? const <String>[];
       if (names.isEmpty) continue;
-      final base = item.amount ~/ names.length;
+      final base = (item.amount / names.length).floor();
       final remainder = item.amount % names.length;
       for (var index = 0; index < names.length; index++) {
         totals[names[index]] =
@@ -249,7 +414,7 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
       }
     }
     return _people
-        .where((person) => (totals[person.name] ?? 0) > 0)
+        .where((person) => (totals[person.name] ?? 0) != 0)
         .map((person) => (person, _won(totals[person.name]!)))
         .toList();
   }
@@ -261,7 +426,7 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
       appBar: AppBar(title: const Text('영수증 정산')),
       bottomNavigationBar: AppStickyActionBar(
         child: FilledButton(
-          onPressed: _items.isEmpty
+          onPressed: !_canSettle
               ? null
               : () => ScaffoldMessenger.of(
                   context,
@@ -300,7 +465,7 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '영수증은 기기에서만 읽고 서버에 저장하지 않아요.',
+                        '이번 여행에서 사용한 비용을 정산할 수 있어요',
                         style: TextStyle(
                           color: AppColors.white.withValues(alpha: .76),
                           height: 1.4,
@@ -309,9 +474,18 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
                       const SizedBox(height: 18),
                       AppMetricStrip(
                         items: [
-                          (label: '총액', value: _won(_receiptTotal ?? _itemSum)),
-                          (label: '참여자', value: '${_people.length}명'),
-                          (label: '품목', value: '${_items.length}개'),
+                          (
+                            label: '총액',
+                            value: _canSettle ? _won(_itemSum) : '확인 전',
+                          ),
+                          (
+                            label: '참여자',
+                            value: '${_selectedTravelers.length}명',
+                          ),
+                          (
+                            label: '정산 항목',
+                            value: _usingTotal ? '전체 결제' : '${_items.length}개',
+                          ),
                         ],
                       ),
                     ],
@@ -321,7 +495,7 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
                 const _SectionHeader(
                   step: '01',
                   title: '영수증 사진',
-                  description: '품목과 금액이 잘 보이는 사진을 올려주세요.',
+                  description: '영수증 전체를 반사광 없이 평평하게 찍고 작은 글자에 초점을 맞춰 주세요.',
                 ),
                 const SizedBox(height: 12),
                 _ReceiptUploadCard(
@@ -329,16 +503,46 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
                   isScanning: _isScanning,
                   onPressed: _isScanning ? null : _chooseReceiptSource,
                 ),
+                if (_receiptBytes != null) ...[
+                  TextButton.icon(
+                    onPressed: () => showDialog<void>(
+                      context: context,
+                      builder: (context) => Dialog.fullscreen(
+                        child: Scaffold(
+                          appBar: AppBar(title: const Text('영수증 원본')),
+                          body: InteractiveViewer(
+                            minScale: .5,
+                            maxScale: 8,
+                            child: Center(child: Image.memory(_receiptBytes!)),
+                          ),
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.zoom_in),
+                    label: const Text('원본 확대해서 확인'),
+                  ),
+                  const _Notice(
+                    message: '사진을 보고 품목과 금액이 맞는지 확인해 주세요.',
+                    isError: false,
+                  ),
+                ],
                 if (_errorMessage != null) ...[
                   const SizedBox(height: 12),
                   _Notice(message: _errorMessage!, isError: true),
                 ],
                 if (_rawText.isNotEmpty) ...[
+                  if (_reviewNotes.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const _Notice(
+                      message: '확인이 필요한 내용이 있어요. 사진을 보고 품목과 금액을 확인해 주세요.',
+                      isError: false,
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   ExpansionTile(
                     tilePadding: EdgeInsets.zero,
                     title: const Text(
-                      'OCR 인식 원문 보기',
+                      '사진에서 읽은 내용 보기',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -369,6 +573,12 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
                   people: _people,
                   selectedNames: _selectedTravelers,
                   onSelected: _toggleTraveler,
+                  onRemove: _removeTraveler,
+                ),
+                TextButton.icon(
+                  onPressed: _isScanning ? null : _addTraveler,
+                  icon: const Icon(Icons.person_add_outlined),
+                  label: const Text('참여자 추가'),
                 ),
                 const SizedBox(height: 30),
                 const _SectionHeader(
@@ -377,6 +587,24 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
                   description: '인식 결과를 확인하고 잘못된 부분을 수정하세요.',
                 ),
                 const SizedBox(height: 12),
+                if (_receiptBytes != null && _receiptTotal != null) ...[
+                  OutlinedButton.icon(
+                    onPressed: _isScanning ? null : _toggleTotalMode,
+                    icon: const Icon(Icons.swap_horiz),
+                    label: Text(_usingTotal ? '품목별로 나누기' : '총액으로 나누기'),
+                  ),
+                  if (_items.isEmpty)
+                    const _Notice(
+                      message: '확인된 총액으로 나누거나 품목을 직접 추가할 수 있어요.',
+                      isError: false,
+                    ),
+                  if (_usingTotal)
+                    const _Notice(
+                      message: '품목별 금액 대신 전체 결제 금액을 나눠요. 업소명과 금액을 확인해 주세요.',
+                      isError: false,
+                    ),
+                  const SizedBox(height: 12),
+                ],
                 if (_items.isEmpty)
                   const _EmptyItemsCard()
                 else
@@ -396,12 +624,16 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
                           .toList(),
                       onAssign: () => _editItemPeople(_items[index]),
                       onEdit: () => _addOrEditItem(_items[index]),
-                      onDelete: () => _deleteItem(_items[index]),
+                      onDelete: _usingTotal
+                          ? _toggleTotalMode
+                          : () => _deleteItem(_items[index]),
                     ),
                   ],
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
-                  onPressed: () => _addOrEditItem(),
+                  onPressed: _isScanning || _usingTotal
+                      ? null
+                      : () => _addOrEditItem(),
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('품목 직접 추가'),
                 ),
@@ -413,6 +645,29 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
                     isError: false,
                   ),
                 ],
+                if (_receiptBytes != null) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: _isScanning ? null : _editTotal,
+                    child: Text(
+                      _receiptTotal == null
+                          ? '총 결제 금액 입력'
+                          : '총 결제 금액 ${_won(_receiptTotal!)} · 수정',
+                    ),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('품목·할인·총액을 원본과 대조했어요'),
+                    value: _reviewed,
+                    onChanged:
+                        _isScanning ||
+                            _items.isEmpty ||
+                            _hasTotalMismatch ||
+                            _receiptTotal == null
+                        ? null
+                        : (value) => setState(() => _reviewed = value ?? false),
+                  ),
+                ],
                 const SizedBox(height: 30),
                 const _SectionHeader(
                   step: '04',
@@ -420,10 +675,13 @@ class _ReceiptSettlementScreenState extends State<ReceiptSettlementScreen> {
                   description: '각자 낼 금액을 마지막으로 확인해요.',
                 ),
                 const SizedBox(height: 12),
-                _SettlementSummary(
-                  total: _receiptTotal ?? _itemSum,
-                  rows: _settlementRows(),
-                ),
+                if (_canSettle)
+                  _SettlementSummary(total: _itemSum, rows: _settlementRows())
+                else
+                  const _Notice(
+                    message: '품목과 총액을 확인하고 나눌 사람을 선택하면 정산 결과가 표시돼요.',
+                    isError: false,
+                  ),
                 const SizedBox(height: 18),
               ],
             ),
@@ -449,10 +707,12 @@ class _ReceiptItemEditorScreenState extends State<_ReceiptItemEditorScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _quantityController;
   late final TextEditingController _amountController;
+  late ReceiptCategory _category;
 
   @override
   void initState() {
     super.initState();
+    _category = widget.existing?.displayCategory ?? ReceiptCategory.unknown;
     _nameController = TextEditingController(text: widget.existing?.name);
     _quantityController = TextEditingController(
       text: widget.existing?.quantity.toString() ?? '1',
@@ -482,6 +742,8 @@ class _ReceiptItemEditorScreenState extends State<_ReceiptItemEditorScreen> {
         quantity: int.parse(_quantityController.text),
         amount: int.parse(_amountController.text.replaceAll(',', '')),
         confidence: widget.existing?.confidence,
+        category: _category,
+        isReceiptTotal: widget.existing?.isReceiptTotal ?? false,
       ),
     );
   }
@@ -517,38 +779,69 @@ class _ReceiptItemEditorScreenState extends State<_ReceiptItemEditorScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
+                  DropdownButtonFormField<ReceiptCategory>(
+                    initialValue: _category,
+                    decoration: const InputDecoration(labelText: '분류'),
+                    items: [
+                      for (final value in ReceiptCategory.values)
+                        DropdownMenuItem(
+                          value: value,
+                          child: Text(value.label),
+                        ),
+                    ],
+                    onChanged: (value) => setState(
+                      () => _category = value ?? ReceiptCategory.unknown,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _nameController,
                     autofocus: true,
-                    decoration: const InputDecoration(labelText: '품목명'),
+                    decoration: InputDecoration(
+                      labelText: (widget.existing?.isReceiptTotal ?? false)
+                          ? '업소명'
+                          : '품목명',
+                    ),
                     textInputAction: TextInputAction.next,
                     validator: (value) => value == null || value.trim().isEmpty
                         ? '품목명을 입력해 주세요.'
                         : null,
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _quantityController,
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: '수량'),
-                    validator: (value) => (int.tryParse(value ?? '') ?? 0) < 1
-                        ? '1 이상의 수량을 입력해 주세요.'
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
+                  if (!(widget.existing?.isReceiptTotal ?? false)) ...[
+                    TextFormField(
+                      controller: _quantityController,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(labelText: '수량'),
+                      validator: (value) => (int.tryParse(value ?? '') ?? 0) < 1
+                          ? '1 이상의 수량을 입력해 주세요.'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   TextFormField(
                     controller: _amountController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      signed: true,
+                    ),
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => _save(),
                     decoration: const InputDecoration(
-                      labelText: '총 금액',
+                      labelText: '품목 총 금액',
+                      helperText: '단가 × 수량의 금액을 입력하세요. 할인·환불은 음수로 입력해요.',
                       suffixText: '원',
                     ),
                     validator: (value) =>
-                        (int.tryParse((value ?? '').replaceAll(',', '')) ?? 0) < 1
-                        ? '금액을 입력해 주세요.'
+                        int.tryParse((value ?? '').replaceAll(',', '')) ==
+                                null ||
+                            ((widget.existing?.isReceiptTotal ?? false) &&
+                                (int.tryParse(
+                                          (value ?? '').replaceAll(',', ''),
+                                        ) ??
+                                        -1) <
+                                    0)
+                        ? '정수 금액을 입력해 주세요.'
                         : null,
                   ),
                 ],
@@ -715,10 +1008,12 @@ class _TravelerCard extends StatelessWidget {
     required this.people,
     required this.selectedNames,
     required this.onSelected,
+    required this.onRemove,
   });
   final List<_Person> people;
   final Set<String> selectedNames;
   final void Function(_Person, bool) onSelected;
+  final ValueChanged<_Person> onRemove;
 
   @override
   Widget build(BuildContext context) => _Panel(
@@ -727,11 +1022,13 @@ class _TravelerCard extends StatelessWidget {
       runSpacing: 8,
       children: [
         for (final person in people)
-          FilterChip(
+          InputChip(
             avatar: _Avatar(person: person, small: true),
             label: Text(person.name),
             selected: selectedNames.contains(person.name),
             onSelected: (selected) => onSelected(person, selected),
+            onDeleted: person.name == '나' ? null : () => onRemove(person),
+            deleteButtonTooltipMessage: '${person.name} 제거',
             materialTapTargetSize: MaterialTapTargetSize.padded,
           ),
       ],
@@ -821,7 +1118,7 @@ class _ItemCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${item.quantity}개',
+                    item.isReceiptTotal ? '전체 결제' : '${item.quantity}개',
                     style: const TextStyle(
                       color: AppColors.gray500,
                       fontSize: 12,
@@ -908,13 +1205,13 @@ class _ItemCard extends StatelessWidget {
 }
 
 String _formatWon(int amount) {
-  final digits = amount.toString();
+  final digits = amount.abs().toString();
   final buffer = StringBuffer();
   for (var index = 0; index < digits.length; index++) {
     if (index > 0 && (digits.length - index) % 3 == 0) buffer.write(',');
     buffer.write(digits[index]);
   }
-  return '${buffer.toString()}원';
+  return '${amount < 0 ? '-' : ''}${buffer.toString()}원';
 }
 
 class _EmptyItemsCard extends StatelessWidget {

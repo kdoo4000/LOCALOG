@@ -18,6 +18,7 @@ import '../../trip_planning/data/travel_plan_repository_provider.dart';
 import '../../trip_planning/domain/travel_plan.dart';
 import '../../trip_planning/presentation/travel_plan_create_screen.dart';
 import '../../trip_planning/presentation/travel_plan_detail_screen.dart';
+import '../../trip_planning/presentation/trip_expenses_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -49,6 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<void>? _plansSubscription;
   TravelPlan? _nextPlan;
   bool _loadingPlan = true;
+  bool _planLoadFailed = false;
   int _planLoadGeneration = 0;
 
   @override
@@ -84,6 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _reloadNextPlan() async {
     final generation = ++_planLoadGeneration;
+    if (mounted) setState(() => _loadingPlan = true);
     try {
       final plans = await _planRepository.getPlans();
       if (!mounted || generation != _planLoadGeneration) return;
@@ -91,11 +94,12 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _nextPlan = nextPlan;
         _loadingPlan = false;
+        _planLoadFailed = false;
       });
     } catch (_) {
       if (!mounted || generation != _planLoadGeneration) return;
       setState(() {
-        _nextPlan = null;
+        _planLoadFailed = true;
         _loadingPlan = false;
       });
     }
@@ -121,7 +125,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (plan == null) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => ReceiptSettlementScreen(travelTitle: plan.title),
+        builder: (_) => plan.ownerId == null
+            ? ReceiptSettlementScreen(travelTitle: plan.title)
+            : TripExpensesScreen(planId: plan.id, title: plan.title),
       ),
     );
   }
@@ -139,6 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _nextPlan = featuredTravelPlan([plan, ?_nextPlan], DateTime.now());
       _loadingPlan = false;
+      _planLoadFailed = false;
     });
   }
 
@@ -160,6 +167,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   user: widget.user,
                   nextPlan: _nextPlan,
                   loadingPlan: _loadingPlan,
+                  planLoadFailed: _planLoadFailed,
+                  onRetryPlan: _reloadNextPlan,
                   onOpenPlan: _openNextPlan,
                   onSettlement: _openSettlement,
                   onCreatePlan: _createPlan,
@@ -246,6 +255,8 @@ class _HomeHeader extends StatelessWidget {
     required this.onLoginTap,
     required this.nextPlan,
     required this.loadingPlan,
+    required this.planLoadFailed,
+    required this.onRetryPlan,
     required this.onOpenPlan,
     required this.onSettlement,
     required this.onCreatePlan,
@@ -257,6 +268,8 @@ class _HomeHeader extends StatelessWidget {
   final VoidCallback? onLoginTap;
   final TravelPlan? nextPlan;
   final bool loadingPlan;
+  final bool planLoadFailed;
+  final VoidCallback onRetryPlan;
   final VoidCallback onOpenPlan;
   final VoidCallback onSettlement;
   final VoidCallback onCreatePlan;
@@ -266,72 +279,81 @@ class _HomeHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Text(
-              'LOCALOG',
-              style: TextStyle(
-                color: AppColors.primaryBlue,
-                fontFamily: 'Pretendard',
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.8,
+        SizedBox(
+          width: double.infinity,
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 16,
+            runSpacing: 12,
+            children: [
+              const Text(
+                'LOCALOG',
+                style: TextStyle(
+                  color: AppColors.primaryBlue,
+                  fontFamily: 'Pretendard',
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
               ),
-            ),
-            const Spacer(),
-            if (isGuest)
-              OutlinedButton(
-                key: const ValueKey('home-login-button'),
-                onPressed: onLoginTap,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 40),
-                  foregroundColor: AppColors.primaryBlue,
-                  side: const BorderSide(color: AppColors.primaryBlue),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
+              if (isGuest)
+                OutlinedButton(
+                  key: const ValueKey('home-login-button'),
+                  onPressed: onLoginTap,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 40),
+                    foregroundColor: AppColors.primaryBlue,
+                    side: const BorderSide(color: AppColors.primaryBlue),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                   ),
-                ),
-                child: const Text(
-                  '로그인',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-              )
-            else
-              Semantics(
-                button: true,
-                label: '프로필 열기',
-                child: InkWell(
-                  key: const ValueKey('home-profile-button'),
-                  customBorder: const CircleBorder(),
-                  onTap: onProfileTap,
-                  child: CircleAvatar(
-                    key: const ValueKey('home-profile-avatar'),
-                    radius: 21,
-                    backgroundColor: AppColors.sky,
-                    foregroundImage: user?.avatarUrl == null
-                        ? null
-                        : NetworkImage(user!.avatarUrl!),
-                    onForegroundImageError: user?.avatarUrl == null
-                        ? null
-                        : (_, _) {},
-                    child: Text(
-                      user?.initial ?? 'L',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w700,
+                  child: const Text(
+                    '로그인',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                )
+              else
+                Semantics(
+                  button: true,
+                  label: '프로필 열기',
+                  child: InkWell(
+                    key: const ValueKey('home-profile-button'),
+                    customBorder: const CircleBorder(),
+                    onTap: onProfileTap,
+                    child: CircleAvatar(
+                      key: const ValueKey('home-profile-avatar'),
+                      radius: 21,
+                      backgroundColor: AppColors.sky,
+                      foregroundImage: user?.avatarUrl == null
+                          ? null
+                          : NetworkImage(user!.avatarUrl!),
+                      onForegroundImageError: user?.avatarUrl == null
+                          ? null
+                          : (_, _) {},
+                      child: Text(
+                        user?.initial ?? 'L',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.w700,
+                            ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.lg),
         AppHeroCard(
           child: _NextTravelContent(
             plan: nextPlan,
             loading: loadingPlan,
+            loadFailed: planLoadFailed,
+            onRetry: onRetryPlan,
             onOpenPlan: onOpenPlan,
             onSettlement: onSettlement,
             onCreatePlan: onCreatePlan,
@@ -346,6 +368,8 @@ class _NextTravelContent extends StatelessWidget {
   const _NextTravelContent({
     required this.plan,
     required this.loading,
+    required this.loadFailed,
+    required this.onRetry,
     required this.onOpenPlan,
     required this.onSettlement,
     required this.onCreatePlan,
@@ -353,6 +377,8 @@ class _NextTravelContent extends StatelessWidget {
 
   final TravelPlan? plan;
   final bool loading;
+  final bool loadFailed;
+  final VoidCallback onRetry;
   final VoidCallback onOpenPlan;
   final VoidCallback onSettlement;
   final VoidCallback onCreatePlan;
@@ -369,12 +395,27 @@ class _NextTravelContent extends StatelessWidget {
     }
 
     final plan = this.plan;
+    if (loadFailed) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '여행 계획을 불러오지 못했어요.',
+            style: TextStyle(color: AppColors.white),
+          ),
+          const SizedBox(height: 16),
+          _HeroActionButton(
+            label: '다시 시도',
+            icon: Icons.refresh,
+            onPressed: onRetry,
+          ),
+        ],
+      );
+    }
     if (plan == null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _TravelBadge(label: 'NEXT JOURNEY'),
-          const SizedBox(height: 16),
           Text(
             '여행을 떠나볼까요?',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -408,8 +449,6 @@ class _NextTravelContent extends StatelessWidget {
         const SizedBox(height: 16),
         Text(
           plan.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
             color: AppColors.white,
             fontWeight: FontWeight.w700,
@@ -515,6 +554,7 @@ class _HeroActionButton extends StatelessWidget {
     return FilledButton.icon(
       onPressed: onPressed,
       style: FilledButton.styleFrom(
+        minimumSize: const Size.fromHeight(56),
         backgroundColor: backgroundColor,
         foregroundColor: foregroundColor,
       ),
@@ -817,59 +857,36 @@ class _PopularPlacesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final places = [
-      ('성수 카페거리', '방문자 추천 88%'),
-      ('경주 황리단길', '방문자 추천 91%'),
-      ('제주 동문시장', '방문자 추천 94%'),
-    ];
+    const places = ['성수 카페거리', '경주 황리단길', '제주 동문시장'];
 
     return Container(
       padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('최근 인기 관광지', style: Theme.of(context).textTheme.titleMedium),
+          Text('지역 둘러보기', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 14),
-          SizedBox(
-            height: 124,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: places.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final place = places[index];
-                return SizedBox(
-                  width: 220,
-                  child: AppCard(
-                    onTap: () => onPlaceTap(place.$1),
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Icon(
-                          Icons.near_me_outlined,
-                          color: index == 0
-                              ? AppColors.primaryBlue
-                              : AppColors.textSecondary,
-                        ),
-                        Text(
-                          place.$1,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        Text(
-                          place.$2,
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(color: AppColors.gray500),
-                        ),
-                      ],
+          for (final place in places) ...[
+            AppCard(
+              onTap: () => onPlaceTap(place),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.near_me_outlined,
+                    color: AppColors.primaryBlue,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      place,
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
-                );
-              },
+                ],
+              ),
             ),
-          ),
+            const SizedBox(height: 12),
+          ],
         ],
       ),
     );

@@ -132,15 +132,26 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(_isEditing ? '여행 계획 수정' : '새 여행 계획')),
       bottomNavigationBar: AppStickyActionBar(
-        child: FilledButton.icon(
-          onPressed: _saving ? null : _save,
-          icon: _saving
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.arrow_forward_rounded),
-          label: Text(_isEditing ? '변경사항 저장' : '여행 계획 만들기'),
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: AppLayout.readingWidth - 48,
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _saving ? null : _save,
+                icon: _saving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.arrow_forward_rounded),
+                label: Text(_isEditing ? '변경사항 저장' : '여행 계획 만들기'),
+              ),
+            ),
+          ),
         ),
       ),
       body: SafeArea(
@@ -179,7 +190,6 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
                   decoration: const InputDecoration(
                     labelText: '여행 이름',
                     hintText: '예: 부산 여름 여행',
-                    border: OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -210,6 +220,8 @@ class _TravelPlanCreateScreenState extends State<TravelPlanCreateScreen> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _selectDates,
                 ),
+                const SizedBox(height: 12),
+                const Text('숙소는 계획을 만든 뒤 날짜별로 선택할 수 있어요.'),
                 const SizedBox(height: 28),
               ],
             ),

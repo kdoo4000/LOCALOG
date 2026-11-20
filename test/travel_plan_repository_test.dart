@@ -201,4 +201,58 @@ void main() {
     expect(log.sourcePlannedRouteId, route.id);
     expect(log.travelDate, day.date);
   });
+
+  test(
+    'a planned log needs one photo overall and retains photo-less stops',
+    () {
+      const route = PlannedRoute(
+        id: 'planned',
+        title: '여행 루트',
+        city: '서울',
+        estimatedDurationMinutes: 90,
+        places: [
+          RoutePlace(id: 'b', name: '사진 있는 장소', category: '장소', orderIndex: 1),
+          RoutePlace(id: 'a', name: '사진 없는 장소', category: '장소', orderIndex: 0),
+          RoutePlace(
+            id: 'c',
+            name: '숙소',
+            category: '호텔',
+            orderIndex: 2,
+            accommodationRole: 'end',
+          ),
+        ],
+      );
+      final day = TravelPlanDay(
+        id: 'day',
+        date: DateTime(2027, 1, 1),
+        dayIndex: 0,
+      );
+      TravelRoute build(Map<String, List<PlannedNodePhoto>> photos) =>
+          buildLogFromPlannedRoute(
+            route: route,
+            day: day,
+            regions: ['서울'],
+            authorName: '나',
+            title: '한 장의 로그',
+            description: '',
+            visibility: RouteVisibility.private,
+            coverPhotoPath: null,
+            photosByPlaceId: photos,
+          );
+      expect(() => build({}), throwsArgumentError);
+      expect(
+        () => build({
+          'unknown': [const PlannedNodePhoto(path: 'orphan.jpg')],
+        }),
+        throwsArgumentError,
+      );
+      final log = build({
+        'b': [const PlannedNodePhoto(path: 'one.jpg')],
+      });
+      expect(log.places.map((p) => p.name), ['사진 없는 장소', '사진 있는 장소', '숙소']);
+      expect(log.places.map((p) => p.photoUrls.length), [0, 1, 0]);
+      expect(log.coverImageUrl, 'one.jpg');
+      expect(log.sourcePlannedRouteId, route.id);
+    },
+  );
 }

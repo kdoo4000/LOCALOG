@@ -3,9 +3,9 @@
     "short_name": "LOCALOG",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "LOCALOG travel route app.",
+    "background_color": "#F7F6F2",
+    "theme_color": "#2457F5",
+    "description": "사진으로 여행 동선을 기록하고 로컬 여행 루트를 찾는 LOCALOG",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

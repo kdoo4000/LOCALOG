@@ -335,7 +335,7 @@ async function handlePlaceSearch(requestUrl: URL): Promise<Response> {
   }
 
   const origin = parseOrigin(requestUrl);
-  const items = await fetchLocalSearch(query, 10);
+  const items = await fetchLocalSearch(query, 10, "random");
   const candidates = rankItems(items, origin, query)
     .slice(0, 8)
     .map((item) => toPlaceCandidate(item, "search"));
@@ -417,12 +417,13 @@ async function fetchReverseGeocode(origin: Point): Promise<JsonRecord> {
 async function fetchLocalSearch(
   query: string,
   display: number,
+  sort: "random" | "comment" = "comment",
 ): Promise<JsonRecord[]> {
   const url = new URL("https://openapi.naver.com/v1/search/local.json");
   url.searchParams.set("query", query);
   url.searchParams.set("display", String(Math.min(Math.max(display, 1), 10)));
   url.searchParams.set("start", "1");
-  url.searchParams.set("sort", "comment");
+  url.searchParams.set("sort", sort);
 
   const response = await fetch(url, {
     headers: {

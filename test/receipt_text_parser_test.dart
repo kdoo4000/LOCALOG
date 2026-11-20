@@ -385,7 +385,7 @@ void main() {
     expect(result.hasTotalMismatch, isFalse);
   });
 
-  test('OCR이 천 단위 구분자와 합계 라벨을 손상해도 복원한다', () {
+  test('품목 숫자는 복원하되 손상된 합계를 추측하지 않는다', () {
     final result = parser.parse(const [
       ReceiptTextLine(text: '상품', top: 10, left: 10, right: 120, bottom: 35),
       ReceiptTextLine(
@@ -465,7 +465,7 @@ void main() {
     ]);
 
     expect(result.items.map((item) => item.amount), [45560, 11010]);
-    expect(result.totalAmount, 56570);
+    expect(result.totalAmount, isNull);
     expect(result.hasTotalMismatch, isFalse);
   });
 }

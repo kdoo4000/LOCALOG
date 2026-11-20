@@ -14,6 +14,13 @@ class PlaceDetailArguments {
   final RoutePlace place;
 }
 
+Future<void> openPlaceDetail(BuildContext context, RoutePlace place) {
+  return Navigator.of(context).pushNamed<void>(
+    RouteNames.placeDetail,
+    arguments: PlaceDetailArguments(place),
+  );
+}
+
 class PlaceDetailScreen extends StatefulWidget {
   const PlaceDetailScreen({super.key, required this.place});
   final RoutePlace place;
@@ -70,10 +77,14 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
               SliverAppBar(
                 pinned: true,
                 expandedHeight: 330,
-                backgroundColor: AppColors.surfaceElevated,
-                foregroundColor: AppColors.ink,
+                backgroundColor: AppColors.primaryBlueDark,
+                foregroundColor: AppColors.white,
                 surfaceTintColor: Colors.transparent,
-                title: Text(place.name),
+                iconTheme: const IconThemeData(color: AppColors.white),
+                title: Text(
+                  place.name,
+                  style: const TextStyle(color: AppColors.white),
+                ),
                 flexibleSpace: FlexibleSpaceBar(
                   background: _PlaceHero(
                     place: place,
@@ -161,7 +172,11 @@ class _PlaceHero extends StatelessWidget {
         children: [
           if (url != null && url.isNotEmpty)
             Image.network(
-              url,
+              url.replaceFirst(
+                'http://tong.visitkorea.or.kr/',
+                'https://tong.visitkorea.or.kr/',
+              ),
+              webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) => const _PlaceHeroFallback(),
             )
@@ -172,7 +187,7 @@ class _PlaceHero extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0x12000000), Color(0xD9000000)],
+                colors: [Color(0x99000000), Color(0xD9000000)],
                 stops: [0.35, 1],
               ),
             ),

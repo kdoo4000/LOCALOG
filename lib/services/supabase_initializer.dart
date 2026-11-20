@@ -12,6 +12,14 @@ bool get isSupabaseConfigured =>
 bool get hasSupabaseSession =>
     isSupabaseConfigured && supabaseClient.auth.currentSession != null;
 
+const mobileAuthRedirectUrl = 'com.localog.app://login-callback/';
+
+bool needsKakaoSignup(User? user) =>
+    user != null &&
+    user.appMetadata['provider'] == 'kakao' &&
+    (user.userMetadata?['terms_agreed_at'] == null ||
+        user.userMetadata?['handle'] == null);
+
 Map<String, String> get supabaseEdgeFunctionHeaders {
   final session = isSupabaseConfigured
       ? supabaseClient.auth.currentSession
@@ -34,6 +42,9 @@ Future<void> initializeSupabase() async {
   await Supabase.initialize(
     url: _supabaseUrl,
     publishableKey: supabasePublishableKey,
+    authOptions: const FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.pkce,
+    ),
   );
 }
 

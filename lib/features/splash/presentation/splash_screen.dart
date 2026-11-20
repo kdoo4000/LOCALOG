@@ -7,6 +7,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../services/supabase_initializer.dart';
+import '../../../services/settlement_links.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -24,7 +25,13 @@ class _SplashScreenState extends State<SplashScreen> {
         return;
       }
       Navigator.of(context).pushReplacementNamed(
-        hasSupabaseSession ? RouteNames.main : RouteNames.onboarding,
+        hasSupabaseSession
+            ? needsKakaoSignup(supabaseClient.auth.currentUser)
+                  ? RouteNames.login
+                  : RouteNames.main
+            : SettlementLinks.instance.pendingPlanId != null
+            ? RouteNames.login
+            : RouteNames.onboarding,
       );
     });
   }

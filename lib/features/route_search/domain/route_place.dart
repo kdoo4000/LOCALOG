@@ -17,6 +17,7 @@ class RoutePlace {
     this.photoUrls = const [],
     this.photoStoragePaths = const [],
     this.purchasedItems = const [],
+    this.accommodationRole,
   });
 
   final String id;
@@ -38,6 +39,9 @@ class RoutePlace {
   final List<String> photoUrls;
   final List<String> photoStoragePaths;
   final List<String> purchasedItems;
+  final String? accommodationRole;
+
+  bool get isAccommodation => accommodationRole != null;
 
   String get displayCategory {
     final parts = category.split('>');
@@ -68,6 +72,7 @@ class RoutePlace {
     List<String>? photoUrls,
     List<String>? photoStoragePaths,
     List<String>? purchasedItems,
+    String? accommodationRole,
   }) {
     return RoutePlace(
       id: id ?? this.id,
@@ -99,6 +104,7 @@ class RoutePlace {
       photoUrls: photoUrls ?? this.photoUrls,
       photoStoragePaths: photoStoragePaths ?? this.photoStoragePaths,
       purchasedItems: purchasedItems ?? this.purchasedItems,
+      accommodationRole: accommodationRole ?? this.accommodationRole,
     );
   }
 }
