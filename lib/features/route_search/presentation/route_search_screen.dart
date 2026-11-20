@@ -471,6 +471,38 @@ class _DetailedRouteSearchScreenState extends State<DetailedRouteSearchScreen> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final filters =
+        <({String id, String label, IconData icon, VoidCallback remove})>[
+          for (final region in _selectedRegions)
+            (
+              id: 'region-$region',
+              label: compactRegionLabel(region),
+              icon: Icons.location_on_outlined,
+              remove: () => setState(() => _selectedRegions.remove(region)),
+            ),
+          for (final entry in _selectedPlaces.entries)
+            (
+              id: 'place-${entry.key}',
+              label: entry.value.name,
+              icon: Icons.place_outlined,
+              remove: () => setState(() => _selectedPlaces.remove(entry.key)),
+            ),
+          for (final entry in _selectedTags.entries)
+            (
+              id: 'tag-${entry.key}',
+              label: '#${entry.value}',
+              icon: Icons.sell_outlined,
+              remove: () => setState(() => _selectedTags.remove(entry.key)),
+            ),
+          if (_stopFilter != _StopFilter.any)
+            (
+              id: 'stops',
+              label: _stopFilterLabel(_stopFilter),
+              icon: Icons.route_outlined,
+              remove: () => setState(() => _stopFilter = _StopFilter.any),
+            ),
+        ];
 
     return Scaffold(
       appBar: AppBar(
@@ -517,42 +549,114 @@ class _DetailedRouteSearchScreenState extends State<DetailedRouteSearchScreen> {
                       ),
                       onChanged: (value) => setState(() => _keyword = value),
                     ),
+                    Builder(
+                      builder: (context) {
+                        final summary = filters.isEmpty
+                            ? const SizedBox(width: double.infinity)
+                            : Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '선택한 조건 ${filters.length}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelMedium
+                                          ?.copyWith(
+                                            color: AppColors.textSecondary,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        for (final filter in filters)
+                                          TweenAnimationBuilder<double>(
+                                            key: ValueKey(filter.id),
+                                            tween: Tween(begin: 0, end: 1),
+                                            duration: reduceMotion
+                                                ? Duration.zero
+                                                : AppMotion.standard,
+                                            curve: AppMotion.curve,
+                                            builder: (context, value, child) =>
+                                                Opacity(
+                                                  opacity: value,
+                                                  child: Transform.translate(
+                                                    offset: Offset(
+                                                      0,
+                                                      4 * (1 - value),
+                                                    ),
+                                                    child: child,
+                                                  ),
+                                                ),
+                                            child: InputChip(
+                                              avatar: Icon(
+                                                filter.icon,
+                                                size: 18,
+                                                color: AppColors.primaryBlue,
+                                              ),
+                                              label: Text(
+                                                filter.label,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              backgroundColor:
+                                                  AppColors.primaryBlueSoft,
+                                              selectedColor:
+                                                  AppColors.primaryBlueSoft,
+                                              selected: true,
+                                              showCheckmark: false,
+                                              onSelected: (_) =>
+                                                  filter.remove(),
+                                              side: BorderSide.none,
+                                              deleteIconColor:
+                                                  AppColors.primaryBlueDark,
+                                              deleteButtonTooltipMessage:
+                                                  '${filter.label} 조건 삭제',
+                                              onDeleted: filter.remove,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                        return reduceMotion
+                            ? summary
+                            : AnimatedSize(
+                                duration: AppMotion.quick,
+                                curve: AppMotion.curve,
+                                alignment: Alignment.topLeft,
+                                child: summary,
+                              );
+                      },
+                    ),
                     const SizedBox(height: 24),
                     _SearchSelectionField(
                       title: '지역',
                       actionKey: 'select-search-regions',
-                      selections: {
-                        for (final region in _selectedRegions)
-                          region: compactRegionLabel(region),
-                      },
+                      selectionCount: _selectedRegions.length,
                       onTap: _selectRegions,
-                      onDeleted: (key) =>
-                          setState(() => _selectedRegions.remove(key)),
                     ),
                     const SizedBox(height: 24),
                     _SearchSelectionField(
                       title: '포함할 여행지',
                       actionKey: 'select-search-places',
-                      selections: {
-                        for (final entry in _selectedPlaces.entries)
-                          entry.key: entry.value.name,
-                      },
+                      selectionCount: _selectedPlaces.length,
                       onTap: snapshot.hasData
                           ? () => _selectPlaces(placeOptions)
                           : null,
-                      onDeleted: (key) =>
-                          setState(() => _selectedPlaces.remove(key)),
                     ),
                     const SizedBox(height: 24),
                     _SearchSelectionField(
                       title: '태그',
                       actionKey: 'select-search-tags',
-                      selections: _selectedTags,
+                      selectionCount: _selectedTags.length,
                       onTap: snapshot.hasData
                           ? () => _selectTags(tagOptions)
                           : null,
-                      onDeleted: (key) =>
-                          setState(() => _selectedTags.remove(key)),
                     ),
                     const SizedBox(height: 12),
                     const Text(
@@ -652,16 +756,14 @@ class _SearchSelectionField extends StatelessWidget {
   const _SearchSelectionField({
     required this.title,
     required this.actionKey,
-    required this.selections,
+    required this.selectionCount,
     required this.onTap,
-    required this.onDeleted,
   });
 
   final String title;
   final String actionKey;
-  final Map<String, String> selections;
+  final int selectionCount;
   final VoidCallback? onTap;
-  final ValueChanged<String> onDeleted;
 
   @override
   Widget build(BuildContext context) => _FilterSection(
@@ -675,26 +777,16 @@ class _SearchSelectionField extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: Text(selections.isEmpty ? '$title 선택' : '$title 변경'),
+                child: Text(
+                  selectionCount == 0
+                      ? '$title 선택'
+                      : '$title 변경 · $selectionCount개 선택',
+                ),
               ),
               const Icon(Icons.chevron_right_rounded),
             ],
           ),
         ),
-        if (selections.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final entry in selections.entries)
-                InputChip(
-                  label: Text(entry.value),
-                  onDeleted: () => onDeleted(entry.key),
-                ),
-            ],
-          ),
-        ],
       ],
     ),
   );

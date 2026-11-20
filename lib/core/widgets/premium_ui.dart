@@ -283,9 +283,38 @@ class AppStepIndicator extends StatelessWidget {
 }
 
 class AppMetricStrip extends StatelessWidget {
-  const AppMetricStrip({super.key, required this.items});
+  const AppMetricStrip({
+    super.key,
+    required this.items,
+    this.onSelected,
+    this.selectedIndex,
+  });
 
   final List<({String label, String value})> items;
+  final ValueChanged<int>? onSelected;
+  final int? selectedIndex;
+
+  Widget _interactive(int index, Widget child) {
+    if (onSelected == null) return child;
+    return Semantics(
+      button: true,
+      selected: selectedIndex == index,
+      child: Material(
+        color: selectedIndex == index
+            ? AppColors.primaryBlueSoft
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => onSelected!(index),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(padding: const EdgeInsets.all(6), child: child),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -305,17 +334,27 @@ class AppMetricStrip extends StatelessWidget {
               children: [
                 for (var index = 0; index < items.length; index++) ...[
                   if (index > 0) const SizedBox(height: 16),
-                  Text(
-                    items[index].label,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    items[index].value,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                  _interactive(
+                    index,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          items[index].label,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          items[index].value,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -326,22 +365,28 @@ class AppMetricStrip extends StatelessWidget {
             children: [
               for (var index = 0; index < items.length; index++) ...[
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        items[index].label,
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(color: AppColors.textSecondary),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        items[index].value,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontFeatures: const [FontFeature.tabularFigures()],
+                  child: _interactive(
+                    index,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          items[index].label,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(color: AppColors.textSecondary),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 5),
+                        Text(
+                          items[index].value,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 if (index != items.length - 1)

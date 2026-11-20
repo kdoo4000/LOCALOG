@@ -7,10 +7,10 @@ import '../../../services/supabase_initializer.dart';
 const _base32Alphabet = 'abcdefghijklmnopqrstuvwxyz234567';
 
 String normalizeHandle(String value) =>
-    value.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
+    value.trim().replaceFirst(RegExp(r'^@'), '');
 
 bool isValidHandle(String value) =>
-    RegExp(r'^[a-z0-9][a-z0-9._]{1,28}[a-z0-9]$').hasMatch(value) &&
+    RegExp(r'^[A-Za-z0-9][A-Za-z0-9._]{1,28}[A-Za-z0-9]$').hasMatch(value) &&
     !value.contains('..');
 
 String temporaryHandleForUuid(String uuid) {

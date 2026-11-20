@@ -8,6 +8,25 @@ import 'package:localog/features/trip_planning/presentation/travel_plan_create_s
 import 'package:localog/features/trip_planning/presentation/travel_plan_screen.dart';
 
 void main() {
+  testWidgets('friends entry sits beside new trip and opens friends', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: TravelPlanScreen()));
+    await tester.pumpAndSettle();
+    expect(find.text('친구'), findsNothing);
+    expect(
+      tester.getCenter(find.byTooltip('친구')).dx,
+      lessThan(tester.getCenter(find.byTooltip('새 여행')).dx),
+    );
+    expect(
+      tester.getCenter(find.byTooltip('친구')).dy,
+      tester.getCenter(find.byTooltip('새 여행')).dy,
+    );
+    await tester.tap(find.byTooltip('친구'));
+    await tester.pumpAndSettle();
+    expect(find.text('로그인 후 친구를 관리할 수 있어요.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('new plan details render from the returned plan immediately', (
     tester,
   ) async {

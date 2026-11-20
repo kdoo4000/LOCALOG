@@ -6,6 +6,7 @@ import '../../../core/l10n/app_language.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_dialog.dart';
 import '../../../core/widgets/region_chip_wrap.dart';
 import '../../../services/naver_static_map_service.dart';
 import '../../../services/supabase_initializer.dart';
@@ -43,6 +44,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   final _scrollController = ScrollController();
   late Future<_RouteDetailData?> _detailFuture;
   bool _isVoting = false;
+  bool _deleting = false;
   bool _isImporting = false;
   bool? _following;
   bool _changingFollow = false;
@@ -106,6 +108,58 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     } finally {
       if (mounted) setState(() => _changingFollow = false);
     }
+  }
+
+  Future<void> _deleteRoute(TravelRoute route) async {
+    if (_deleting || !route.isCreatedByCurrentUser) return;
+    final strings = context.strings;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final dialogStrings = context.strings;
+
+        return AppDialog(
+          title: Text(dialogStrings.deleteRouteTitle),
+          content: Text(dialogStrings.deleteRouteMessage(route.title)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(dialogStrings.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(dialogStrings.delete),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _deleting = true);
+    try {
+      await _repository.deleteDownloadedRoute(route.id);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _deleting = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('로그를 삭제하지 못했습니다: $error')));
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(strings.routeDeleted)));
+    Navigator.of(context).pop(true);
   }
 
   Future<void> _openDownloadEdit(TravelRoute route) async {
@@ -311,35 +365,66 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                           const SizedBox(height: 12),
                         ],
                         const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: _isImporting
-                                ? null
-                                : () =>
-                                      route.isCreatedByCurrentUser &&
+                        if (route.isCreatedByCurrentUser &&
+                            widget.targetPlanDayId == null)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: _deleting
+                                      ? null
+                                      : () => _openDownloadEdit(route),
+                                  icon: const Icon(Icons.edit_note_outlined),
+                                  label: Text(strings.editMyRoute),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _deleting
+                                      ? null
+                                      : () => _deleteRoute(route),
+                                  icon: const Icon(Icons.delete_outline),
+                                  label: Text(strings.delete),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.error,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _isImporting
+                                  ? null
+                                  : () =>
+                                        route.isCreatedByCurrentUser &&
+                                            widget.targetPlanDayId == null
+                                        ? _openDownloadEdit(route)
+                                        : _openPlanImport(route),
+                              icon: Icon(
+                                _isImporting
+                                    ? Icons.hourglass_top
+                                    : route.isCreatedByCurrentUser &&
                                           widget.targetPlanDayId == null
-                                      ? _openDownloadEdit(route)
-                                      : _openPlanImport(route),
-                            icon: Icon(
-                              _isImporting
-                                  ? Icons.hourglass_top
-                                  : route.isCreatedByCurrentUser &&
-                                        widget.targetPlanDayId == null
-                                  ? Icons.edit_note_outlined
-                                  : Icons.route_outlined,
-                            ),
-                            label: Text(
-                              _isImporting
-                                  ? '루트를 가져오는 중...'
-                                  : widget.targetPlanDayId != null
-                                  ? '이 루트 가져오기'
-                                  : route.isCreatedByCurrentUser
-                                  ? strings.editMyRoute
-                                  : strings.downloadAndCustomize,
+                                    ? Icons.edit_note_outlined
+                                    : Icons.route_outlined,
+                              ),
+                              label: Text(
+                                _isImporting
+                                    ? '루트를 가져오는 중...'
+                                    : widget.targetPlanDayId != null
+                                    ? '이 루트 가져오기'
+                                    : route.isCreatedByCurrentUser
+                                    ? strings.editMyRoute
+                                    : strings.downloadAndCustomize,
+                              ),
                             ),
                           ),
-                        ),
                         const SizedBox(height: 24),
                         _RouteMapPanel(places: sortedPlaces),
                         if (route.isPublic &&

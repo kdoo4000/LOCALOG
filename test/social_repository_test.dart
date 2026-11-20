@@ -9,12 +9,18 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 const userId = '11111111-1111-4111-8111-111111111111';
 
-Future<SupabaseClient> signedInClient(MockClient httpClient) async {
+Future<SupabaseClient> signedInClient(
+  MockClient httpClient, {
+  GotrueAsyncStorage? pkceAsyncStorage,
+}) async {
   final client = SupabaseClient(
     'https://example.test',
     'test-public-key',
     httpClient: httpClient,
-    authOptions: const AuthClientOptions(autoRefreshToken: false),
+    authOptions: AuthClientOptions(
+      autoRefreshToken: false,
+      pkceAsyncStorage: pkceAsyncStorage,
+    ),
   );
   String encode(Object value) =>
       base64Url.encode(utf8.encode(jsonEncode(value))).replaceAll('=', '');
@@ -78,7 +84,7 @@ void main() {
       final repo = SocialRepository(client: client);
       final bytes = Uint8List.fromList([137, 80, 78, 71, 13, 10, 26, 10]);
       await repo.updateMyProfile(
-        handle: 'hana.travel',
+        handle: '  @Hana.Travel  ',
         displayName: '하나',
         avatarBytes: bytes,
       );
@@ -86,6 +92,7 @@ void main() {
         (r) => r.url.path.contains('/profile-avatars/$userId/'),
       );
       final payload = jsonDecode(requests.last.body) as Map;
+      expect(payload['handle'], 'Hana.Travel');
       expect(payload['avatar_path'], startsWith('$userId/'));
       expect(upload.method, 'POST');
       requests.clear();

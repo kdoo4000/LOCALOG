@@ -40,7 +40,7 @@ class RouteCard extends StatelessWidget {
                       width: double.infinity,
                       alignment: Alignment.center,
                       color: AppColors.accentLime,
-                      child: _RouteCoverImage(
+                      child: RouteCoverImage(
                         path: route.coverImageUrl,
                         fallbackInitial: cityInitial,
                       ),
@@ -102,8 +102,12 @@ class RouteCard extends StatelessWidget {
   }
 }
 
-class _RouteCoverImage extends StatelessWidget {
-  const _RouteCoverImage({required this.path, required this.fallbackInitial});
+class RouteCoverImage extends StatelessWidget {
+  const RouteCoverImage({
+    super.key,
+    required this.path,
+    required this.fallbackInitial,
+  });
 
   final String? path;
   final String fallbackInitial;

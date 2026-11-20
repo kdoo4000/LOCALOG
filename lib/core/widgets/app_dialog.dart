@@ -66,13 +66,29 @@ class AppDialog extends StatelessWidget {
         actions: actions.isEmpty
             ? null
             : [
-                Row(
-                  children: [
-                    for (var i = 0; i < actions.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 12),
-                      Expanded(child: actions[i]),
-                    ],
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth / actions.length <
+                        120 * MediaQuery.textScalerOf(context).scale(1)) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var i = 0; i < actions.length; i++) ...[
+                            if (i > 0) const SizedBox(height: 12),
+                            actions[i],
+                          ],
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        for (var i = 0; i < actions.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 12),
+                          Expanded(child: actions[i]),
+                        ],
+                      ],
+                    );
+                  },
                 ),
               ],
       ),

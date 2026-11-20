@@ -101,7 +101,7 @@ void main() {
       var calls = 0;
       await openEditor(tester, (handle, name, _, _) {
         calls++;
-        expect(handle, 'new.id');
+        expect(handle, 'New.ID');
         expect(name, '하나');
         return pending.future;
       });

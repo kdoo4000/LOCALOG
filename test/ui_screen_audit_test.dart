@@ -32,7 +32,6 @@ import 'package:localog/features/trip_planning/presentation/planned_route_log_cr
 import 'package:localog/features/trip_planning/presentation/travel_plan_create_screen.dart';
 import 'package:localog/features/trip_planning/presentation/travel_plan_detail_screen.dart';
 import 'package:localog/features/trip_planning/presentation/travel_plan_screen.dart';
-import 'package:localog/features/trip_planning/presentation/trip_code_screen.dart';
 import 'package:localog/features/trip_planning/presentation/place_search_map_screen.dart';
 
 const previewPerson = SocialPerson(
@@ -122,7 +121,6 @@ void main() {
           regions: plan.regions,
         ),
         'trip-import': PlanRouteImportScreen(logId: route.id),
-        'invite-input': const JoinTripCodeScreen(),
         'settlement': const ReceiptSettlementScreen(travelTitle: '부산 여행'),
         'search': const RouteSearchScreen(),
         'detailed-search': const DetailedRouteSearchScreen(),
@@ -220,8 +218,8 @@ void main() {
           }
         }
         if (entry.key == 'login') {
-          await tester.ensureVisible(find.text('처음이신가요? 회원가입'));
-          await tester.tap(find.text('처음이신가요? 회원가입'));
+          await tester.ensureVisible(find.text('이메일로 회원가입'));
+          await tester.tap(find.text('이메일로 회원가입'));
           await tester.pumpAndSettle();
           await tester.drag(
             find.byType(Scrollable).first,

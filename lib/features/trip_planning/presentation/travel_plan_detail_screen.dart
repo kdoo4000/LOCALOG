@@ -8,7 +8,7 @@ import '../../../models/place_candidate.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
-import '../../profile/presentation/social_person_tile.dart';
+import 'trip_members_summary.dart';
 import '../../../core/widgets/premium_ui.dart';
 import '../../../core/widgets/region_chip_wrap.dart';
 import '../../../services/naver_static_map_service.dart';
@@ -438,16 +438,10 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
                     )
                   else if (!snapshot.hasData)
                     const LinearProgressIndicator(semanticsLabel: '동행자 불러오는 중')
-                  else if (snapshot.data!.isEmpty)
-                    const Text('아직 동행자가 없어요.'),
-                  for (final person in snapshot.data ?? const <TripPerson>[])
-                    SocialPersonTile(
-                      name: person.name,
-                      handle: person.handle,
-                      avatarPath: person.avatarPath,
-                      trailing: person.id == plan.ownerId
-                          ? const Text('방장')
-                          : null,
+                  else
+                    TripMembersSummary(
+                      members: snapshot.data!,
+                      ownerId: plan.ownerId,
                     ),
                 ],
               ),
@@ -512,6 +506,18 @@ class _TravelPlanDetailScreenState extends State<TravelPlanDetailScreen> {
                           : () => _selectAccommodation(plan, day),
                       icon: const Icon(Icons.hotel_outlined),
                       label: const Text('숙소 선택'),
+                    ),
+                  if (day.dayIndex > 0 &&
+                      plan.days[day.dayIndex - 1].accommodation != null)
+                    TextButton.icon(
+                      onPressed: _savingAccommodation
+                          ? null
+                          : () => _setAccommodation(
+                              day,
+                              plan.days[day.dayIndex - 1].accommodation,
+                            ),
+                      icon: const Icon(Icons.history),
+                      label: const Text('전날 숙소 다시 선택'),
                     ),
                   if (_savingAccommodation)
                     const LinearProgressIndicator(semanticsLabel: '숙소 저장 중'),

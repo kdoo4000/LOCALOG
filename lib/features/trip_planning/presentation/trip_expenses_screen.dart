@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import '../../../services/kakao_invite_service.dart';
 
 import '../../../core/widgets/app_dialog.dart';
 import 'package:image_picker/image_picker.dart';
@@ -31,6 +33,7 @@ class _TripExpensesScreenState extends State<TripExpensesScreen> {
   List<TripPerson> _people = [];
   List<TripExpense> _expenses = [];
   bool _loading = true;
+  bool _sharing = false;
   String? _error;
 
   @override
@@ -75,6 +78,48 @@ class _TripExpensesScreenState extends State<TripExpensesScreen> {
     if (person == null) return '알 수 없는 사용자';
     final duplicate = _people.where((p) => p.name == person.name).length > 1;
     return duplicate ? '${person.name} (@${person.handle})' : person.name;
+  }
+
+  Future<void> _requestPayment(TripTransfer transfer) async {
+    if (_sharing) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AppDialog(
+        title: const Text('정산 요청'),
+        content: Text(
+          '${_name(transfer.fromId)}님이 ${_name(transfer.toId)}님에게\n${_won(transfer.amount)}\n\n카카오톡에서 받을 친구나 채팅방을 선택해 주세요.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('카톡으로 요청'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _sharing = true);
+    try {
+      await shareKakaoSettlement(
+        planId: widget.planId,
+        title: widget.title,
+        debtor: _name(transfer.fromId),
+        creditor: _name(transfer.toId),
+        amount: transfer.amount,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('카카오톡 요청 화면을 열지 못했어요. 다시 시도해 주세요.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
   }
 
   Future<void> _viewReceipt(String path) async {
@@ -129,6 +174,9 @@ class _TripExpensesScreenState extends State<TripExpensesScreen> {
   @override
   Widget build(BuildContext context) {
     final transfers = settleTrip(_expenses);
+    final stackAmounts =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(17) > 24;
     final mine = _repo.userId;
     final outgoing = transfers.where((t) => t.fromId == mine).toList();
     final incoming = transfers.where((t) => t.toId == mine).toList();
@@ -161,6 +209,15 @@ class _TripExpensesScreenState extends State<TripExpensesScreen> {
                       items: [(label: '전체 지출', value: _won(total))],
                     ),
                     const SizedBox(height: 24),
+                    if (_expenses.any(
+                      (expense) => !expense.hasCompleteShares,
+                    )) ...[
+                      const Text(
+                        '탈퇴 등으로 참여자 정보가 없어진 지출은 송금 계산에서 제외됩니다. 해당 지출을 등록한 멤버가 삭제 후 다시 등록해 주세요. 영수증과 원래 지출 금액은 유지됩니다.',
+                        style: TextStyle(color: AppColors.warning),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     Text(
                       '내가 보낼 돈',
                       style: Theme.of(context).textTheme.titleMedium,
@@ -179,10 +236,18 @@ class _TripExpensesScreenState extends State<TripExpensesScreen> {
                         contentPadding: EdgeInsets.zero,
                         leading: SocialAvatar(name: _name(transfer.toId)),
                         title: Text('${_name(transfer.toId)}님에게'),
-                        trailing: Text(
-                          _won(transfer.amount),
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
+                        subtitle: stackAmounts
+                            ? Text(
+                                _won(transfer.amount),
+                                style: Theme.of(context).textTheme.titleMedium,
+                              )
+                            : null,
+                        trailing: stackAmounts
+                            ? null
+                            : Text(
+                                _won(transfer.amount),
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
                       ),
                     const SizedBox(height: 24),
                     Text(
@@ -199,14 +264,44 @@ class _TripExpensesScreenState extends State<TripExpensesScreen> {
                         ),
                       ),
                     for (final transfer in incoming)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: SocialAvatar(name: _name(transfer.fromId)),
-                        title: Text('${_name(transfer.fromId)}님에게서'),
-                        trailing: Text(
-                          _won(transfer.amount),
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
+                      Column(
+                        children: [
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: SocialAvatar(name: _name(transfer.fromId)),
+                            title: Text('${_name(transfer.fromId)}님에게서'),
+                            subtitle: stackAmounts
+                                ? Text(
+                                    _won(transfer.amount),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  )
+                                : null,
+                            trailing: stackAmounts
+                                ? null
+                                : Text(
+                                    _won(transfer.amount),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: _sharing
+                                  ? null
+                                  : () => _requestPayment(transfer),
+                              icon: SvgPicture.asset(
+                                'assets/kakao_symbol.svg',
+                                width: 18,
+                                height: 18,
+                              ),
+                              label: const Text('카톡으로 요청'),
+                            ),
+                          ),
+                        ],
                       ),
                     if (transfers.any(
                       (t) => t.fromId != mine && t.toId != mine,
@@ -221,7 +316,12 @@ class _TripExpensesScreenState extends State<TripExpensesScreen> {
                               title: Text(
                                 '${_name(transfer.fromId)} → ${_name(transfer.toId)}',
                               ),
-                              trailing: Text(_won(transfer.amount)),
+                              subtitle: stackAmounts
+                                  ? Text(_won(transfer.amount))
+                                  : null,
+                              trailing: stackAmounts
+                                  ? null
+                                  : Text(_won(transfer.amount)),
                             ),
                         ],
                       ),
@@ -392,6 +492,8 @@ class _ExpenseEditorState extends State<_ExpenseEditor> {
   }
 
   Future<void> _save() async {
+    if (_busy) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     final amount = int.tryParse(_amount.text.replaceAll(',', ''));
     if (_photo != null && !_reviewedPhoto) {
       setState(() => _error = '영수증의 금액을 확인해 주세요.');
@@ -451,10 +553,13 @@ class _ExpenseEditorState extends State<_ExpenseEditor> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('지출 등록')),
-    bottomNavigationBar: AppStickyActionBar(
-      child: FilledButton(
-        onPressed: _busy ? null : _save,
-        child: Text(_savedExpenseId == null ? '등록' : '사진 다시 올리기'),
+    bottomNavigationBar: Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: AppStickyActionBar(
+        child: FilledButton(
+          onPressed: _busy ? null : _save,
+          child: Text(_savedExpenseId == null ? '등록' : '사진 다시 올리기'),
+        ),
       ),
     ),
     body: AppPageBody(
@@ -484,13 +589,16 @@ class _ExpenseEditorState extends State<_ExpenseEditor> {
           const SizedBox(height: 16),
           TextField(
             controller: _title,
-            enabled: _savedExpenseId == null,
+            enabled: !_busy && _savedExpenseId == null,
+            textInputAction: TextInputAction.next,
             decoration: const InputDecoration(labelText: '항목명'),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: _amount,
-            enabled: _savedExpenseId == null,
+            enabled: !_busy && _savedExpenseId == null,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _save(),
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
               labelText: '결제 금액',

@@ -1,15 +1,22 @@
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localog/core/l10n/app_language.dart';
 import 'package:localog/core/theme/app_theme.dart';
 import 'package:localog/features/route_search/presentation/route_search_screen.dart';
 
-import 'ui_screen_audit_test.dart' show loadUiFonts;
+import 'ui_screen_audit_test.dart' show loadUiFonts, saveUiPreview;
 
 void main() {
   setUpAll(loadUiFonts);
+  final boundary = GlobalKey();
 
-  Future<void> openSearch(WidgetTester tester) async {
+  Future<void> openSearch(
+    WidgetTester tester, {
+    double textScale = 1,
+    bool reduceMotion = false,
+  }) async {
     final language = AppLanguageController();
     addTearDown(language.dispose);
     await tester.pumpWidget(
@@ -17,7 +24,17 @@ void main() {
         controller: language,
         child: MaterialApp(
           theme: AppTheme.light,
-          home: const DetailedRouteSearchScreen(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(textScale),
+              disableAnimations: reduceMotion,
+            ),
+            child: child!,
+          ),
+          home: RepaintBoundary(
+            key: boundary,
+            child: const DetailedRouteSearchScreen(),
+          ),
         ),
       ),
     );
@@ -184,9 +201,87 @@ void main() {
     final chip = find.widgetWithText(InputChip, '광안리해수욕장');
     await tester.ensureVisible(chip);
     await tester.tap(
-      find.descendant(of: chip, matching: find.byTooltip('Delete')),
+      find.descendant(of: chip, matching: find.byTooltip('광안리해수욕장 조건 삭제')),
     );
     await tester.pumpAndSettle();
     expect(find.text('조건에 맞는 로그 1개 보기'), findsOneWidget);
+  });
+
+  testWidgets('filter summary removes only the selected condition', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await openSearch(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('log-title-filter')),
+      '성수',
+    );
+    await openPicker(tester, 'select-search-tags');
+    await select(tester, '카페');
+    await select(tester, '바다');
+    await apply(tester);
+
+    final chips = find.byType(InputChip);
+    expect(chips, findsNWidgets(2));
+    expect(
+      tester.getSemantics(chips.first).flagsCollection.isEnabled,
+      Tristate.isTrue,
+    );
+    expect(find.text('선택한 조건 2'), findsOneWidget);
+    expect(find.text('조건에 맞는 로그 0개 보기'), findsOneWidget);
+    await tester.ensureVisible(find.text('#바다'));
+    if (const bool.fromEnvironment('WRITE_UI_PREVIEWS')) {
+      await saveUiPreview(tester, boundary, 'search-filter-summary');
+    }
+    await tester.tap(find.byTooltip('#바다 조건 삭제'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('#바다'), findsNothing);
+    expect(find.text('#카페'), findsOneWidget);
+    expect(find.text('선택한 조건 1'), findsOneWidget);
+    expect(find.text('조건에 맞는 로그 1개 보기'), findsOneWidget);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 1600));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(const ValueKey('log-title-filter')))
+          .controller!
+          .text,
+      '성수',
+    );
+    expect(
+      tester.getTopLeft(chips).dy,
+      lessThan(
+        tester
+            .getTopLeft(find.byKey(const ValueKey('select-search-regions')))
+            .dy,
+      ),
+    );
+    await tester.tap(find.text('#카페'));
+    await tester.pumpAndSettle();
+    expect(find.byType(InputChip), findsNothing);
+    expect(find.textContaining('선택한 조건'), findsNothing);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets('filter summary supports compact screens and reduced motion', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await openSearch(tester, textScale: 2, reduceMotion: true);
+    await openPicker(tester, 'select-search-places');
+    await select(tester, '광안리해수욕장');
+    await apply(tester);
+    await tester.ensureVisible(find.byType(InputChip));
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byTooltip('광안리해수욕장 조건 삭제'));
+    await tester.pumpAndSettle();
+    expect(find.byType(InputChip), findsNothing);
+    expect(find.text('조건에 맞는 로그 3개 보기'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

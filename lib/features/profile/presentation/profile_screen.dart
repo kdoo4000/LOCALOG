@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../core/widgets/app_dialog.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_language.dart';
@@ -14,9 +13,12 @@ import '../../../services/supabase_initializer.dart';
 import '../../route_search/data/route_repository_provider.dart';
 import '../../route_search/data/route_repository.dart';
 import '../../route_search/domain/travel_route.dart';
-import '../../route_search/presentation/widgets/route_card.dart';
+import '../../trip_planning/data/trip_friend_repository.dart';
+import 'profile_logs.dart';
 import '../data/social_repository.dart';
 import 'people_search_screen.dart';
+import 'kakao_account_tile.dart';
+import 'account_deletion_tile.dart';
 import 'public_profile_screen.dart';
 import 'social_person_tile.dart';
 import 'social_profile_header.dart';
@@ -68,54 +70,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) {
       return;
     }
-    _reloadDownloadedRoutes();
-  }
-
-  Future<void> _deleteRoute(TravelRoute route) async {
-    final strings = context.strings;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        final dialogStrings = context.strings;
-
-        return AppDialog(
-          title: Text(dialogStrings.deleteRouteTitle),
-          content: Text(dialogStrings.deleteRouteMessage(route.title)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(dialogStrings.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(dialogStrings.delete),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) {
-      return;
-    }
-
-    try {
-      await _repository.deleteDownloadedRoute(route.id);
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('로그를 삭제하지 못했습니다: $error')));
-      }
-      return;
-    }
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(strings.routeDeleted)));
     _reloadDownloadedRoutes();
   }
 
@@ -205,10 +159,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (isSupabaseConfigured &&
                           supabaseClient.auth.currentUser != null) ...[
                         const SizedBox(height: 16),
+                        KakaoAccountTile(client: supabaseClient),
                         ListTile(
                           leading: const Icon(Icons.logout),
                           title: const Text('로그아웃'),
                           onTap: _signOut,
+                        ),
+                        AccountDeletionTile(
+                          client: supabaseClient,
+                          onDeleted: () {
+                            if (!mounted) return;
+                            Navigator.of(context).pushNamedAndRemoveUntil(
+                              RouteNames.login,
+                              (route) => false,
+                            );
+                          },
                         ),
                       ],
                     ],
@@ -223,6 +188,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _signOut() async {
+    try {
+      await TripFriendRepository.clearPendingConsent();
+    } catch (_) {
+      debugPrint('카카오 동의 기록을 정리하지 못했습니다.');
+    }
     await supabaseClient.auth.signOut();
     if (!mounted) {
       return;
@@ -284,7 +254,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.person_search_outlined),
-                        title: const Text('사람 찾기'),
+                        title: const Text('사용자 검색'),
                         trailing: const Icon(
                           Icons.chevron_right_rounded,
                           color: AppColors.textSecondary,
@@ -299,11 +269,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         },
                       ),
                       const SizedBox(height: 24),
-                      Text(
-                        strings.myRouteList,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 16),
                       if (snapshot.hasError)
                         Center(
                           child: Column(
@@ -319,17 +284,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         )
                       else if (!snapshot.hasData)
                         const _ProfileSkeleton()
-                      else if (uploadedRoutes.isEmpty)
-                        const _EmptyDownloadedRoutes()
                       else
-                        for (final route in uploadedRoutes) ...[
-                          _DownloadedRouteTile(
-                            route: route,
-                            onOpen: () => _openRoute(route),
-                            onDelete: () => _deleteRoute(route),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
+                        ProfileLogs(
+                          routes: uploadedRoutes,
+                          title: strings.myRouteList,
+                          emptyMessage: strings.emptyDownloadedRoutes,
+                          showVisibility: true,
+                          onOpen: _openRoute,
+                        ),
                     ],
                   ),
                 );
@@ -532,85 +494,6 @@ class _ProfileSkeleton extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadii.card),
         ),
       ),
-    );
-  }
-}
-
-class _DownloadedRouteTile extends StatelessWidget {
-  const _DownloadedRouteTile({
-    required this.route,
-    required this.onOpen,
-    required this.onDelete,
-  });
-
-  final TravelRoute route;
-  final VoidCallback onOpen;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = context.strings;
-
-    return Stack(
-      children: [
-        RouteCard(route: route, onTap: onOpen),
-        if (route.isCreatedByCurrentUser && !route.isDownloadedCopy)
-          Positioned(
-            top: 10,
-            left: 10,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: route.isPublic
-                    ? AppColors.primaryBlue
-                    : AppColors.gray500,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                child: Text(
-                  route.isPublic ? '전체 공개' : '나만 보기',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        Positioned(
-          top: 4,
-          right: 4,
-          child: Material(
-            color: Colors.white,
-            shape: const CircleBorder(),
-            child: IconButton(
-              tooltip: strings.delete,
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _EmptyDownloadedRoutes extends StatelessWidget {
-  const _EmptyDownloadedRoutes();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
-        border: Border.all(color: AppColors.borderSubtle),
-        borderRadius: BorderRadius.circular(AppRadii.card),
-      ),
-      child: Text(context.strings.emptyDownloadedRoutes),
     );
   }
 }

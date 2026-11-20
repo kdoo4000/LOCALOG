@@ -8,7 +8,6 @@ import 'package:localog/core/theme/app_theme.dart';
 import 'package:localog/core/l10n/app_language.dart';
 import 'package:localog/features/profile/presentation/profile_screen.dart';
 import 'package:localog/features/profile/presentation/public_profile_screen.dart';
-import 'package:localog/features/trip_planning/presentation/trip_code_screen.dart';
 import 'package:localog/features/trip_planning/presentation/trip_expenses_screen.dart';
 import 'package:localog/features/trip_planning/presentation/trip_invite_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -22,7 +21,6 @@ const enabled =
 const owner = '11111111-1111-4111-8111-111111111111';
 const member = '22222222-2222-4222-8222-222222222222';
 bool failStatistics = false;
-bool failActiveCodes = false;
 final profiles = [
   {
     'id': owner,
@@ -57,13 +55,11 @@ void main() {
         localStorage: EmptyLocalStorage(),
       ),
       httpClient: MockClient((request) async {
-        if ((failStatistics &&
-                request.url.queryParameters['select']?.startsWith(
-                      'download_count',
-                    ) ==
-                    true) ||
-            (failActiveCodes &&
-                request.url.path.endsWith('/active_trip_invitation_codes'))) {
+        if (failStatistics &&
+            request.url.queryParameters['select']?.startsWith(
+                  'download_count',
+                ) ==
+                true) {
           return http.Response(
             jsonEncode({'message': 'Test failure', 'code': 'test_failure'}),
             400,
@@ -73,6 +69,15 @@ void main() {
         }
         Object response;
         switch (request.url.path.split('/').last) {
+          case 'user':
+            response = {
+              'id': owner,
+              'aud': 'authenticated',
+              'app_metadata': {'provider': 'email'},
+              'user_metadata': {},
+              'identities': [],
+              'created_at': '2026-01-01T00:00:00Z',
+            };
           case 'profiles':
             response = profiles
                 .where(
@@ -86,6 +91,13 @@ void main() {
             response = [
               {'follower_id': owner, 'followed_id': member},
             ];
+          case 'trip_friendships':
+            response = [
+              {'user_low': owner, 'user_high': member, 'source': 'manual'},
+            ];
+          case 'trip_friend_consents':
+          case 'trip_friend_requests':
+            response = [];
           case 'routes':
             response = request.url.queryParameters['select'] == 'id,title'
                 ? [
@@ -125,14 +137,6 @@ void main() {
                 ],
               },
             ];
-          case 'active_trip_invitation_codes':
-            response = [];
-          case 'create_trip_invitation_code':
-            response = {
-              'id': 'code-1',
-              'code': 'ABCD2345',
-              'expires_at': '2026-10-12T00:00:00Z',
-            };
           default:
             throw StateError('Unexpected UI request: ${request.url.path}');
         }
@@ -214,6 +218,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('설정'));
       await tester.pumpAndSettle();
+      expect(find.text('카카오 계정 연결'), findsOneWidget);
       expect(find.text('English'), findsOneWidget);
       await tester.tap(find.text('English'));
       await tester.pumpAndSettle();
@@ -226,50 +231,28 @@ void main() {
     skip: !enabled,
   );
 
-  testWidgets(
-    'failed statistics and invitation codes show retry and recover',
-    (tester) async {
-      addTearDown(() {
-        failStatistics = false;
-        failActiveCodes = false;
-      });
-      failStatistics = true;
-      final language = AppLanguageController();
-      addTearDown(language.dispose);
-      await tester.pumpWidget(
-        AppLanguageScope(
-          controller: language,
-          child: MaterialApp(
-            theme: AppTheme.light,
-            home: const ProfileScreen(),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('통계를 불러오지 못했어요. 다시 시도'), findsOneWidget);
-      expect(find.text('누적 좋아요'), findsNothing);
+  testWidgets('failed statistics show retry and recover', (tester) async {
+    addTearDown(() {
       failStatistics = false;
-      await tester.tap(find.text('통계를 불러오지 못했어요. 다시 시도'));
-      await tester.pumpAndSettle();
-      expect(find.text('누적 좋아요'), findsOneWidget);
-      failActiveCodes = true;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: AppTheme.light,
-          home: const TripCodeScreen(planId: 'plan', title: '여행'),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('활성 초대를 불러오지 못했어요.'), findsOneWidget);
-      failActiveCodes = false;
-      await tester.tap(find.text('다시 시도'));
-      await tester.pumpAndSettle();
-      expect(find.text('활성 초대를 불러오지 못했어요.'), findsNothing);
-      expect(find.text('활성 초대가 없어요. 코드를 만들어 동행자에게 공유하세요.'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-    skip: !enabled,
-  );
+    });
+    failStatistics = true;
+    final language = AppLanguageController();
+    addTearDown(language.dispose);
+    await tester.pumpWidget(
+      AppLanguageScope(
+        controller: language,
+        child: MaterialApp(theme: AppTheme.light, home: const ProfileScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('통계를 불러오지 못했어요. 다시 시도'), findsOneWidget);
+    expect(find.text('누적 좋아요'), findsNothing);
+    failStatistics = false;
+    await tester.tap(find.text('통계를 불러오지 못했어요. 다시 시도'));
+    await tester.pumpAndSettle();
+    expect(find.text('누적 좋아요'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  }, skip: !enabled);
 
   for (final viewport in [
     (name: 'phone', size: const Size(390, 844), scale: 1.0),
@@ -293,7 +276,6 @@ void main() {
         ),
         'public-profile': const PublicProfileScreen(userId: owner),
         'invite': const TripInviteScreen(planId: 'plan', title: '부산 여행'),
-        'invite-code': const TripCodeScreen(planId: 'plan', title: '부산 여행'),
         'trip-settlement': const TripExpensesScreen(
           planId: 'plan',
           title: '부산 여행',
@@ -329,9 +311,34 @@ void main() {
         if (entry.key == 'trip-settlement') {
           if (viewport.name == 'phone') {
             expect(find.text('15,000원'), findsOneWidget);
+            await tester.ensureVisible(find.text('카톡으로 요청'));
+            await tester.tap(find.text('카톡으로 요청'));
+            await tester.pumpAndSettle();
+            expect(find.text('정산 요청'), findsOneWidget);
+            if (const bool.fromEnvironment('WRITE_UI_PREVIEWS')) {
+              await saveUiPreview(tester, boundary, 'settlement-kakao-request');
+            }
+            await tester.tap(find.text('취소'));
+            await tester.pumpAndSettle();
           }
           await tester.tap(find.text('지출 등록'));
           await tester.pumpAndSettle();
+          if (viewport.name == 'phone') {
+            tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+            addTearDown(tester.view.resetViewInsets);
+            await tester.tap(find.byType(TextField).last);
+            await tester.pumpAndSettle();
+            expect(
+              tester.getBottomLeft(find.widgetWithText(FilledButton, '등록')).dy,
+              lessThanOrEqualTo(viewport.size.height - 300),
+            );
+            if (const bool.fromEnvironment('WRITE_UI_PREVIEWS')) {
+              await saveUiPreview(tester, boundary, 'expense-editor-keyboard');
+            }
+            tester.view.resetViewInsets();
+            FocusManager.instance.primaryFocus?.unfocus();
+            await tester.pumpAndSettle();
+          }
           expect(tester.takeException(), isNull, reason: 'expense editor');
           if (const bool.fromEnvironment('WRITE_UI_PREVIEWS') &&
               viewport.name == 'phone') {

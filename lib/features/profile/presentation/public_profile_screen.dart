@@ -8,7 +8,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_dialog.dart';
-import '../../../core/widgets/app_card.dart';
+import '../../route_search/data/supabase_route_repository.dart';
+import '../../route_search/domain/travel_route.dart';
+import 'profile_logs.dart';
 import '../../../core/widgets/premium_ui.dart';
 import '../../../services/supabase_initializer.dart';
 import '../data/social_repository.dart';
@@ -42,13 +44,9 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     final isFollowing = currentUser == null || currentUser.id == widget.userId
         ? null
         : await social.isFollowing(widget.userId);
-    final logs = await supabaseClient
-        .from('routes')
-        .select('id,title')
-        .eq('owner_id', widget.userId)
-        .eq('access_level', 'public')
-        .order('published_at', ascending: false)
-        .limit(30);
+    final logs = await SupabaseRouteRepository.instance.getPublicRoutesForUser(
+      widget.userId,
+    );
     return _ProfileView(
       person,
       followers,
@@ -157,45 +155,12 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 ),
               ],
               const SizedBox(height: 24),
-              Text('공개 로그', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              if (data.logs.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Text(
-                    '아직 공개한 로그가 없어요.',
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                ),
-              for (final log in data.logs)
-                AppCard(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: EdgeInsets.zero,
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    leading: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryBlueSoft,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.map_outlined,
-                        color: AppColors.primaryBlue,
-                      ),
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    title: Text(log['title'] as String),
-                    onTap: () => Navigator.of(context).pushNamed(
-                      RouteNames.routeDetail,
-                      arguments: log['id'] as String,
-                    ),
-                  ),
-                ),
+              ProfileLogs(
+                routes: data.logs,
+                onOpen: (route) => Navigator.of(
+                  context,
+                ).pushNamed(RouteNames.routeDetail, arguments: route.id),
+              ),
             ],
           );
         },
@@ -458,5 +423,5 @@ class _ProfileView {
   final List<SocialPerson> following;
   final bool? isFollowing;
   final bool isOwn;
-  final List<Map<String, dynamic>> logs;
+  final List<TravelRoute> logs;
 }

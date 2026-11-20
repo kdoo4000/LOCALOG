@@ -172,6 +172,55 @@ void main() {
   );
 
   for (final size in [const Size(390, 844), const Size(1200, 900)]) {
+    testWidgets('previous accommodation can be reused at $size', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final language = AppLanguageController();
+      addTearDown(language.dispose);
+      final original = await plan();
+      await tester.pumpWidget(
+        AppLanguageScope(
+          controller: language,
+          child: MaterialApp(
+            theme: AppTheme.light,
+            home: TravelPlanDetailScreen(
+              planId: original.id,
+              initialPlan: original,
+              initialDayIndex: 1,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final reuse = find.text('전날 숙소 다시 선택');
+      expect(reuse, findsNothing);
+      await repository.setAccommodation(
+        planDayId: original.days[0].id,
+        accommodation: firstStay,
+      );
+      await repository.setAccommodation(
+        planDayId: original.days[1].id,
+        accommodation: secondStay,
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(reuse);
+      await tester.tap(reuse);
+      await tester.pumpAndSettle();
+      final saved = (await repository.getPlanById(original.id))!;
+      expect(saved.days[1].accommodation?.toJson(), firstStay.toJson());
+      expect(saved.days[1].plannedRoute!.places.map((p) => p.name), [
+        '첫 숙소',
+        '첫 숙소',
+      ]);
+      expect(saved.days[2].plannedRoute!.places.first.name, '첫 숙소');
+      expect(find.byType(PlaceSearchMapScreen), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('nightly accommodation can be selected and cleared at $size', (
       tester,
     ) async {
@@ -194,6 +243,7 @@ void main() {
           ),
         ),
       );
+      expect(find.text('전날 숙소 다시 선택'), findsNothing);
       final choose = find.text('숙소 선택');
       await tester.ensureVisible(choose);
       await tester.tap(choose);

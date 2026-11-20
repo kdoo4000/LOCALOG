@@ -2,16 +2,22 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../auth/presentation/existing_kakao_link_screen.dart';
 
 import '../../../core/l10n/app_language.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../services/supabase_initializer.dart';
+import '../../../services/settlement_links.dart';
+import '../../trip_planning/presentation/trip_expenses_screen.dart';
 import '../../photo_location/photo_location_page.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../route_search/presentation/route_search_screen.dart';
 import '../../trip_planning/presentation/travel_plan_screen.dart';
 import 'home_screen.dart';
+import '../../trip_planning/data/trip_friend_repository.dart';
+import '../../trip_planning/presentation/trip_friends_screen.dart';
 
 class MainShellScreen extends StatefulWidget {
   const MainShellScreen({super.key});
@@ -26,22 +32,123 @@ class _MainShellScreenState extends State<MainShellScreen> {
   String _searchKeyword = '';
   StreamSubscription<AuthState>? _authSubscription;
   HomeUserSummary? _homeUser;
+  bool _openingSettlement = false;
 
   @override
   void initState() {
     super.initState();
+    SettlementLinks.instance.addListener(_settlementChanged);
     if (isSupabaseConfigured) {
-      _authSubscription = supabaseClient.auth.onAuthStateChange.listen((_) {
-        _refreshHomeUser();
+      _authSubscription = supabaseClient.auth.onAuthStateChange.listen((
+        state,
+      ) async {
+        if (mounted &&
+            state.event == AuthChangeEvent.signedIn &&
+            !Navigator.of(context).canPop()) {
+          await TripFriendRepository.completePendingConsent(supabaseClient);
+          if (mounted) await _resumeEntry();
+        }
+        await _refreshHomeUser();
       });
       _refreshHomeUser();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _resumeEntry());
     }
   }
 
   @override
   void dispose() {
+    SettlementLinks.instance.removeListener(_settlementChanged);
     _authSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _resumeFriends() async {
+    if (!mounted || Navigator.of(context).canPop()) return;
+    final message = await TripFriendRepository.takeConsentResult();
+    if (!mounted || message == null) return;
+    setState(() => _currentIndex = 3);
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TripFriendsScreen(initialMessage: message),
+      ),
+    );
+  }
+
+  Future<void> _resumeEntry() async {
+    if (!mounted || Navigator.of(context).canPop()) return;
+    final prefs = await SharedPreferences.getInstance();
+    final user = supabaseClient.auth.currentUser;
+    if (user?.identities?.any((i) => i.provider == 'kakao') == true) {
+      await prefs.setBool(kakaoLoginSeenKey, true);
+    }
+    if (!mounted || Navigator.of(context).canPop()) return;
+    if (user != null && prefs.getString(kakaoLinkPendingUserKey) == user.id) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ExistingKakaoLinkScreen(client: supabaseClient),
+        ),
+      );
+    }
+    if (mounted && SettlementLinks.instance.pendingPlanId != null) {
+      await _openSettlement();
+    } else if (mounted) {
+      await _resumeFriends();
+    }
+  }
+
+  void _settlementChanged() => unawaited(_openSettlement());
+
+  Future<void> _openSettlement() async {
+    if (!mounted ||
+        _openingSettlement ||
+        SettlementLinks.instance.pendingPlanId == null) {
+      return;
+    }
+    _openingSettlement = true;
+    try {
+      if (!hasSupabaseSession ||
+          needsKakaoSignup(supabaseClient.auth.currentUser)) {
+        await Navigator.of(context).pushNamed(RouteNames.login);
+        return;
+      }
+      final id = await SettlementLinks.instance.take();
+      if (id == null) return;
+      final plan = await supabaseClient
+          .from('travel_plans')
+          .select('title')
+          .eq('id', id)
+          .maybeSingle();
+      if (!mounted) return;
+      if (plan == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('참여 중인 여행의 정산만 볼 수 있어요.')));
+        return;
+      }
+      setState(() => _currentIndex = 3);
+      unawaited(
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                TripExpensesScreen(planId: id, title: plan['title'] as String),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('정산을 열지 못했어요. 요청 메시지에서 다시 시도해 주세요.')),
+        );
+      }
+    } finally {
+      _openingSettlement = false;
+      if (mounted &&
+          hasSupabaseSession &&
+          !needsKakaoSignup(supabaseClient.auth.currentUser) &&
+          SettlementLinks.instance.pendingPlanId != null) {
+        unawaited(_openSettlement());
+      }
+    }
   }
 
   void _openProfile() => setState(() => _currentIndex = 4);

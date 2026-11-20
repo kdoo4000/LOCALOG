@@ -1,16 +1,20 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/app_dialog.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../services/supabase_initializer.dart';
 import '../../profile/data/social_repository.dart';
+import '../../../core/widgets/kakao_button.dart';
+import 'existing_kakao_link_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,17 +37,34 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _thirdPartyAgreed = false;
   bool _isSubmitting = false;
   bool _obscurePassword = true;
+  bool _isKakaoSignup = false;
+  bool _isOpeningMain = false;
+  bool _linkingExistingAccount = false;
+  StreamSubscription<AuthState>? _authSubscription;
+
+  bool get _showSignup => _isSignUp || _isKakaoSignup;
 
   @override
   void initState() {
     super.initState();
-    if (isSupabaseConfigured && supabaseClient.auth.currentSession != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _openMain());
+    if (isSupabaseConfigured) {
+      _authSubscription = supabaseClient.auth.onAuthStateChange.listen(
+        (state) {
+          if (state.event == AuthChangeEvent.signedIn) _handleSignedIn();
+        },
+        onError: (Object error) {
+          if (mounted) _showMessage('카카오 인증을 완료하지 못했습니다. 다시 시도해 주세요.');
+        },
+      );
+      if (supabaseClient.auth.currentSession != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _handleSignedIn());
+      }
     }
   }
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     _displayNameController.dispose();
@@ -59,22 +80,46 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    if (_isSignUp && !_requiredAgreed) {
+    if (_showSignup && !_requiredAgreed) {
       _showMessage('회원가입을 위해 필수 약관에 동의해 주세요.');
       return;
     }
 
     setState(() => _isSubmitting = true);
     try {
-      if (_isSignUp) {
+      if (_showSignup) {
         final handle = normalizeHandle(_handleController.text);
         final taken = await supabaseClient
             .from('profiles')
             .select('id')
             .eq('handle', handle)
             .maybeSingle();
-        if (taken != null) {
+        if (taken != null &&
+            taken['id'] != supabaseClient.auth.currentUser?.id) {
           _showMessage('이미 사용 중인 아이디입니다.');
+          return;
+        }
+        if (_isKakaoSignup) {
+          await SocialRepository.instance
+              .updateMyProfile(
+                handle: handle,
+                displayName: _displayNameController.text.trim(),
+              )
+              .timeout(const Duration(seconds: 10));
+          await supabaseClient.auth
+              .updateUser(
+                UserAttributes(
+                  data: {
+                    'display_name': _displayNameController.text.trim(),
+                    'handle': handle,
+                    'terms_version': _termsVersion,
+                    'terms_agreed_at': DateTime.now().toUtc().toIso8601String(),
+                    'third_party_agreed': _thirdPartyAgreed,
+                  },
+                ),
+              )
+              .timeout(const Duration(seconds: 10));
+          _openMain();
           return;
         }
         final response = await supabaseClient.auth
@@ -117,9 +162,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         _showMessage(_authMessage(error.message));
       }
-    } catch (error) {
+    } catch (_) {
       if (mounted) {
-        _showMessage('로그인 처리 중 오류가 발생했습니다: $error');
+        _showMessage('로그인 처리 중 오류가 발생했습니다. 다시 시도해 주세요.');
       }
     } finally {
       if (mounted) {
@@ -128,10 +173,103 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _openMain() {
-    if (!mounted) {
+  void _handleSignedIn() {
+    if (!mounted || _linkingExistingAccount) return;
+    final user = supabaseClient.auth.currentUser;
+    if (user == null) return;
+    if (needsKakaoSignup(user)) {
+      if (_isKakaoSignup) return;
+      final metadata = user.userMetadata ?? {};
+      _displayNameController.text =
+          [metadata['display_name'], metadata['name'], metadata['nickname']]
+              .whereType<String>()
+              .firstOrNull ??
+          '';
+      _handleController.text = switch (metadata['handle']) {
+        String handle => handle,
+        _ => '',
+      };
+      setState(() {
+        _isKakaoSignup = true;
+        _isSubmitting = false;
+      });
+    } else {
+      _openMain();
+    }
+  }
+
+  Future<void> _signInWithKakao() async {
+    if (!isSupabaseConfigured) {
+      _showMessage('Supabase 설정이 없어 카카오 로그인을 사용할 수 없습니다.');
       return;
     }
+    setState(() => _isSubmitting = true);
+    try {
+      final launched = await supabaseClient.auth
+          .signInWithOAuth(
+            OAuthProvider.kakao,
+            redirectTo: kIsWeb ? '${Uri.base.origin}/' : mobileAuthRedirectUrl,
+            // Kakao email access requires a Biz App; signup also supports no email.
+            queryParams: const {'scope': 'profile_nickname profile_image'},
+            authScreenLaunchMode: LaunchMode.externalApplication,
+          )
+          .timeout(const Duration(seconds: 10));
+      if (!launched && mounted) {
+        _showMessage('카카오 로그인 화면을 열지 못했습니다. 다시 시도해 주세요.');
+      }
+    } catch (_) {
+      if (mounted) _showMessage('카카오 로그인을 시작하지 못했습니다. 다시 시도해 주세요.');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _chooseKakaoLogin() async {
+    if (!isSupabaseConfigured) return _signInWithKakao();
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    if (prefs.getBool(kakaoLoginSeenKey) == true) return _signInWithKakao();
+    final existing = await showDialog<bool>(
+      context: context,
+      builder: (context) => AppDialog(
+        title: const Text('기존 LOCALOG 계정이 있나요?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            OutlinedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('기존 계정 연결하기'),
+            ),
+            const SizedBox(height: 12),
+            KakaoButton(
+              label: '카카오 로그인',
+              onPressed: () => Navigator.pop(context, false),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || existing == null) return;
+    if (!existing) return _signInWithKakao();
+    _linkingExistingAccount = true;
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ExistingKakaoLinkScreen(client: supabaseClient),
+        ),
+      );
+    } finally {
+      _linkingExistingAccount = false;
+    }
+    if (mounted && supabaseClient.auth.currentUser != null) _handleSignedIn();
+  }
+
+  void _openMain() {
+    if (!mounted || _isOpeningMain) {
+      return;
+    }
+    _isOpeningMain = true;
     Navigator.of(
       context,
     ).pushNamedAndRemoveUntil(RouteNames.main, (route) => false);
@@ -214,8 +352,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   Center(
                     child: SvgPicture.asset(
                       'assets/localog_text_vertical.svg',
-                      width: 128,
-                      height: 128,
+                      width: 84,
+                      height: 84,
                       fit: BoxFit.contain,
                       colorFilter: const ColorFilter.mode(
                         AppColors.primaryBlue,
@@ -226,19 +364,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    _isSignUp ? 'LOCALOG 회원가입' : 'LOCALOG 로그인',
+                    _isKakaoSignup
+                        ? '카카오 회원가입 마무리'
+                        : _isSignUp
+                        ? 'LOCALOG 회원가입'
+                        : 'LOCALOG 로그인',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _isSignUp
-                        ? '여행의 순간을 나만의 로컬 로그로 남겨보세요.'
-                        : '저장한 장소와 여행 계획을 이어서 확인하세요.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
                   ),
                   const SizedBox(height: 24),
                   Container(
@@ -257,7 +389,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         curve: AppMotion.curve,
                         child: Column(
                           children: [
-                            if (_isSignUp) ...[
+                            if (_showSignup) ...[
                               TextFormField(
                                 controller: _displayNameController,
                                 textInputAction: TextInputAction.next,
@@ -283,65 +415,67 @@ class _LoginScreenState extends State<LoginScreen> {
                                 validator: (value) =>
                                     isValidHandle(normalizeHandle(value ?? ''))
                                     ? null
-                                    : '영문 소문자·숫자·._를 사용해 3~30자로 입력해 주세요.',
+                                    : '영문 대소문자·숫자·._를 사용해 3~30자로 입력해 주세요.',
                               ),
                               const SizedBox(height: 12),
                             ],
-                            TextFormField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              textInputAction: TextInputAction.next,
-                              autofillHints: const [AutofillHints.email],
-                              decoration: const InputDecoration(
-                                labelText: '이메일',
-                                prefixIcon: Icon(Icons.mail_outline),
+                            if (!_isKakaoSignup) ...[
+                              TextFormField(
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                textInputAction: TextInputAction.next,
+                                autofillHints: const [AutofillHints.email],
+                                decoration: const InputDecoration(
+                                  labelText: '이메일',
+                                  prefixIcon: Icon(Icons.mail_outline),
+                                ),
+                                validator: (value) {
+                                  final email = value?.trim() ?? '';
+                                  if (!email.contains('@') ||
+                                      !email.contains('.')) {
+                                    return '올바른 이메일 주소를 입력해 주세요.';
+                                  }
+                                  return null;
+                                },
                               ),
-                              validator: (value) {
-                                final email = value?.trim() ?? '';
-                                if (!email.contains('@') ||
-                                    !email.contains('.')) {
-                                  return '올바른 이메일 주소를 입력해 주세요.';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _passwordController,
-                              obscureText: _obscurePassword,
-                              textInputAction: TextInputAction.done,
-                              autofillHints: const [AutofillHints.password],
-                              onFieldSubmitted: (_) => _submit(),
-                              decoration: InputDecoration(
-                                labelText: '비밀번호',
-                                prefixIcon: const Icon(Icons.lock_outline),
-                                suffixIcon: IconButton(
-                                  onPressed: () {
-                                    setState(
-                                      () =>
-                                          _obscurePassword = !_obscurePassword,
-                                    );
-                                  },
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_outlined
-                                        : Icons.visibility_off_outlined,
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: _passwordController,
+                                obscureText: _obscurePassword,
+                                textInputAction: TextInputAction.done,
+                                autofillHints: const [AutofillHints.password],
+                                onFieldSubmitted: (_) => _submit(),
+                                decoration: InputDecoration(
+                                  labelText: '비밀번호',
+                                  prefixIcon: const Icon(Icons.lock_outline),
+                                  suffixIcon: IconButton(
+                                    onPressed: () {
+                                      setState(
+                                        () => _obscurePassword =
+                                            !_obscurePassword,
+                                      );
+                                    },
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_outlined
+                                          : Icons.visibility_off_outlined,
+                                    ),
                                   ),
                                 ),
+                                validator: (value) {
+                                  if ((value ?? '').length < 8) {
+                                    return '비밀번호는 8자 이상이어야 합니다.';
+                                  }
+                                  return null;
+                                },
                               ),
-                              validator: (value) {
-                                if ((value ?? '').length < 8) {
-                                  return '비밀번호는 8자 이상이어야 합니다.';
-                                }
-                                return null;
-                              },
-                            ),
+                            ],
                           ],
                         ),
                       ),
                     ),
                   ),
-                  if (_isSignUp) ...[
+                  if (_showSignup) ...[
                     const SizedBox(height: 12),
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
@@ -388,22 +522,56 @@ class _LoginScreenState extends State<LoginScreen> {
                             dimension: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : Text(_isSignUp ? '가입하기' : '로그인'),
+                        : Text(_showSignup ? '가입하기' : '로그인'),
                   ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _isSubmitting
-                        ? null
-                        : () {
-                            setState(() => _isSignUp = !_isSignUp);
-                          },
-                    child: Text(_isSignUp ? '이미 계정이 있나요? 로그인' : '처음이신가요? 회원가입'),
-                  ),
-                  const Divider(height: 32),
-                  TextButton(
-                    onPressed: _openMain,
-                    child: const Text('게스트로 공개 로그 둘러보기'),
-                  ),
+                  if (!_isKakaoSignup) ...[
+                    const SizedBox(height: 12),
+                    KakaoButton(
+                      key: const ValueKey('kakao-login-button'),
+                      label: '카카오 로그인',
+                      onPressed: _isSubmitting ? null : _chooseKakaoLogin,
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () {
+                              setState(() => _isSignUp = !_isSignUp);
+                            },
+                      child: Text(
+                        _isSignUp ? '이메일로 로그인' : '이메일로 회원가입',
+                      ),
+                    ),
+                    const Divider(height: 32),
+                    TextButton(
+                      onPressed: _openMain,
+                      child: const Text('게스트로 공개 로그 둘러보기'),
+                    ),
+                  ] else
+                    TextButton(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () async {
+                              try {
+                                await supabaseClient.auth.signOut();
+                                if (mounted) {
+                                  setState(() {
+                                    _isKakaoSignup = false;
+                                    _isSignUp = false;
+                                    _termsAgreed = false;
+                                    _privacyAgreed = false;
+                                    _locationAgreed = false;
+                                    _thirdPartyAgreed = false;
+                                  });
+                                }
+                              } catch (_) {
+                                if (mounted) {
+                                  _showMessage('로그아웃하지 못했습니다. 다시 시도해 주세요.');
+                                }
+                              }
+                            },
+                      child: const Text('로그아웃'),
+                    ),
                 ],
               ),
             ),
@@ -467,5 +635,5 @@ String _authMessage(String message) {
   if (normalized.contains('already registered')) {
     return '이미 가입된 이메일입니다.';
   }
-  return message;
+  return '인증을 완료하지 못했습니다. 다시 시도해 주세요.';
 }

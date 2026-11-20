@@ -6,6 +6,9 @@ create temporary table audit_context (
 insert into audit_context(owner_id, member_id)
 select min(id::text)::uuid, max(id::text)::uuid from public.profiles;
 grant select, update on audit_context to authenticated;
+insert into public.trip_friendships(user_low,user_high,source)
+select least(owner_id,member_id),greatest(owner_id,member_id),'manual' from audit_context
+on conflict do nothing;
 do $$
 begin
   if exists(select 1 from audit_context where owner_id is null or owner_id = member_id) then
@@ -68,12 +71,7 @@ begin
     raise exception 'Expense split does not equal total';
   end if;
   update audit_context set expense_id=new_expense;
-  begin
-    perform public.create_trip_invitation_code(ctx.plan_id);
-    raise exception 'Member created an invitation';
-  exception when raise_exception then
-    if sqlerrm='Member created an invitation' then raise; end if;
-  end;
+
   begin
     insert into public.routes(owner_id,source_planned_route_id,title,city)
     values(ctx.member_id,ctx.planned_id,'Forbidden trip log','Seoul');
