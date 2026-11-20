@@ -11,17 +11,31 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+/tmp/
 
-# IntelliJ related
+# Local editors and development tools
 *.iml
 *.ipr
 *.iws
 .idea/
+/.vscode/
+/.agents/
+/.codex/
+/.serena/
+/skills-lock.json
+AGENTS.md
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# Root npm files are only for the local Codex security tool.
+/package.json
+/package-lock.json
+node_modules/
+
+# Internal drafts and review artifacts
+/anti-slop/
+/docs/superpowers/
+/docs/astryx-ui-adoption.md
+/docs/ui-audit-*.md
+/docs/ui-references-*.html
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -33,17 +47,28 @@ migrate_working_dir/
 /build/
 /coverage/
 
-# Local API configuration
+# Local configuration and credentials
 /config/local.json
-/tools/.env
-/tools/node_modules/
 .env
 .env.*
 !.env.example
-!**/.env.example
+/.aws/
+.vercel/
+key.properties
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.pem
+*.key
+*.mobileprovision
+*.provisionprofile
 
-# Local agent configuration and skills
-/.agents/
+# Font distributions unused by pubspec.yaml
+/assets/fonts/nanum_square/
+/assets/fonts/pretendard/public/static/*.otf
+/assets/fonts/pretendard/public/variable/
+/assets/fonts/pretendard/web/
 
 # Symbolication related
 app.*.symbols
@@ -55,7 +80,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
-node_modules
-AGENTS.md
-.codex/config.toml
-tmp/route-detail-deployed-main.dart.js
+*.apk
+*.aab
+*.ipa
